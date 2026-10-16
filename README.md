@@ -18,6 +18,10 @@ import your own audio, record voice-over, per-clip and per-track volume and fade
 **Text**: text overlays with 18 fonts (Latin and Hindi/Devanagari), styles, outline, background and in/out animations,
 subtitles with SRT import and export, stickers.
 
+**Watermark**: your own text (name or channel, any of the 18 fonts, size, colour, bold, shadow) or logo image, with
+10–100% opacity; place it on a 9-point grid or drag it on the preview, or let it float slowly around the frame
+(anti-piracy style); show it for the full video or a time range only. It is baked into the export.
+
 **AI captions & dubbing** (the "AI Dub" tool):
 - *Auto captions*: Whisper (tiny/base/small) runs in the browser through transformers.js and turns the timeline's speech
   into timed subtitles, in the spoken language or translated to English. Export them as .srt.
@@ -71,4 +75,5 @@ In the repository go to Settings > Pages and set Source to "GitHub Actions" once
 - `src/engine/exporter.ts`, `frames.ts`, `audiomix.ts` – export pipeline
 - `src/engine/ai.ts`, `ai.worker.ts` – speech to text, translation and text to speech
 - `src/engine/music.ts` – synthesised music and sound effects
+- `src/engine/watermark.ts` – user watermark layout (grid, drag, floating path) and drawing
 - `src/components/`, `src/panels/` – UI

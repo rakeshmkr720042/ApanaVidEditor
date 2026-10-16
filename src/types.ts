@@ -149,10 +149,37 @@ export interface ProjectSettings {
   fps: number
 }
 
+/** 3x3 anchor grid (top/middle/bottom × left/centre/right), or a dragged spot. */
+export type WatermarkPos = 'tl' | 'tc' | 'tr' | 'ml' | 'mc' | 'mr' | 'bl' | 'bc' | 'br' | 'custom'
+
+/** The user's own watermark, drawn on top of everything in preview and export. */
+export interface Watermark {
+  enabled: boolean
+  kind: 'text' | 'image'
+  text: string
+  font: string
+  size: number // text height, fraction of the canvas short side
+  color: string
+  bold: boolean
+  shadow: boolean
+  sourceId: string | null // image watermark
+  imageSize: number // image height, fraction of the canvas short side
+  opacity: number // 0.1..1
+  position: WatermarkPos
+  x: number // centre, 0..1 of canvas width (position = custom)
+  y: number
+  motion: 'static' | 'float'
+  speed: number // floating speed multiplier
+  range: 'full' | 'custom'
+  start: number // timeline seconds (range = custom)
+  end: number
+}
+
 export interface Project {
   clips: Clip[]
   layers: Layer[]
   settings: ProjectSettings
+  watermark?: Watermark | null
 }
 
 export const MIN_CLIP = 0.2

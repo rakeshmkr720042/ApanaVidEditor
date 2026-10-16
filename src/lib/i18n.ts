@@ -32,6 +32,14 @@ const hi: Record<string, string> = {
   'Subtitles are now in': 'सबटाइटल अब इस भाषा में हैं:', 'The .srt file was downloaded too.': '.srt फ़ाइल भी डाउनलोड हो गई।',
   'Translated .srt downloaded.': 'अनुवादित .srt डाउनलोड हो गई।', 'no offline voice yet. Voices available:': 'इसकी आवाज़ अभी नहीं है। उपलब्ध आवाज़ें:',
   'Email (optional, raises the free limit to 50,000 characters a day)': 'ईमेल (ज़रूरी नहीं, मुफ़्त सीमा 50,000 अक्षर/दिन हो जाती है)',
+  'Show watermark': 'वॉटरमार्क दिखाएं', 'Content': 'क्या दिखे', 'Position': 'जगह', 'Timing': 'समय', 'Logo image': 'लोगो फ़ोटो',
+  'Your name or channel': 'आपका नाम या चैनल', 'Shadow': 'छाया', 'Font': 'फ़ॉन्ट', 'No logo yet': 'लोगो नहीं है', 'Upload logo': 'लोगो जोड़ें',
+  'Change logo': 'लोगो बदलें', 'Static': 'एक जगह', 'Floating': 'घूमता हुआ', 'Full video': 'पूरा वीडियो', 'Time range': 'कुछ समय',
+  'Start': 'शुरू', 'End': 'खत्म', 'Start at playhead': 'यहाँ से शुरू', 'End at playhead': 'यहाँ खत्म', 'ApanaVidEditor watermark': 'ApanaVidEditor वॉटरमार्क',
+  'Or drag the watermark on the video.': 'या वीडियो पर वॉटरमार्क को खींचकर रखें।',
+  'Custom spot. Pick a box above to snap it back.': 'आपकी चुनी जगह। ऊपर कोई डिब्बा चुनकर वापस ले जाएं।',
+  'Moves slowly around the whole frame so it is hard to crop out.': 'पूरे वीडियो में धीरे-धीरे घूमता है ताकि काटकर हटाया न जा सके।',
+  'Pick an image (PNG with a transparent background works best)': 'फ़ोटो चुनें (पारदर्शी बैकग्राउंड वाली PNG सबसे अच्छी)',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

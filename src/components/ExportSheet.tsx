@@ -34,7 +34,8 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const [format, setFormat] = useState<Format>('mp4')
   const [res, setRes] = useState<Resolution>('1080')
   const [fps, setFps] = useState(30)
-  const [watermark, setWatermark] = useState(true)
+  // the app's own mark is off by default once the user has their own watermark
+  const [watermark, setWatermark] = useState(!project.watermark?.enabled)
   const [useCover, setUseCover] = useState(false)
   const [coverT, setCoverT] = useState(Math.min(1, total / 2))
   const [coverImg, setCoverImg] = useState<string | null>(null)
@@ -142,7 +143,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
                         <Chips options={[24, 25, 30, 60].map((f) => ({ value: f, label: `${f} fps` }))} value={fps} onChange={setFps} />
                       </>
                     )}
-                    <Toggle label="Watermark" value={watermark} onChange={setWatermark} />
+                    <Toggle label="ApanaVidEditor watermark" value={watermark} onChange={setWatermark} />
                     {(format === 'mp4' || format === 'mov') && <Toggle label="Choose cover image" value={useCover} onChange={setUseCover} />}
                     {useCover && (format === 'mp4' || format === 'mov') && (
                       <div className="cover-pick">

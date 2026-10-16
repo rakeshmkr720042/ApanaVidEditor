@@ -296,3 +296,13 @@ input, textarea { font: inherit; color: inherit; }
 .warn { color: #ffcc00; }
 .error-text { color: #ff6b6b; margin-top: 10px; }
 .ok-text { color: #34c759; margin-top: 10px; }
+
+/* watermark panel */
+.wm-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 220px; margin: 8px auto 4px; }
+.wm-grid button { aspect-ratio: 16 / 9; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); font-size: 16px; }
+.wm-grid .on { border-color: var(--accent); background: rgba(79,140,255,.18); }
+.wm-logo { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.wm-logo img, .wm-logo-empty { width: 72px; height: 72px; object-fit: contain; border-radius: 10px; border: 1px solid var(--line);
+  background: repeating-conic-gradient(#3a3a3a 0 25%, #2a2a2a 0 50%) 0 0 / 12px 12px; }
+.wm-logo-empty { display: grid; place-items: center; font-size: 11px; color: var(--muted); text-align: center; }
+.sel-box.wm { border-style: dashed; }

@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BlurLayer, Clip, Layer, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer } from '../types'
+import type { AudioLayer, BlurLayer, Clip, Layer, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Watermark } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
 import { clipSegments, defaultAdjust, layoutClips, newClip, sourceAt } from './timeline'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
+import { defaultWatermark } from '../engine/watermark'
 
 export type Selection = { type: 'clip'; id: string } | { type: 'layer'; id: string } | null
 
@@ -54,6 +55,11 @@ export function useEditor(initial: Project) {
   const setSettings = useCallback((patch: Partial<ProjectSettings>) => {
     const p = ref.current
     commit({ ...p, settings: { ...p.settings, ...patch } })
+  }, [commit])
+
+  const setWatermark = useCallback((patch: Partial<Watermark>) => {
+    const p = ref.current
+    commit({ ...p, watermark: { ...(p.watermark ?? defaultWatermark()), ...patch } })
   }, [commit])
 
   const appendClips = useCallback((srcs: MediaSource[], at?: number) => {
@@ -199,7 +205,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, appendClips, updateClip, updateAllClips, updateLayer, setSettings,
+    addSource, appendClips, updateClip, updateAllClips, updateLayer, setSettings, setWatermark,
     addText, addSticker, addBlur, addOverlay, addAudio, addLayer,
     remove, duplicate, split, moveClip, replaceProject,
   }

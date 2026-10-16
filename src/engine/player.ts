@@ -234,7 +234,7 @@ export class Player {
       const clip = this.project.clips.find((c) => c.id === this.renderOverride)
       if (clip) {
         const items = [{ clip: { ...clip, transition: null }, index: 0, start: 0, dur: 1, transIn: 0, transOut: 0 }]
-        this.renderer.render({ t: 0, project: { ...this.project, layers: [] }, items, sources: this.sources, frame: this.frame, watermark: null, seed: 0 })
+        this.renderer.render({ t: 0, project: { ...this.project, layers: [], watermark: null }, items, sources: this.sources, frame: this.frame, watermark: null, seed: 0 })
         return
       }
     }
