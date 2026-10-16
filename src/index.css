@@ -100,7 +100,7 @@ input, textarea { font: inherit; color: inherit; }
 .time { font-variant-numeric: tabular-nums; font-size: 13px; }
 .zoom { justify-self: end; display: flex; gap: 2px; }
 
-.timeline { position: relative; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); touch-action: pan-x; }
+.timeline { position: relative; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); touch-action: pan-x; user-select: none; -webkit-user-select: none; }
 .tl-scroll { overflow-x: auto; overflow-y: auto; display: flex; scrollbar-width: none; max-height: 34dvh; min-height: 108px; }
 .tl-scroll::-webkit-scrollbar { display: none; }
 .tl-pad { flex: 0 0 50%; }

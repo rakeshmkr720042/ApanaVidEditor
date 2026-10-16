@@ -198,7 +198,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) ed.redo(); else ed.undo() }
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); ed.redo() }
       else if (e.key === ' ') { e.preventDefault(); togglePlay() }
-      else if (e.key === 's') ed.split(time)
+      else if (e.key === 's' && !mod) ed.split(time)
       else if (e.key === 'Delete' || e.key === 'Backspace') ed.remove()
       else if (e.key === 'ArrowLeft') seek(time - (e.shiftKey ? 1 : 1 / 30))
       else if (e.key === 'ArrowRight') seek(time + (e.shiftKey ? 1 : 1 / 30))

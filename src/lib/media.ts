@@ -16,9 +16,13 @@ function once(el: HTMLMediaElement | HTMLImageElement, ev: string) {
 }
 
 export function kindOf(file: { type: string; name: string }): MediaKind | null {
-  if (file.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v|3gp)$/i.test(file.name)) return 'video'
-  if (file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(file.name)) return 'image'
-  if (file.type.startsWith('audio/') || /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac)$/i.test(file.name)) return 'audio'
+  // the MIME type wins over the name: a recorded voice is audio/webm but named .webm
+  if (file.type.startsWith('video/')) return 'video'
+  if (file.type.startsWith('image/')) return 'image'
+  if (file.type.startsWith('audio/')) return 'audio'
+  if (/\.(mp4|mov|webm|mkv|m4v|3gp)$/i.test(file.name)) return 'video'
+  if (/\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(file.name)) return 'image'
+  if (/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac)$/i.test(file.name)) return 'audio'
   return null
 }
 

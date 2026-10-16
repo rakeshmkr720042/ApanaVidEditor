@@ -35,7 +35,7 @@ const PRESETS: { id: string; label: string; aspect: AspectRatio; resolution: Res
   { id: 'square', label: 'Square (1:1 1080x1080)', aspect: '1:1', resolution: '1080', fps: 30 },
 ]
 
-const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3' ? '' : ` · ${RES.find((r) => r.value === j.resolution)?.label}${j.aspect ? ` ${j.aspect}` : ''} · ${j.fps}fps`}`
+const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3' ? '' : ` · ${RES.find((r) => r.value === j.resolution)?.label}${j.aspect ? ` ${j.aspect}` : ''} · ${j.format === 'gif' ? Math.min(15, j.fps) : j.fps}fps`}`
 
 export function ExportSheet({ project, sources, name, snapshot, onClose }: Props) {
   const total = layoutClips(project.clips).total
