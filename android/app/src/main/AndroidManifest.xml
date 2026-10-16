@@ -37,5 +37,13 @@
 
     <!-- Permissions -->
 
+    <!-- AI captions/dub models and translation are downloaded on first use -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Voice-over recording in the Audio panel (asked at runtime the first time) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Saving exports to Documents on Android 9 and older; newer versions need no permission -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 </manifest>
