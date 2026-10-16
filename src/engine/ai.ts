@@ -2,6 +2,8 @@ import type { MediaSource, Project } from '../types'
 import type { Cue } from '../lib/srt'
 import type { AiRequest, AiResponse } from './ai.worker'
 import { mixAudio, stretch } from './audiomix'
+import { decodeAudio } from '../lib/media'
+import { cloneLines } from './voiceclone'
 
 // ---------------------------------------------------------------- languages
 
@@ -168,40 +170,47 @@ export async function translateCues(cues: Cue[], from: string, to: string, onPro
 
 // ---------------------------------------------------------------- text to speech
 
-/** Speaks each cue with an offline voice; returns the raw clips at the model's rate. */
-async function speak(texts: string[], lang: string, progress: Progress) {
-  const model = VOICES[lang]
-  if (!model) throw new Error('No offline voice for this language yet')
-  const r = await call({ type: 'tts', model, texts }, progress)
-  if (r.type !== 'tts') throw new Error('Unexpected reply')
-  return r
-}
-
 const toBuffer = (data: Float32Array, rate: number) => {
   const b = new AudioBuffer({ length: Math.max(1, data.length), numberOfChannels: 1, sampleRate: rate })
   b.copyToChannel(data as Float32Array<ArrayBuffer>, 0)
   return b
 }
 
+/**
+ * Speaks each line. With a reference recording the lines are voiced in that
+ * person's voice by the cloning server; otherwise by an offline voice.
+ */
+async function speak(texts: string[], lang: string, progress: Progress, reference?: Blob | null): Promise<(AudioBuffer | null)[]> {
+  if (reference) {
+    const files = await cloneLines(reference, texts, lang, (p) => progress('work', p))
+    return Promise.all(files.map((f) => (f.byteLength ? decodeAudio(new Blob([f])) : null)))
+  }
+  const model = VOICES[lang]
+  if (!model) throw new Error('No offline voice for this language yet')
+  const r = await call({ type: 'tts', model, texts }, progress)
+  if (r.type !== 'tts') throw new Error('Unexpected reply')
+  return r.clips.map((c) => (c ? toBuffer(c, r.rate) : null))
+}
+
 /** Plays the first line so the voice can be heard before dubbing everything. */
-export async function sampleVoice(text: string, lang: string, progress: Progress) {
-  const r = await speak([text], lang, progress)
-  return r.clips[0] ? toBuffer(r.clips[0], r.rate) : null
+export async function sampleVoice(text: string, lang: string, progress: Progress, reference?: Blob | null) {
+  return (await speak([text], lang, progress, reference))[0] ?? null
 }
 
 /**
  * Builds one voice-over track as long as the video. Each line starts at its cue;
  * a line that would run into the next one is sped up (up to 1.6x, pitch kept).
  */
-export async function buildVoiceOver(cues: Cue[], lang: string, total: number, progress: Progress): Promise<AudioBuffer> {
+export async function buildVoiceOver(
+  cues: Cue[], lang: string, total: number, progress: Progress, reference?: Blob | null,
+): Promise<AudioBuffer> {
   const sorted = [...cues].sort((a, b) => a.start - b.start)
-  const r = await speak(sorted.map((c) => c.text), lang, progress)
+  const clips = await speak(sorted.map((c) => c.text), lang, progress, reference)
   const RATE = 48000
   const ctx = new OfflineAudioContext(1, Math.ceil(Math.max(total, 0.5) * RATE), RATE)
   for (let i = 0; i < sorted.length; i++) {
-    const clip = r.clips[i]
-    if (!clip) continue
-    let buf: AudioBuffer = toBuffer(clip, r.rate)
+    let buf = clips[i]
+    if (!buf) continue
     const slot = (sorted[i + 1]?.start ?? total) - sorted[i].start
     const factor = buf.duration / Math.max(0.3, slot)
     if (factor > 1.05) buf = (await stretch(buf, Math.min(1.6, factor)).catch(() => null)) ?? buf

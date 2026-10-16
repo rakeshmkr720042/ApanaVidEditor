@@ -68,3 +68,9 @@ export async function requestPersistence() {
 export async function storageEstimate() {
   try { return await navigator.storage?.estimate?.() } catch { return undefined }
 }
+
+/** The user's own voice sample for voice cloning, kept across projects. */
+const VOICE_ID = '__my-voice'
+export const saveVoiceSample = (blob: Blob) => run('media', 'readwrite', (s) => s.put({ id: VOICE_ID, blob, meta: {} }))
+export const getVoiceSample = () => run<{ blob: Blob } | undefined>('media', 'readonly', (s) => s.get(VOICE_ID)).then((r) => r?.blob ?? null)
+export const deleteVoiceSample = () => run('media', 'readwrite', (s) => s.delete(VOICE_ID))

@@ -72,3 +72,10 @@ In the repository go to Settings > Pages and set Source to "GitHub Actions" once
 - `src/engine/ai.ts`, `ai.worker.ts` – speech to text, translation and text to speech
 - `src/engine/music.ts` – synthesised music and sound effects
 - `src/components/`, `src/panels/` – UI
+
+## Voice cloning
+
+The AI Dub → Voice-over tab can speak subtitles in the user's own voice ("My voice (clone)").
+The cloning runs on a free Hugging Face Space whose code is in `voice-space/` (Coqui XTTS v2, 17 languages incl. Hindi).
+Create a Gradio Space, upload the three files from `voice-space/`, and put its id (`username/space-name`) in the app's
+"Voice cloning server" field. XTTS v2 is licensed for non-commercial use only.

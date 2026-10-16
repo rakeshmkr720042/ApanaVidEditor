@@ -32,6 +32,12 @@ const hi: Record<string, string> = {
   'Subtitles are now in': 'सबटाइटल अब इस भाषा में हैं:', 'The .srt file was downloaded too.': '.srt फ़ाइल भी डाउनलोड हो गई।',
   'Translated .srt downloaded.': 'अनुवादित .srt डाउनलोड हो गई।', 'no offline voice yet. Voices available:': 'इसकी आवाज़ अभी नहीं है। उपलब्ध आवाज़ें:',
   'Email (optional, raises the free limit to 50,000 characters a day)': 'ईमेल (ज़रूरी नहीं, मुफ़्त सीमा 50,000 अक्षर/दिन हो जाती है)',
+  'Voice': 'आवाज़', 'AI voice (offline)': 'AI आवाज़ (ऑफ़लाइन)', 'My voice (clone)': 'मेरी आवाज़ (क्लोन)', 'My voice': 'मेरी आवाज़',
+  'Record my voice': 'मेरी आवाज़ रिकॉर्ड करें', 'Record again': 'दोबारा रिकॉर्ड करें', 'Recording': 'रिकॉर्डिंग', 'Stop': 'रोकें',
+  'Voice sample ready': 'आवाज़ का नमूना तैयार', 'Voice cloning server (Hugging Face Space)': 'वॉइस क्लोनिंग सर्वर (Hugging Face Space)',
+  'Could not read this audio': 'यह ऑडियो पढ़ा नहीं जा सका',
+  'The voice sample is too short. Speak for at least 10 seconds.': 'आवाज़ का नमूना बहुत छोटा है। कम से कम 10 सेकंड बोलें।',
+  'Record 15 to 30 seconds of yourself speaking clearly in a quiet room. Your voice is sent to your voice cloning server to make the voice-over, so this needs internet.': 'शांत कमरे में 15 से 30 सेकंड साफ़ बोलकर रिकॉर्ड करें। वॉइस-ओवर बनाने के लिए आपकी आवाज़ आपके वॉइस क्लोनिंग सर्वर पर जाती है, इसलिए इंटरनेट चाहिए।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

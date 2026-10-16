@@ -296,3 +296,5 @@ input, textarea { font: inherit; color: inherit; }
 .warn { color: #ffcc00; }
 .error-text { color: #ff6b6b; margin-top: 10px; }
 .ok-text { color: #34c759; margin-top: 10px; }
+.clone-box { display: grid; gap: 8px; padding: 10px; margin: 6px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.rec-live { color: #ff3b30; font-variant-numeric: tabular-nums; }
