@@ -18,6 +18,17 @@ import your own audio, record voice-over, per-clip and per-track volume and fade
 **Text**: text overlays with 18 fonts (Latin and Hindi/Devanagari), styles, outline, background and in/out animations,
 subtitles with SRT import and export, stickers.
 
+**AI captions & dubbing** (the "AI Dub" tool):
+- *Auto captions*: Whisper (tiny/base/small) runs in the browser through transformers.js and turns the timeline's speech
+  into timed subtitles, in the spoken language or translated to English. Export them as .srt.
+- *Translate*: subtitles are translated into 60 languages with the free MyMemory API, keeping their timing; the
+  translated .srt is downloaded and can replace the on-screen subtitles. Needs internet; an optional email raises the
+  free limit to 50,000 characters a day.
+- *Voice-over*: each subtitle is spoken with an offline Meta MMS voice (English, Hindi, Spanish, French, German,
+  Portuguese, Russian, Arabic, Vietnamese, Romanian, Yoruba) at its time, sped up to fit its slot when needed; the
+  original sound is lowered and the voice track lands on the timeline, so it is in the export.
+The library and models download on first use (45–250 MB for captions, ~30 MB per voice) and stay in the browser cache.
+
 **Export**: MP4 (H.264/AAC), WebM (VP9/Vorbis), MOV, GIF and MP3; 480p to 2K; 24/25/30/60 fps; aspect ratio change
 (9:16, 1:1, 16:9, 4:5…) with blurred, black or white background; removable watermark; cover thumbnail selector;
 batch export; lossless "fast" export for plain cuts.
@@ -58,5 +69,6 @@ In the repository go to Settings > Pages and set Source to "GitHub Actions" once
 - `src/engine/gl.ts`, `filters.ts`, `transitions.ts` – shaders, filter presets, transitions
 - `src/engine/player.ts` – real-time preview clock driving video/audio elements
 - `src/engine/exporter.ts`, `frames.ts`, `audiomix.ts` – export pipeline
+- `src/engine/ai.ts`, `ai.worker.ts` – speech to text, translation and text to speech
 - `src/engine/music.ts` – synthesised music and sound effects
 - `src/components/`, `src/panels/` – UI
