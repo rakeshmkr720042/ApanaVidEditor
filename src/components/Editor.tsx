@@ -7,6 +7,7 @@ import { loadSource, restoreSource } from '../lib/media'
 import { getMedia, getProject, saveMedia, saveProject } from '../lib/db'
 import { fmtTime } from '../lib/format'
 import { t } from '../lib/i18n'
+import { onPendingFiles, takePendingFiles } from '../lib/desktop'
 import { Timeline } from './Timeline'
 import { Preview } from './Preview'
 import { ExportSheet } from './ExportSheet'
@@ -118,6 +119,15 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     if (target === 'main') ed.appendClips(added)
     else for (const s of added) ed.addOverlay(time, s)
   }
+
+  // desktop app: File > Open Video / files opened from Explorer
+  const importRef = useRef(importFiles)
+  useEffect(() => { importRef.current = importFiles })
+  useEffect(() => {
+    const flush = () => { const f = takePendingFiles(); if (f.length) importRef.current(f, 'main') }
+    flush()
+    return onPendingFiles(flush)
+  }, [])
 
   // desktop drag & drop
   useEffect(() => {
