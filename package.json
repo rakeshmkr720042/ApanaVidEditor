@@ -1,0 +1,35 @@
+{
+  "name": "clipcut",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/copy-ffmpeg.mjs && vite",
+    "build": "node scripts/copy-ffmpeg.mjs && tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "postinstall": "node scripts/copy-ffmpeg.mjs"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/filesystem": "^7.1.9",
+    "@capacitor/share": "^7.0.4",
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vite-plugin-pwa": "^2.0.0"
+  }
+}
