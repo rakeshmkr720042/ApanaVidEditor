@@ -26,14 +26,14 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // App shell is precached; the 32 MB ffmpeg core is cached on first use instead.
+        // App shell is precached; the 32 MB ffmpeg core and the fonts are cached on first use.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        globIgnores: ['ffmpeg/**'],
+        globIgnores: ['ffmpeg/**', 'fonts/**'],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.includes('/ffmpeg/'),
+            urlPattern: ({ url }) => url.pathname.includes('/ffmpeg/') || url.pathname.includes('/fonts/'),
             handler: 'CacheFirst',
-            options: { cacheName: 'ffmpeg-core', cacheableResponse: { statuses: [200] } },
+            options: { cacheName: 'clipcut-assets', cacheableResponse: { statuses: [200] } },
           },
         ],
       },
