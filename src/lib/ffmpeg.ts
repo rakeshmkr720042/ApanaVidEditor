@@ -1,4 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg'
+import { isDesktop } from './desktop'
 
 const coreBase = () => new URL(`${import.meta.env.BASE_URL}ffmpeg/`, location.href).href
 export const coreURL = () => coreBase() + 'ffmpeg-core.js'
@@ -45,6 +46,7 @@ export async function runFFmpeg(args: string[], onProgress?: (p: number) => void
 }
 
 export async function isCoreCached() {
+  if (isDesktop) return true // bundled with the desktop app
   if (!('caches' in window)) return false
   return !!(await caches.match(wasmURL()))
 }

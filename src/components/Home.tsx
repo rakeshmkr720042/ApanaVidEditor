@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { importProjectFile } from '../lib/projectFile'
-import { deleteProject, listProjects, saveProject, storageEstimate, type ProjectRecord } from '../lib/db'
-import { emptyProject } from '../model/useEditor'
-import { fmtTime, uid } from '../lib/format'
+import { deleteProject, listProjects, storageEstimate, type ProjectRecord } from '../lib/db'
+import { createProject } from '../lib/newProject'
+import { fmtTime } from '../lib/format'
 import { isCoreCached, prefetchCore } from '../lib/ffmpeg'
 import { prefetchFonts } from '../engine/text'
 import { getLang, setLang, t } from '../lib/i18n'
@@ -28,12 +28,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
     storageEstimate().then((e) => e?.usage != null && setUsage(`${(e.usage / 1048576).toFixed(0)} MB`))
   }, [])
 
-  const create = async () => {
-    const id = uid()
-    const n = (projects?.length ?? 0) + 1
-    await saveProject({ id, name: `${t('Project')} ${n}`, updatedAt: Date.now(), data: emptyProject(), mediaIds: [], thumb: null, duration: 0 })
-    onOpen(id)
-  }
+  const create = async () => onOpen(await createProject())
 
   const remove = async (p: ProjectRecord) => {
     if (!confirm(`${t('Delete')} "${p.name}"?`)) return
