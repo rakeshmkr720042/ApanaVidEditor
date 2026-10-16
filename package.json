@@ -1,14 +1,22 @@
 {
   "name": "apanavideditor",
+  "productName": "ApanaVidEditor",
   "private": true,
   "version": "1.0.0",
+  "description": "Lightweight offline video editor",
+  "author": "Rakesh",
+  "homepage": "https://rakeshmkr720042.github.io/ApanaVidEditor/",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "node scripts/copy-assets.mjs && vite",
     "build": "node scripts/copy-assets.mjs && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "postinstall": "node scripts/copy-assets.mjs"
+    "postinstall": "node scripts/copy-assets.mjs",
+    "electron:dev": "concurrently -k \"vite --port 5173 --strictPort\" \"wait-on tcp:5173 && cross-env ELECTRON_DEV_URL=http://localhost:5173 electron .\"",
+    "electron:start": "npm run build && electron .",
+    "electron:build": "npm run build && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "@capacitor/core": "^7.6.9",
@@ -46,9 +54,67 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^9.2.5",
+    "cross-env": "^10.1.0",
+    "electron": "^44.8.0",
+    "electron-builder": "^26.15.3",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
-    "vite-plugin-pwa": "^2.0.0"
+    "vite-plugin-pwa": "^2.0.0",
+    "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "com.clipcut.editor",
+    "productName": "ApanaVidEditor",
+    "copyright": "Copyright © 2026 Rakesh",
+    "directories": {
+      "output": "release",
+      "buildResources": "electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "asar": true,
+    "fileAssociations": [
+      {
+        "ext": "mp4",
+        "name": "MP4 Video",
+        "role": "Editor"
+      },
+      {
+        "ext": "mov",
+        "name": "QuickTime Video",
+        "role": "Editor"
+      },
+      {
+        "ext": "webm",
+        "name": "WebM Video",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.png",
+      "artifactName": "ApanaVidEditor-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ApanaVidEditor"
+    }
   }
 }

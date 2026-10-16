@@ -48,6 +48,18 @@ npm run build      # production build in dist/
 npm run preview    # serve dist/ on http://localhost:4173
 ```
 
+## Windows desktop app
+An Electron shell (`electron/`) wraps the same build into a native Windows app with a File menu
+(File > Open Video, Ctrl+O), Explorer "Open with" for .mp4/.mov/.webm, and everything bundled for offline use.
+```bash
+npm run electron:dev     # Vite dev server + Electron window with hot reload
+npm run electron:start   # build, then run the production app in Electron
+npm run electron:build   # build the x64 NSIS installer into release/ (run on Windows)
+```
+The app is served from an `app://` scheme with COOP/COEP headers (cross-origin isolated, so
+SharedArrayBuffer is available) and a Content-Security-Policy. Every push to `main` builds the installer in
+GitHub Actions ("Build Windows installer"); download it from the run's **ApanaVidEditor-Windows-Setup** artifact.
+
 ## Android
 Needs Android Studio / the Android SDK.
 ```bash

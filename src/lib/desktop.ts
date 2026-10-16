@@ -1,0 +1,46 @@
+/** Bridge to the Electron shell (electron/preload.cjs). Undefined in the browser and on Android. */
+interface DesktopBridge {
+  platform: string
+  onOpenFiles(cb: (files: { name: string; data: Uint8Array }[]) => void): () => void
+  ready(): void
+}
+
+export const desktop = (window as unknown as { desktop?: DesktopBridge }).desktop
+export const isDesktop = !!desktop
+
+// Files from File > Open Video or Explorer wait here until an editor picks them up.
+let pending: File[] = []
+const listeners = new Set<() => void>()
+
+const mimeByExt: Record<string, string> = {
+  mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+  mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg',
+}
+
+/** Calls onFiles when the desktop app is asked to open files. Returns an unsubscribe function. */
+export function listenForOpenedFiles(onFiles: () => void) {
+  if (!desktop) return () => {}
+  const off = desktop.onOpenFiles((files) => {
+    pending.push(...files.map((f) => new File([f.data as BlobPart], f.name, { type: mimeByExt[f.name.split('.').pop()!.toLowerCase()] ?? '' })))
+    listeners.forEach((l) => l())
+    onFiles()
+  })
+  desktop.ready()
+  return off
+}
+
+export const hasPendingFiles = () => pending.length > 0
+
+/** Removes and returns the waiting files. */
+export function takePendingFiles() {
+  const f = pending
+  pending = []
+  return f
+}
+
+/** Runs cb whenever new files arrive. Returns an unsubscribe function. */
+export function onPendingFiles(cb: () => void) {
+  listeners.add(cb)
+  return () => { listeners.delete(cb) }
+}
