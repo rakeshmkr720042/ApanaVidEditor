@@ -182,6 +182,15 @@ const hi: Record<string, string> = {
   '2. On the same computer keep the address http://localhost:11434 and tap Test connection.': '2. उसी कंप्यूटर पर पता http://localhost:11434 रखें और "कनेक्शन जांचें" दबाएं।',
   '3. In the browser, allow this site once in PowerShell, then quit and restart Ollama:': '3. ब्राउज़र में: PowerShell में एक बार यह साइट allow करें, फिर Ollama बंद करके दोबारा चालू करें:',
   "From a phone: on the laptop run the line below and restart Ollama, allow it in Windows Firewall, then type the laptop's Wi-Fi address here, like http://192.168.1.5:11434 (ipconfig shows it as IPv4). Both must be on the same Wi-Fi. Use the Android app for this; the web page can only reach localhost.": 'फ़ोन से: लैपटॉप पर नीचे वाली लाइन चलाएं और Ollama दोबारा चालू करें, Windows Firewall में allow करें, फिर यहां लैपटॉप का Wi-Fi पता लिखें, जैसे http://192.168.1.5:11434 (ipconfig में IPv4)। दोनों एक ही Wi-Fi पर हों। इसके लिए Android ऐप इस्तेमाल करें; वेब पेज सिर्फ़ localhost तक पहुंच सकता है।',
+  'AI voice (offline)': 'AI आवाज़ (ऑफ़लाइन)', 'My voice (clone)': 'मेरी आवाज़ (क्लोन)', 'My voice': 'मेरी आवाज़',
+  'Record my voice': 'मेरी आवाज़ रिकॉर्ड करें', 'Record again': 'दोबारा रिकॉर्ड करें',
+  'Voice sample ready': 'आवाज़ का नमूना तैयार',
+  'Could not read this audio': 'यह ऑडियो पढ़ा नहीं जा सका',
+  'My voice (personal)': 'मेरी आवाज़ (पर्सनल)', 'Use voice cloning': 'वॉइस क्लोनिंग चालू करें', 'Voice cloning server URL': 'वॉइस क्लोनिंग सर्वर URL',
+  'Dub videos in your own voice with your voice cloning server (a free Hugging Face Space). Your voice sample is sent to that server, so this needs internet.': 'अपने वॉइस क्लोनिंग सर्वर (मुफ़्त Hugging Face Space) से वीडियो को अपनी आवाज़ में डब करें। आपकी आवाज़ का नमूना उस सर्वर पर जाता है, इसलिए इंटरनेट चाहिए।',
+  'Connected. "My voice (clone)" is now in AI Dub → Voice-over.': 'जुड़ गया। अब AI Dub → Voice-over में "मेरी आवाज़ (क्लोन)" मिलेगा।',
+  'The voice sample is too short. Speak for at least 10 seconds.': 'आवाज़ का नमूना बहुत छोटा है। कम से कम 10 सेकंड बोलें।',
+  'Record 15 to 30 seconds of yourself speaking clearly in a quiet room. Your voice is sent to your voice cloning server to make the voice-over, so this needs internet.': 'शांत कमरे में 15 से 30 सेकंड साफ़ बोलकर रिकॉर्ड करें। वॉइस-ओवर बनाने के लिए आपकी आवाज़ आपके वॉइस क्लोनिंग सर्वर पर जाती है, इसलिए इंटरनेट चाहिए।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

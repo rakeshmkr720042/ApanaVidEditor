@@ -102,3 +102,12 @@ In the repository go to Settings > Pages and set Source to "GitHub Actions" once
 - `src/engine/music.ts` – synthesised music and sound effects
 - `src/engine/watermark.ts` – user watermark layout (grid, drag, floating path) and drawing
 - `src/components/`, `src/panels/` – UI
+
+## Voice cloning (personal, off by default)
+
+AI Dub → Voice-over can speak subtitles in the user's own voice ("My voice (clone)"). It is hidden until it is
+switched on under Local AI → "My voice (personal)" with the address of the user's own server; there is no default
+server, so the published apps behave exactly as before.
+The server is a free Hugging Face Space whose code is in `voice-space/` (Coqui XTTS v2, 17 languages incl. Hindi).
+Create a Gradio Space, upload the three files from `voice-space/`, and put its id (`username/space-name`) or URL in
+"Voice cloning server URL". XTTS v2 is licensed for non-commercial use only.

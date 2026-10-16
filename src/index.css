@@ -495,3 +495,5 @@ input, textarea { font: inherit; color: inherit; }
 .meter-empty span { padding: 2px 6px; border-radius: 6px; background: var(--panel-3); }
 .meter-empty span.long { background: #4a3413; color: #ffd27a; }
 .meter p { margin: 0; }
+.clone-box { display: grid; gap: 8px; padding: 10px; margin: 6px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.rec-live { color: #ff3b30; font-variant-numeric: tabular-nums; }
