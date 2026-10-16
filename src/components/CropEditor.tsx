@@ -44,12 +44,12 @@ export function CropEditor({ ed, clip, source, time, onClose }: Props) {
   const frameR = aspect === 'original' ? null : (([a, b]) => a / b)(aspect.split(':').map(Number))
   const ratios = frameR ? [{ value: 'frame', label: `${t('Frame')} ${aspect}`, r: frameR }, ...RATIOS] : RATIOS
 
-  const applyRatio = (val: string) => {
+  const applyRatio = (val: string, rot = rotate) => {
     setRatio(val)
     const r = ratios.find((x) => x.value === val)?.r
     if (!r) return
     // r is the visible ratio; convert to normalised source units
-    const want = (rotate % 180 ? 1 / r : r) / srcAR
+    const want = (rot % 180 ? 1 / r : r) / srcAR
     let w = 1, h = w / want
     if (h > 1) { h = 1; w = want }
     setCrop({ x: (1 - w) / 2, y: (1 - h) / 2, w, h })
@@ -110,7 +110,7 @@ export function CropEditor({ ed, clip, source, time, onClose }: Props) {
       <div className="modal-foot">
         <Chips options={ratios} value={ratio} onChange={applyRatio} />
         <div className="row">
-          <button className="btn" onClick={() => setRotate(((rotate + 90) % 360) as Clip['rotate'])}>⟳ {t('Rotate')} {rotate ? `${rotate}°` : ''}</button>
+          <button className="btn" onClick={() => { const r = ((rotate + 90) % 360) as Clip['rotate']; setRotate(r); applyRatio(ratio, r) }}>⟳ {t('Rotate')} {rotate ? `${rotate}°` : ''}</button>
           <button className={`btn${flipH ? ' primary' : ''}`} onClick={() => setFlipH(!flipH)}>⇋ {t('Flip')}</button>
           <button className={`btn${flipV ? ' primary' : ''}`} onClick={() => setFlipV(!flipV)}>⇵</button>
           <button className="btn" onClick={() => { setCrop({ x: 0, y: 0, w: 1, h: 1 }); setRotate(0); setFlipH(false); setFlipV(false); setRatio('free') }}>{t('Reset')}</button>

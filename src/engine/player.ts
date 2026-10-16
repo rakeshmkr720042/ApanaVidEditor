@@ -229,6 +229,8 @@ export class Player {
   }
 
   draw() {
+    // a seeking video has no frame for a moment: keep the last picture until 'seeked' asks for a redraw, instead of flashing black
+    if (!this.playing && [...this.els.values()].some((el) => el.seeking && el.readyState < 2)) return
     if (this.renderOverride) {
       // Trim preview: show the raw clip frame being trimmed, full screen.
       const clip = this.project.clips.find((c) => c.id === this.renderOverride)

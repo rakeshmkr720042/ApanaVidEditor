@@ -263,7 +263,8 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
               )
             })}
             {layout.items.slice(0, -1).map((it) => (
-              <button
+              // hidden next to the selected clip so its trim handles can be grabbed (the toolbar has Transition)
+              sel?.type === 'clip' && (sel.id === it.clip.id || sel.id === layout.items[it.index + 1].clip.id) ? null : <button
                 key={'tr' + it.clip.id}
                 className={`tl-trans${it.clip.transition ? ' on' : ''}`}
                 style={{ left: (it.start + it.dur - it.transOut / 2) * pps }}
