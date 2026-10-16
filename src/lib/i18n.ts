@@ -40,6 +40,12 @@ const hi: Record<string, string> = {
   'Custom spot. Pick a box above to snap it back.': 'आपकी चुनी जगह। ऊपर कोई डिब्बा चुनकर वापस ले जाएं।',
   'Moves slowly around the whole frame so it is hard to crop out.': 'पूरे वीडियो में धीरे-धीरे घूमता है ताकि काटकर हटाया न जा सके।',
   'Pick an image (PNG with a transparent background works best)': 'फ़ोटो चुनें (पारदर्शी बैकग्राउंड वाली PNG सबसे अच्छी)',
+  'Motion': 'मोशन', 'Preset': 'प्रीसेट', 'Custom (project frame)': 'अपनी सेटिंग (प्रोजेक्ट फ़्रेम)',
+  'The video is reframed to': 'वीडियो का आकार बदलकर होगा', 'empty space uses the Format background.': 'खाली जगह में फ़ॉर्मेट वाला बैकग्राउंड आएगा।',
+  'Project saved': 'प्रोजेक्ट सेव हो गया', 'Preparing project file…': 'प्रोजेक्ट फ़ाइल बन रही है…', 'Save project': 'प्रोजेक्ट सेव करें',
+  'Save as .avp file': '.avp फ़ाइल में सेव करें', 'Open project file (.avp)': 'प्रोजेक्ट फ़ाइल खोलें (.avp)', 'Magnetic snap': 'मैग्नेटिक स्नैप',
+  'Frame': 'फ़्रेम', 'Typewriter': 'टाइपराइटर', 'Bounce In': 'उछलकर आए', 'Slide In Left': 'बाएं से आए', 'Slide In Right': 'दाएं से आए',
+  'Fade In': 'धीरे दिखे', 'Zoom In': 'ज़ूम होकर आए', 'None': 'कोई नहीं',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

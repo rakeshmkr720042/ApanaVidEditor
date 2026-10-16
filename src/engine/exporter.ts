@@ -1,4 +1,4 @@
-import type { MediaSource, Project } from '../types'
+import type { AspectRatio, MediaSource, Project } from '../types'
 import { layoutClips } from '../model/timeline'
 import { getFFmpeg, runFFmpeg } from '../lib/ffmpeg'
 import { mixAudio } from './audiomix'
@@ -17,6 +17,7 @@ export interface ExportJob {
   fps: number
   watermark: string | null
   cover: number | null // timeline time of the cover frame, embedded in MP4/MOV
+  aspect?: AspectRatio // overrides the project's frame shape (platform presets)
 }
 
 export interface ExportOutput { blob: Blob; ext: string; cover: Blob | null; width: number; height: number; encoder: string }
@@ -80,6 +81,7 @@ export async function exportProject(
   signal?: AbortSignal,
 ): Promise<ExportOutput> {
   const check = () => { if (signal?.aborted) throw new Cancelled() }
+  if (job.aspect && job.aspect !== project.settings.aspect) project = { ...project, settings: { ...project.settings, aspect: job.aspect } }
   const { items, total } = layoutClips(project.clips)
   if (total <= 0) throw new Error('Nothing to export')
   const gif = job.format === 'gif'

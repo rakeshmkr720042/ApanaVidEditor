@@ -12,6 +12,7 @@ export interface MediaSource {
   height: number
   hasAudio: boolean
   thumbs: string[]
+  wave?: string // video sources: waveform image of the sound over the whole file ('' = no sound / not decodable)
 }
 
 /** Colour settings, also produced by filter presets. All 0 = unchanged. */
@@ -71,7 +72,7 @@ interface LayerBase {
   end: number
 }
 
-export type TextAnim = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'pop' | 'typewriter' | 'zoom' | 'bounce'
+export type TextAnim = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'pop' | 'typewriter' | 'zoom' | 'bounce'
 
 export interface TextStyle {
   font: string

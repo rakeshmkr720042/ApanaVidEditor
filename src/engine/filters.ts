@@ -15,6 +15,15 @@ export interface FilterPreset { id: string; name: string; group: string; look: L
 const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255]
 
 const groups: Record<string, [string, Look][]> = {
+  // creator colour grades: tone + split toning, stacked on top of the clip's own Adjust sliders
+  Looks: [
+    ['Warm Sunset', { temperature: 0.4, tint: 0.08, contrast: 0.12, highlights: -0.1, vignette: 0.25, split: { shadow: hex('#4a1f3d'), highlight: hex('#ffb35c'), amount: 0.45 } }],
+    ['Cold Blue', { temperature: -0.45, tint: -0.04, saturation: -0.15, contrast: 0.15, split: { shadow: hex('#0a2a55'), highlight: hex('#cfe6ff'), amount: 0.4 } }],
+    ['Film Noir', { mono: 1, contrast: 0.65, shadows: -0.25, highlights: 0.1, vignette: 0.65, grain: 0.35 }],
+    ['Vintage', { sepia: 0.35, fade: 0.35, temperature: 0.15, saturation: -0.25, vignette: 0.4, grain: 0.3, split: { shadow: hex('#2e3b2a'), highlight: hex('#ffe8b8'), amount: 0.3 } }],
+    ['Vivid Pop', { saturation: 0.55, vibrance: 0.35, contrast: 0.25, exposure: 0.05, sharpen: 0.4 }],
+    ['Matte', { fade: 0.5, contrast: -0.15, saturation: -0.15, shadows: 0.1, split: { shadow: hex('#2b2f3a'), highlight: hex('#f2e9dc'), amount: 0.2 } }],
+  ],
   Basic: [
     ['Vivid', { saturation: 0.35, contrast: 0.15, vibrance: 0.2 }],
     ['Punch', { contrast: 0.35, saturation: 0.25, shadows: -0.1 }],

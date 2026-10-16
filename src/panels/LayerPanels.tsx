@@ -10,6 +10,17 @@ import { t } from '../lib/i18n'
 
 interface P { ed: Editor; onClose: () => void }
 
+/** One-tap motion titles shown right where the text is typed: an entry animation with a matching exit. */
+const MOTION_PRESETS: { label: string; animIn: TextAnim; animOut: TextAnim }[] = [
+  { label: 'Typewriter', animIn: 'typewriter', animOut: 'fade' },
+  { label: 'Bounce In', animIn: 'bounce', animOut: 'fade' },
+  { label: 'Slide In Left', animIn: 'slide-right', animOut: 'slide-left' },
+  { label: 'Slide In Right', animIn: 'slide-left', animOut: 'slide-right' },
+  { label: 'Fade In', animIn: 'fade', animOut: 'fade' },
+  { label: 'Zoom In', animIn: 'zoom', animOut: 'fade' },
+  { label: 'None', animIn: 'none', animOut: 'none' },
+]
+
 const animOptions = ANIMS.map((a) => ({ value: a, label: a === 'none' ? 'None' : a.replace('-', ' ').replace(/^\w/, (c) => c.toUpperCase()) }))
 
 export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer: TextLayer; startTab?: string }) {
@@ -24,6 +35,12 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
       {tab === 'edit' && (
         <>
           <textarea className="text-input" value={layer.text} autoFocus rows={3} onChange={(e) => set({ text: e.target.value })} placeholder={t('Type here')} />
+          <span className="field-label">{t('Motion')}</span>
+          <Chips
+            options={MOTION_PRESETS.map((m) => ({ value: m.label, label: m.label }))}
+            value={MOTION_PRESETS.find((m) => m.animIn === layer.animIn && m.animOut === layer.animOut)?.label ?? ''}
+            onChange={(v) => { const m = MOTION_PRESETS.find((x) => x.label === v)!; set({ animIn: m.animIn, animOut: m.animOut }) }}
+          />
           <div className="preset-grid">
             {TEXT_PRESETS.map((p) => (
               <button key={p.name} onClick={() => { if (p.style.font) ensureFont(p.style.font); style({ ...p.style, ...(p.style.stroke === undefined ? { stroke: null } : {}), ...(p.style.background === undefined ? { background: null } : {}) }) }}
