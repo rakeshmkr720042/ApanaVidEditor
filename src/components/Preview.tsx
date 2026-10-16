@@ -10,14 +10,17 @@ interface Props {
   t: number
   onEditText: (id: string) => void
   onTogglePlay: () => void
+  /** Watermark panel is open: the watermark can be dragged. */
+  wmEdit?: boolean
 }
 
 type Gesture =
   | { kind: 'move'; id: string; x0: number; y0: number; bx: number; by: number }
+  | { kind: 'wm'; x0: number; y0: number; cx: number; cy: number }
   | { kind: 'scale'; id: string; cx: number; cy: number; d0: number; a0: number; s0: number; r0: number; rect0?: { x: number; y: number; w: number; h: number } }
 
 /** The video canvas plus handles to move, scale and rotate text, stickers, overlays and blur areas. */
-export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay }: Props) {
+export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit }: Props) {
   const wrap = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ w: 0, h: 0, left: 0, top: 0 })
   const gesture = useRef<Gesture | null>(null)
@@ -43,6 +46,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay }: 
   const layers = ed.project.layers.filter((l): l is VisualLayer => l.type !== 'audio' && visible(l))
   const selected = ed.sel?.type === 'layer' ? layers.find((l) => l.id === ed.sel!.id) : undefined
   const rect = selected && player ? player.renderer.layerRect(selected, ed.sources) : null
+  const wmRect = wmEdit && player ? player.renderer.watermarkRect(ed.project, ed.sources, t) : null
 
   const toCanvas = (e: React.PointerEvent) => {
     const r = wrap.current!.getBoundingClientRect()
@@ -64,6 +68,12 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay }: 
 
   const onDown = (e: React.PointerEvent) => {
     const p = toCanvas(e)
+    if (wmRect && Math.abs(p.x - wmRect.cx) <= wmRect.w / 2 + 10 && Math.abs(p.y - wmRect.cy) <= wmRect.h / 2 + 10) {
+      e.currentTarget.setPointerCapture(e.pointerId)
+      ed.begin()
+      gesture.current = { kind: 'wm', x0: p.x, y0: p.y, cx: wmRect.cx, cy: wmRect.cy }
+      return
+    }
     const l = hit(p.x, p.y)
     if (!l) {
       const now = Date.now()
@@ -99,6 +109,11 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay }: 
     const g = gesture.current
     if (!g) return
     const p = toCanvas(e)
+    if (g.kind === 'wm') {
+      // dragging pins a floating watermark to the spot it was dropped
+      ed.setWatermark({ position: 'custom', motion: 'static', x: (g.cx + p.x - g.x0) / W, y: (g.cy + p.y - g.y0) / H })
+      return
+    }
     const l = ed.project.layers.find((x) => x.id === g.id)
     if (!l || l.type === 'audio') return
     if (g.kind === 'move') {
@@ -132,6 +147,9 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay }: 
   return (
     <div className="stage" ref={wrap} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
       <canvas ref={canvasRef} className="preview-canvas" style={{ width: box.w, height: box.h, left: box.left, top: box.top }} />
+      {wmRect && (
+        <div className="sel-box wm" style={{ left: box.left + wmRect.cx * scale, top: box.top + wmRect.cy * scale, width: wmRect.w * scale, height: wmRect.h * scale, transform: 'translate(-50%, -50%)' }} />
+      )}
       {selected && rect && (
         <div
           className="sel-box"

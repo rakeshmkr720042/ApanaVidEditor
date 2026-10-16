@@ -3,6 +3,7 @@ import { activeAt, type LaidClip } from '../model/timeline'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { drawSticker, drawText, ensureFont, fontLoaded, measureText, STICKER_BASE } from './text'
+import { drawUserWatermark, watermarkCenter, watermarkSize, watermarkVisible } from './watermark'
 
 export interface FrameImage { image: CanvasImageSource; width: number; height: number }
 export type FrameGetter = (key: string) => FrameImage | null
@@ -61,6 +62,7 @@ export class Renderer {
   private layerGrader: Grader | null = null
   private scratch = makeCanvas()
   private bgSmall = makeCanvas(48, 48)
+  private wmImage: { id: string; img: CanvasImageSource | null; ready: Promise<void> } | null = null
   onNeedsRedraw: (() => void) | null = null
   W = 2
   H = 2
@@ -125,7 +127,42 @@ export class Renderer {
       else if (l.type === 'blur') this.drawBlur(l)
     }
 
+    const wm = inp.project.watermark
+    if (watermarkVisible(wm, inp.t)) {
+      const src = wm.sourceId ? inp.sources[wm.sourceId] : undefined
+      if (wm.kind === 'text' && !fontLoaded(wm.font)) ensureFont(wm.font).then(() => this.onNeedsRedraw?.())
+      drawUserWatermark(ctx, wm, inp.t, W, H, src, wm.kind === 'image' ? this.watermarkImage(src) : null)
+    }
+
     if (inp.watermark) this.drawWatermark(inp.watermark)
+  }
+
+  /** Decoded logo for an image watermark; null until it has loaded (then a redraw is requested). */
+  private watermarkImage(src: MediaSource | undefined): CanvasImageSource | null {
+    if (!src) return null
+    if (this.wmImage?.id !== src.id) {
+      const entry: NonNullable<Renderer['wmImage']> = { id: src.id, img: null, ready: Promise.resolve() }
+      entry.ready = decodeImage(src).then((img) => { entry.img = img; this.onNeedsRedraw?.() }).catch(() => {})
+      this.wmImage = entry
+    }
+    return this.wmImage.img
+  }
+
+  /** Waits until everything the watermark needs is loaded, so the first exported frames have it. */
+  async prepareWatermark(project: Project, sources: Record<string, MediaSource>) {
+    const wm = project.watermark
+    if (!wm?.enabled) return
+    if (wm.kind === 'text') await ensureFont(wm.font)
+    else if (wm.sourceId) { this.watermarkImage(sources[wm.sourceId]); await this.wmImage?.ready }
+  }
+
+  /** Where the user watermark is at time t, in canvas pixels, for dragging it on the preview. */
+  watermarkRect(project: Project, sources: Record<string, MediaSource>, t: number) {
+    const wm = project.watermark
+    if (!watermarkVisible(wm, t)) return null
+    const { W, H } = this
+    const { w, h } = watermarkSize(this.ctx, wm, W, H, wm.sourceId ? sources[wm.sourceId] : undefined)
+    return { ...watermarkCenter(wm, t, W, H, w, h), w, h }
   }
 
   /** Draws a clip (crop, rotate, flip, fit/fill, background) into frames[i]. */
@@ -297,6 +334,18 @@ export class Renderer {
 
   /** Test helper: compiles all transition shaders. */
   compileTransitions() { return this.grader?.compileAll() ?? ['no webgl'] }
+}
+
+async function decodeImage(src: MediaSource): Promise<CanvasImageSource> {
+  try {
+    return await createImageBitmap(src.file)
+  } catch {
+    // e.g. SVG logos, which createImageBitmap can't decode from a Blob
+    const img = new Image()
+    img.src = src.url
+    await img.decode()
+    return img
+  }
 }
 
 function hexRgb(h: string): [number, number, number] {

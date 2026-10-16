@@ -8,7 +8,7 @@ const t = (n: number) => n.toFixed(3)
 
 /** True when the project is only cuts of videos, so it can be exported without re-encoding. */
 export function isSimpleProject(p: Project, sources: Record<string, MediaSource>) {
-  if (!p.clips.length || p.layers.length || p.settings.aspect !== 'original') return false
+  if (!p.clips.length || p.layers.length || p.watermark?.enabled || p.settings.aspect !== 'original') return false
   const first = sources[p.clips[0].sourceId]
   return p.clips.every((c) => {
     const s = sources[c.sourceId]

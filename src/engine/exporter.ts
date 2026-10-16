@@ -114,6 +114,7 @@ export async function exportProject(
     await Promise.all([...fonts, 'Poppins'].map(ensureFont))
     const renderer = new Renderer(canvasFor(w, h))
     renderer.resize(w, h)
+    await renderer.prepareWatermark(project, sources)
     const readers = new Map<string, FrameReader>()
     const renderAt = async (t: number, seed: number) => {
       const needs = mediaNeeds(project, items, sources, t)
