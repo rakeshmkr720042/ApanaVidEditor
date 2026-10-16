@@ -40,7 +40,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   return (
     <div className="app home">
       <header className="top">
-        <div className="brand"><span className="logo"><Icon name="play" size={16} /></span> ClipCut</div>
+        <div className="brand"><span className="logo"><Icon name="play" size={16} /></span> ApanaVidEditor</div>
         <div className="top-actions">
           <button className="btn ghost small" onClick={() => { setLang(getLang() === 'hi' ? 'en' : 'hi'); onLang() }}>{getLang() === 'hi' ? 'English' : 'हिंदी'}</button>
         </div>

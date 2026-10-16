@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
-        name: 'ClipCut Video Editor',
-        short_name: 'ClipCut',
+        name: 'ApanaVidEditor',
+        short_name: 'ApanaVidEditor',
         description: 'Lightweight offline video editor',
         theme_color: '#0f1115',
         background_color: '#0f1115',

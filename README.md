@@ -1,4 +1,4 @@
-# ClipCut
+# ApanaVidEditor
 
 Lightweight, offline-first video editor for the web (installable PWA) and Android (Capacitor).
 Everything runs on the device: rendering in WebGL, encoding with WebCodecs, muxing with ffmpeg.wasm. Nothing is uploaded.
@@ -41,7 +41,7 @@ npx cap sync android
 npx cap open android   # then Run, or Build > Build Bundle(s) / APK(s)
 ```
 ffmpeg and fonts are bundled inside the APK, so it works offline from the first launch.
-Exports are saved to Documents/ClipCut and can be shared from the export sheet.
+Exports are saved to Documents/ApanaVidEditor and can be shared from the export sheet.
 
 ## Live link (GitHub Pages)
 `.github/workflows/pages.yml` builds and deploys on every push to `main`.

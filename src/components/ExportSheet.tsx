@@ -54,7 +54,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
     return () => { live = false; clearTimeout(id) }
   }, [useCover, coverT, snapshot])
 
-  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : res, fps, watermark: watermark ? 'ClipCut' : null, cover: useCover ? coverT : null })
+  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : res, fps, watermark: watermark ? 'ApanaVidEditor' : null, cover: useCover ? coverT : null })
 
   const run = async (jobs: ExportJob[]) => {
     setError(null)
@@ -94,7 +94,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
 
   const save = async (r: Result) => {
     if (isNative) {
-      try { await saveNative(r.blob, r.file, false); setToast(`${t('Saved to')} Documents/ClipCut/${r.file}`) } catch (e) { setToast((e as Error).message) }
+      try { await saveNative(r.blob, r.file, false); setToast(`${t('Saved to')} Documents/ApanaVidEditor/${r.file}`) } catch (e) { setToast((e as Error).message) }
       return
     }
     const a = document.createElement('a')

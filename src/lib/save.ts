@@ -11,11 +11,11 @@ function toBase64(blob: Blob) {
   })
 }
 
-/** On Android, writes the video to Documents/ClipCut and opens the share sheet. */
+/** On Android, writes the video to Documents/ApanaVidEditor and opens the share sheet. */
 export async function saveNative(blob: Blob, name: string, share: boolean) {
   const { Filesystem, Directory } = await import('@capacitor/filesystem')
   const { uri } = await Filesystem.writeFile({
-    path: `ClipCut/${name}`,
+    path: `ApanaVidEditor/${name}`,
     data: await toBase64(blob),
     directory: Directory.Documents,
     recursive: true,
