@@ -14,7 +14,10 @@ interface Props {
   onTrimPreview: (clipId: string | null, sourceTime: number) => void
   onTransition: (clipId: string) => void
   onAdd: () => void
+  snap: boolean
 }
+
+const SNAP_PX = 10
 
 type Drag =
   | { kind: 'clip-trim'; id: string; side: 'in' | 'out'; x0: number; in0: number; out0: number; speed: number }
@@ -34,7 +37,7 @@ function layerLabel(l: Layer) {
   }
 }
 
-export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd }: Props) {
+export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, snap }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const lastSet = useRef(-1)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -45,6 +48,26 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const { project, sources, layout, sel } = ed
   const total = layout.total
+  const [snapLine, setSnapLine] = useState<number | null>(null)
+
+  /** Magnetic snap: edges of clips, other layers and the playhead pull a dragged edge in when within SNAP_PX. */
+  const snapEdges = (skipId: string) => {
+    const e = [0, total, t]
+    for (const it of layout.items) e.push(it.start, it.start + it.dur)
+    for (const l of project.layers) if (l.id !== skipId) e.push(l.start, l.end)
+    return e
+  }
+  /** Returns the shift that snaps one of `edges` to the nearest target, or 0. */
+  const snapShift = (edges: number[], targets: number[]) => {
+    if (!snap) { setSnapLine(null); return 0 }
+    let best = SNAP_PX / pps, shift = 0, line: number | null = null
+    for (const e of edges) for (const x of targets) {
+      const d = x - e
+      if (Math.abs(d) < best) { best = Math.abs(d); shift = d; line = x }
+    }
+    setSnapLine(line)
+    return shift
+  }
 
   useLayoutEffect(() => {
     const el = scroller.current
@@ -105,7 +128,10 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
         ed.updateClip(c.id, { in: v })
         onTrimPreview(c.id, v)
       } else {
-        const v = Math.min(maxOut, Math.max(d.in0 + MIN_CLIP, d.out0 + dt * d.speed))
+        const it = layout.items.find((x) => x.clip.id === c.id)!
+        const raw = d.out0 + dt * d.speed
+        const endAt = it.start + (raw - c.in) / d.speed
+        const v = Math.min(maxOut, Math.max(d.in0 + MIN_CLIP, raw + snapShift([endAt], [t, ...project.layers.flatMap((l) => [l.start, l.end])]) * d.speed))
         ed.updateClip(c.id, { out: v })
         onTrimPreview(c.id, Math.max(d.in0, v - 0.04))
       }
@@ -113,12 +139,15 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       const l = project.layers.find((x) => x.id === d.id)!
       const hasSrc = l.type === 'media' || l.type === 'audio'
       const srcDur = hasSrc ? sources[(l as { sourceId: string }).sourceId]?.duration ?? Infinity : Infinity
+      const targets = snapEdges(l.id)
       if (d.side === 'in') {
-        let start = Math.max(0, Math.min(d.end0 - 0.2, d.start0 + dt))
+        let start = d.start0 + dt
+        start = Math.max(0, Math.min(d.end0 - 0.2, start + snapShift([start], targets)))
         if (hasSrc) start = Math.max(start, d.start0 - d.in0)
         ed.updateLayer(l.id, hasSrc ? { start, in: d.in0 + (start - d.start0) } : { start })
       } else {
-        let end = Math.max(d.start0 + 0.2, d.end0 + dt)
+        let end = d.end0 + dt
+        end = Math.max(d.start0 + 0.2, end + snapShift([end], targets))
         if (hasSrc) end = Math.min(end, d.start0 + (srcDur - d.in0))
         ed.updateLayer(l.id, { end })
       }
@@ -126,7 +155,9 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       if (!d.moved && Math.abs(e.clientX - d.x0) < 6) return
       if (!d.moved) { ed.begin(); setDrag({ ...d, moved: true }) }
       const len = d.end0 - d.start0
-      const start = Math.max(0, d.start0 + dt)
+      let start = d.start0 + dt
+      start += snapShift([start, start + len], snapEdges(d.id))
+      start = Math.max(0, start)
       ed.updateLayer(d.id, { start, end: start + len })
     } else if (d.kind === 'reorder') {
       const track = scroller.current!.querySelector('.tl-track') as HTMLElement
@@ -144,6 +175,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     const d = dragRef.current
     if (!d) return
     setDrag(null)
+    setSnapLine(null)
     if (d.kind === 'clip-trim') { ed.end(); onTrimPreview(null, 0) }
     else if (d.kind === 'layer-trim') ed.end()
     else if (d.kind === 'layer-move' && d.moved) ed.end()
@@ -169,6 +201,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       <div className="tl-scroll" ref={scroller} onScroll={onScroll} onClick={() => ed.setSel(null)}>
         <div className="tl-pad" />
         <div className="tl-content" style={{ width }}>
+          {snapLine !== null && <div className="tl-snapline" style={{ left: snapLine * pps }} />}
           <div className="tl-ruler">
             {ticks.map((s) => <span key={s} style={{ left: s * pps }}>{fmtTime(s, false)}</span>)}
           </div>
@@ -211,6 +244,11 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                       ))}
                     </div>
                   </div>
+                  {src.wave && !isImg && (
+                    <div className={`tl-clipwave${clip.volume === 0 ? ' muted' : ''}`}>
+                      <img src={src.wave} alt="" draggable={false} style={{ width: (src.duration * pps) / speed, transform: `translateX(${(-clip.in / speed) * pps}px)` }} />
+                    </div>
+                  )}
                   <span className="tl-badges">
                     {clip.speed !== 1 && !clip.ramp && <i>{clip.speed}x</i>}
                     {clip.ramp && <i>⤳</i>}

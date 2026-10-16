@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { MediaSource, Project } from '../types'
+import type { AspectRatio, MediaSource, Project } from '../types'
 import { exportProject, Cancelled, type ExportJob, type Format, type Resolution } from '../engine/exporter'
 import { exportFast, isSimpleProject } from '../lib/export'
 import { resetFFmpeg } from '../lib/ffmpeg'
@@ -26,7 +26,16 @@ const RES: { value: Resolution; label: string }[] = [
   { value: '480', label: '480p' }, { value: '720', label: '720p' }, { value: '1080', label: '1080p' }, { value: '1440', label: '2K' },
 ]
 
-const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3' ? '' : ` · ${RES.find((r) => r.value === j.resolution)?.label} · ${j.fps}fps`}`
+/** Platform presets: each sets the frame shape, the short side and the frame rate in one tap. */
+const PRESETS: { id: string; label: string; aspect: AspectRatio; resolution: Resolution; fps: number }[] = [
+  { id: 'youtube', label: 'YouTube 1080p (16:9)', aspect: '16:9', resolution: '1080', fps: 30 },
+  { id: 'reel', label: 'Instagram Reel (9:16 1080x1920)', aspect: '9:16', resolution: '1080', fps: 30 },
+  { id: 'whatsapp', label: 'WhatsApp Status (9:16 720x1280)', aspect: '9:16', resolution: '720', fps: 30 },
+  { id: 'twitter', label: 'Twitter/X (16:9 720p)', aspect: '16:9', resolution: '720', fps: 30 },
+  { id: 'square', label: 'Square (1:1 1080x1080)', aspect: '1:1', resolution: '1080', fps: 30 },
+]
+
+const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3' ? '' : ` · ${RES.find((r) => r.value === j.resolution)?.label}${j.aspect ? ` ${j.aspect}` : ''} · ${j.fps}fps`}`
 
 export function ExportSheet({ project, sources, name, snapshot, onClose }: Props) {
   const total = layoutClips(project.clips).total
@@ -34,6 +43,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const [format, setFormat] = useState<Format>('mp4')
   const [res, setRes] = useState<Resolution>('1080')
   const [fps, setFps] = useState(30)
+  const [preset, setPreset] = useState('')
   // the app's own mark is off by default once the user has their own watermark
   const [watermark, setWatermark] = useState(!project.watermark?.enabled)
   const [useCover, setUseCover] = useState(false)
@@ -55,7 +65,16 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
     return () => { live = false; clearTimeout(id) }
   }, [useCover, coverT, snapshot])
 
-  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : res, fps, watermark: watermark ? 'ApanaVidEditor' : null, cover: useCover ? coverT : null })
+  const presetAspect = PRESETS.find((p) => p.id === preset)?.aspect
+  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : res, fps, watermark: watermark ? 'ApanaVidEditor' : null, cover: useCover ? coverT : null, aspect: presetAspect })
+  const pickPreset = (id: string) => {
+    setPreset(id)
+    const p = PRESETS.find((x) => x.id === id)
+    if (!p) return
+    if (format === 'gif' || format === 'mp3') setFormat('mp4')
+    setRes(p.resolution)
+    setFps(p.fps)
+  }
 
   const run = async (jobs: ExportJob[]) => {
     setError(null)
@@ -131,16 +150,24 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
             )}
             {!(fast && simple) && (
               <>
+                <span className="field-label">{t('Preset')}</span>
+                <select className="select" value={preset} onChange={(e) => pickPreset(e.target.value)} aria-label="Preset">
+                  <option value="">{t('Custom (project frame)')}</option>
+                  {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                {presetAspect && presetAspect !== project.settings.aspect && (
+                  <p className="muted small">{t('The video is reframed to')} {presetAspect}; {t('empty space uses the Format background.')}</p>
+                )}
                 <span className="field-label">{t('Format')}</span>
                 <Chips options={FORMATS} value={format} onChange={setFormat} wrap />
                 {format !== 'mp3' && (
                   <>
                     <span className="field-label">{t('Resolution')}</span>
-                    <Chips options={format === 'gif' ? RES.slice(0, 1) : RES} value={format === 'gif' ? '480' : res} onChange={setRes} />
+                    <Chips options={format === 'gif' ? RES.slice(0, 1) : RES} value={format === 'gif' ? '480' : res} onChange={(v) => { setRes(v); setPreset('') }} />
                     {format !== 'gif' && (
                       <>
                         <span className="field-label">{t('Frame rate')}</span>
-                        <Chips options={[24, 25, 30, 60].map((f) => ({ value: f, label: `${f} fps` }))} value={fps} onChange={setFps} />
+                        <Chips options={[24, 25, 30, 60].map((f) => ({ value: f, label: `${f} fps` }))} value={fps} onChange={(v) => { setFps(v); setPreset('') }} />
                       </>
                     )}
                     <Toggle label="ApanaVidEditor watermark" value={watermark} onChange={setWatermark} />

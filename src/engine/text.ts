@@ -69,7 +69,7 @@ export const TEXT_PRESETS: { name: string; style: Partial<TextStyle> }[] = [
   { name: 'Hindi', style: { font: 'Yatra One', color: '#ffd166', stroke: '#3d1f00', strokeWidth: 0.5 } },
 ]
 
-export const ANIMS: TextAnim[] = ['none', 'fade', 'slide-up', 'slide-down', 'pop', 'zoom', 'bounce', 'typewriter']
+export const ANIMS: TextAnim[] = ['none', 'fade', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'pop', 'zoom', 'bounce', 'typewriter']
 
 const ANIM_TIME = 0.45
 
@@ -97,6 +97,9 @@ export function animState(l: { start: number; end: number; animIn: TextAnim; ani
       case 'fade': s.alpha *= p; break
       case 'slide-up': s.alpha *= p; s.dy += (1 - easeOut(p)) * (entering ? 0.08 : -0.08); break
       case 'slide-down': s.alpha *= p; s.dy += (1 - easeOut(p)) * (entering ? -0.08 : 0.08); break
+      // slide-left enters from the right and moves left; slide-right the opposite
+      case 'slide-left': s.alpha *= p; s.dx += (1 - easeOut(p)) * (entering ? 0.25 : -0.25); break
+      case 'slide-right': s.alpha *= p; s.dx += (1 - easeOut(p)) * (entering ? -0.25 : 0.25); break
       case 'pop': s.scale *= entering ? Math.max(0, easeOutBack(p)) : p; s.alpha *= Math.min(1, p * 3); break
       case 'zoom': s.scale *= 0.4 + 0.6 * easeOut(p); s.alpha *= p; break
       case 'bounce': s.dy += (1 - bounce(p)) * (entering ? -0.15 : 0.15); s.alpha *= Math.min(1, p * 4); break

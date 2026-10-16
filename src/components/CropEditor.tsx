@@ -39,10 +39,14 @@ export function CropEditor({ ed, clip, source, time, onClose }: Props) {
   }, [source, time])
 
   const srcAR = source.width / source.height
+  // "Frame" crops to the project's frame shape, so the clip is reframed for 9:16, 1:1, 4:5… without bars
+  const aspect = ed.project.settings.aspect
+  const frameR = aspect === 'original' ? null : (([a, b]) => a / b)(aspect.split(':').map(Number))
+  const ratios = frameR ? [{ value: 'frame', label: `${t('Frame')} ${aspect}`, r: frameR }, ...RATIOS] : RATIOS
 
   const applyRatio = (val: string) => {
     setRatio(val)
-    const r = RATIOS.find((x) => x.value === val)?.r
+    const r = ratios.find((x) => x.value === val)?.r
     if (!r) return
     // r is the visible ratio; convert to normalised source units
     const want = (rotate % 180 ? 1 / r : r) / srcAR
@@ -62,7 +66,7 @@ export function CropEditor({ ed, clip, source, time, onClose }: Props) {
     const r = area.current!.getBoundingClientRect()
     const dx = (e.clientX - d.x0) / r.width, dy = (e.clientY - d.y0) / r.height
     const c = { ...d.c0 }
-    const fixed = RATIOS.find((x) => x.value === ratio)?.r
+    const fixed = ratios.find((x) => x.value === ratio)?.r
     if (d.mode === 'move') {
       c.x = Math.max(0, Math.min(1 - c.w, c.x + dx)); c.y = Math.max(0, Math.min(1 - c.h, c.y + dy))
     } else {
@@ -104,7 +108,7 @@ export function CropEditor({ ed, clip, source, time, onClose }: Props) {
         </div>
       </div>
       <div className="modal-foot">
-        <Chips options={RATIOS} value={ratio} onChange={applyRatio} />
+        <Chips options={ratios} value={ratio} onChange={applyRatio} />
         <div className="row">
           <button className="btn" onClick={() => setRotate(((rotate + 90) % 360) as Clip['rotate'])}>⟳ {t('Rotate')} {rotate ? `${rotate}°` : ''}</button>
           <button className={`btn${flipH ? ' primary' : ''}`} onClick={() => setFlipH(!flipH)}>⇋ {t('Flip')}</button>

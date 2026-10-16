@@ -1,4 +1,7 @@
 const paths = {
+  save: 'M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10z',
+  folder: 'M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8z',
+  magnet: 'M3 7v6a9 9 0 0 0 18 0V7h-5v6a4 4 0 0 1-8 0V7zm2 2h1v-2H5zm13 0h1V7h-1z',
   play: 'M8 5v14l11-7z',
   pause: 'M7 5h4v14H7zM13 5h4v14h-4z',
   plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z',

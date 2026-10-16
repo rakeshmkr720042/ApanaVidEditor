@@ -40,13 +40,27 @@ export function waveform(buf: AudioBuffer, width = 400, height = 48) {
   const data = buf.getChannelData(0)
   const step = Math.max(1, Math.floor(data.length / width))
   ctx.fillStyle = 'rgba(255,255,255,0.85)'
+  const peaks = new Float32Array(width)
   for (let x = 0; x < width; x++) {
     let peak = 0
     for (let i = x * step; i < (x + 1) * step && i < data.length; i += 8) peak = Math.max(peak, Math.abs(data[i]))
-    const h = Math.max(1, peak * height * 0.95)
+    peaks[x] = peak
+  }
+  // normalise so quiet recordings still show their shape (at most 8x gain)
+  const gain = 1 / Math.max(0.125, ...peaks)
+  for (let x = 0; x < width; x++) {
+    const h = Math.max(1, peaks[x] * gain * height * 0.95)
     ctx.fillRect(x, (height - h) / 2, 1, h)
   }
   return c.toDataURL('image/png')
+}
+
+/** Waveform of a video's sound for the timeline, or '' when it has none (or is too long to decode cheaply). */
+export async function videoWave(file: Blob, duration: number): Promise<string> {
+  if (duration > 20 * 60 || file.size > 600 * 1048576) return ''
+  const buf = await decodeAudio(file)
+  if (!buf) return ''
+  return waveform(buf, Math.round(Math.min(4000, Math.max(200, duration * 40))), 32)
 }
 
 /** Reads duration, size and thumbnails (or a waveform for audio). */
@@ -100,7 +114,8 @@ export async function loadSource(file: Blob, name: string, id = uid()): Promise<
   }
   v.removeAttribute('src')
   v.load()
-  return { id, kind, file, url, name, duration, width, height, hasAudio: true, thumbs }
+  const wave = await videoWave(file, duration).catch(() => '')
+  return { id, kind, file, url, name, duration, width, height, hasAudio: true, thumbs, wave }
 }
 
 /** Builds a source from stored data without re-reading the file. */

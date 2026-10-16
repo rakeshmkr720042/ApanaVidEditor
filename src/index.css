@@ -306,3 +306,21 @@ input, textarea { font: inherit; color: inherit; }
   background: repeating-conic-gradient(#3a3a3a 0 25%, #2a2a2a 0 50%) 0 0 / 12px 12px; }
 .wm-logo-empty { display: grid; place-items: center; font-size: 11px; color: var(--muted); text-align: center; }
 .sel-box.wm { border-style: dashed; }
+
+/* save menu in the editor header */
+.menu-anchor { position: relative; }
+.menu-backdrop { position: fixed; inset: 0; z-index: 40; }
+.menu { position: absolute; right: 0; top: 44px; z-index: 41; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px; min-width: 200px; box-shadow: 0 8px 24px #0008; }
+.menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; background: transparent; color: inherit; font-size: 14px; border-radius: 8px; text-align: left; }
+.menu button:active, .menu button:hover { background: var(--panel-2); }
+.home-main > .btn.wide { display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* sound waveform along the bottom of video clips */
+.tl-clipwave { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; overflow: hidden; border-radius: 0 0 6px 6px; background: rgba(0, 0, 0, 0.6); pointer-events: none; }
+.tl-clipwave img { position: absolute; left: 0; top: 0; height: 100%; opacity: .85; }
+.tl-clipwave.muted img { opacity: .25; }
+/* magnetic snap guide and toggle */
+.tl-snapline { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed var(--sel); z-index: 6; pointer-events: none; }
+.icon-btn.snap { color: var(--muted); }
+.icon-btn.snap.on { color: var(--sel); }
+.tl-clipwave ~ .tl-dur { bottom: 21px; }

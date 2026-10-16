@@ -3,9 +3,11 @@ import type { MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '
 import { useEditor } from '../model/useEditor'
 import { Player } from '../engine/player'
 import { activeAt } from '../model/timeline'
-import { loadSource, restoreSource } from '../lib/media'
+import { loadSource, restoreSource, videoWave } from '../lib/media'
 import { getMedia, getProject, saveMedia, saveProject } from '../lib/db'
 import { fmtTime } from '../lib/format'
+import { projectToFile } from '../lib/projectFile'
+import { isNative, saveNative } from '../lib/save'
 import { t } from '../lib/i18n'
 import { Timeline } from './Timeline'
 import { Preview } from './Preview'
@@ -51,6 +53,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [pps, setPps] = useState(40)
+  const [snap, setSnap] = useState(() => { try { return localStorage.getItem('snap') !== 'off' } catch { return true } })
+  const toggleSnap = () => setSnap((v) => { try { localStorage.setItem('snap', v ? 'off' : 'on') } catch { /* private mode */ } return !v })
   const [panel, setPanel] = useState<PanelName>(null)
   const [transitionFor, setTransitionFor] = useState<string | null>(null)
   const [importing, setImporting] = useState(0)
@@ -59,8 +63,22 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
 
-  // restore sources once
-  useEffect(() => { Object.values(initial.sources).forEach(ed.addSource) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // restore sources once; videos imported before waveforms existed get one in the background
+  useEffect(() => {
+    Object.values(initial.sources).forEach(ed.addSource)
+    let live = true
+    ;(async () => {
+      for (const s of Object.values(initial.sources)) {
+        if (s.kind !== 'video' || s.wave !== undefined || !live) continue
+        const wave = await videoWave(s.file, s.duration).catch(() => '')
+        if (!live) return
+        const next = { ...s, wave }
+        ed.addSource(next)
+        saveMedia(next).catch(() => {})
+      }
+    })()
+    return () => { live = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const p = new Player(canvasRef.current!, Math.min(screen.width, screen.height) > 700 ? 720 : 540)
@@ -71,17 +89,35 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
   useEffect(() => { player?.setProject(ed.project, ed.sources) }, [player, ed.project, ed.sources])
 
+  const saveNow = useCallback(() => {
+    const first = ed.project.clips[0]
+    return saveProject({
+      id: initial.id, name, updatedAt: Date.now(), data: ed.project, mediaIds: Object.keys(ed.sources),
+      thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: ed.layout.total,
+    }).then(() => true, () => { setToast(t('Could not save the project (storage full?)')); return false })
+  }, [ed.project, ed.sources, name, initial.id, ed.layout.total])
+
   // autosave
   useEffect(() => {
-    const id = setTimeout(() => {
-      const first = ed.project.clips[0]
-      saveProject({
-        id: initial.id, name, updatedAt: Date.now(), data: ed.project, mediaIds: Object.keys(ed.sources),
-        thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: ed.layout.total,
-      }).catch(() => setToast(t('Could not save the project (storage full?)')))
-    }, 600)
+    const id = setTimeout(saveNow, 600)
     return () => clearTimeout(id)
-  }, [ed.project, ed.sources, name, initial.id, ed.layout.total])
+  }, [saveNow])
+
+  const [saveMenu, setSaveMenu] = useState(false)
+  const saveToApp = async () => { setSaveMenu(false); if (await saveNow()) setToast(t('Project saved')) }
+  const saveToFile = async () => {
+    setSaveMenu(false)
+    setToast(t('Preparing project file…'))
+    try {
+      const blob = await projectToFile(name, ed.project, ed.sources)
+      const file = `${name.replace(/[^\w\- ]+/g, '').trim() || 'project'}.avp`
+      if (isNative) { await saveNative(blob, file, true); setToast(`${t('Saved to')} Documents/ApanaVidEditor/${file}`); return }
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob); a.download = file; a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+      setToast(null)
+    } catch (e) { setToast((e as Error).message) }
+  }
 
   useEffect(() => {
     if (!toast) return
@@ -268,6 +304,16 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         <div className="top-actions">
           <button className="icon-btn" disabled={!ed.canUndo} onClick={ed.undo} aria-label="Undo"><Icon name="undo" /></button>
           <button className="icon-btn" disabled={!ed.canRedo} onClick={ed.redo} aria-label="Redo"><Icon name="redo" /></button>
+          <span className="menu-anchor">
+            <button className="icon-btn" onClick={() => setSaveMenu((v) => !v)} aria-label="Save project"><Icon name="save" /></button>
+            {saveMenu && <div className="menu-backdrop" onClick={() => setSaveMenu(false)} />}
+            {saveMenu && (
+              <div className="menu">
+                <button onClick={saveToApp}><Icon name="save" size={18} /> {t('Save project')}</button>
+                <button onClick={saveToFile}><Icon name="download" size={18} /> {t('Save as .avp file')}</button>
+              </div>
+            )}
+          </span>
           <button className="btn primary small" disabled={empty || importing > 0} onClick={() => { player?.pause(); setExporting(true) }}>{t('Export')}</button>
         </div>
       </header>
@@ -294,6 +340,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           <Icon name={playing ? 'pause' : 'play'} />
         </button>
         <span className="zoom">
+          <button className={`icon-btn snap${snap ? ' on' : ''}`} onClick={toggleSnap} aria-label="Snap" aria-pressed={snap} title={t('Magnetic snap')}><Icon name="magnet" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.max(4, z / 1.5))} aria-label="Zoom out"><Icon name="minus" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.min(400, z * 1.5))} aria-label="Zoom in"><Icon name="plus" /></button>
         </span>
@@ -306,6 +353,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           onTrimPreview={(id, st) => { if (!player) return; if (id) { player.pause(); player.previewSource(id, st) } else player.endPreviewSource() }}
           onTransition={(id) => { ed.setSel({ type: 'clip', id }); setTransitionFor(id); setPanel('transition') }}
           onAdd={() => mainInput.current?.click()}
+          snap={snap}
         />
       )}
 

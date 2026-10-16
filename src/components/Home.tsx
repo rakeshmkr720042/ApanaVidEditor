@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { importProjectFile } from '../lib/projectFile'
 import { deleteProject, listProjects, saveProject, storageEstimate, type ProjectRecord } from '../lib/db'
 import { emptyProject } from '../model/useEditor'
 import { fmtTime, uid } from '../lib/format'
@@ -11,6 +12,14 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null)
   const [offline, setOffline] = useState<'unknown' | 'ready' | 'downloading' | 'no'>('unknown')
   const [usage, setUsage] = useState<string | null>(null)
+  const [opening, setOpening] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const openFile = async (f: File) => {
+    setError(null); setOpening(true)
+    try { onOpen(await importProjectFile(f)) } catch (e) { setError((e as Error).message) } finally { setOpening(false) }
+  }
 
   const refresh = () => listProjects().then(setProjects).catch(() => setProjects([]))
   useEffect(() => {
@@ -50,6 +59,11 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           <Icon name="plus" size={30} />
           <span>{t('New project')}</span>
         </button>
+        <button className="btn wide" disabled={opening} onClick={() => fileInput.current?.click()}>
+          <Icon name="folder" size={18} /> {opening ? t('Opening project…') : t('Open project file (.avp)')}
+        </button>
+        <input ref={fileInput} type="file" accept=".avp,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
+        {error && <p className="error-text">{error}</p>}
         <div className="offline-row">
           {offline === 'no' && <button className="btn small" onClick={getOffline}><Icon name="download" size={16} /> {t('Get offline pack')} <span className="muted">~33 MB</span></button>}
           {offline === 'downloading' && <span className="muted small">{t('Downloading…')}</span>}
