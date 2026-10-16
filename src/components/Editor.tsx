@@ -15,6 +15,7 @@ import { Icon, type IconName } from './Icon'
 import { AdjustPanel, FilterPanel, FormatPanel, SpeedPanel, TransitionPanel, VolumePanel } from '../panels/ClipPanels'
 import { BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, TextPanel } from '../panels/LayerPanels'
 import { AudioPanel } from '../panels/AudioPanel'
+import { AIPanel } from '../panels/AIPanel'
 
 interface Loaded { id: string; name: string; project: Project; sources: Record<string, MediaSource> }
 
@@ -39,7 +40,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
-  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | null
+  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -133,7 +134,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? clipAtPlayhead
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'audio', 'format', 'subtitles', 'filters', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'audio', 'format', 'subtitles', 'ai', 'filters', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -218,6 +219,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
+      { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
       { icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers'), disabled: empty },
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'blur', label: 'Blur', on: () => ed.addBlur(time), disabled: empty },
@@ -247,6 +249,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
   else if ((panel === 'overlay' || panel === 'chroma') && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} chroma={panel === 'chroma'} onClose={closePanel} />
   else if (panel === 'blur' && selLayer?.type === 'blur') panelView = <BlurPanel ed={ed} layer={selLayer} onClose={closePanel} />
+  else if (panel === 'ai') panelView = <AIPanel ed={ed} onClose={closePanel} />
   else if (panel === 'subtitles') panelView = <SubtitlePanel ed={ed} t={time} onClose={closePanel} onSeek={seek} />
   else if (panel === 'audio') panelView = (
     <AudioPanel ed={ed} time={time} onClose={closePanel}

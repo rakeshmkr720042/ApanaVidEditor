@@ -289,3 +289,10 @@ input, textarea { font: inherit; color: inherit; }
   .stage-wrap { min-height: 300px; }
   .tl-scroll { max-height: 30dvh; }
 }
+
+/* AI captions & dubbing */
+.select { width: 100%; padding: 9px 10px; border-radius: 8px; background: var(--panel-2); color: inherit; border: 1px solid var(--line); font-size: 14px; margin: 4px 0 6px; }
+.ai-status { margin-top: 12px; display: grid; gap: 6px; }
+.warn { color: #ffcc00; }
+.error-text { color: #ff6b6b; margin-top: 10px; }
+.ok-text { color: #34c759; margin-top: 10px; }

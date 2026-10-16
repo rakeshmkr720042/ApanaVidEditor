@@ -7,7 +7,7 @@ import { runFFmpeg, getFFmpeg } from '../lib/ffmpeg'
 export const MIX_RATE = 48000
 
 /** Pitch-preserving time stretch of a slice, done with ffmpeg's atempo. */
-async function stretch(slice: AudioBuffer, speed: number): Promise<AudioBuffer | null> {
+export async function stretch(slice: AudioBuffer, speed: number): Promise<AudioBuffer | null> {
   const ff = await getFFmpeg()
   const chain: string[] = []
   let s = speed
