@@ -212,3 +212,13 @@ export async function buildVoiceOver(cues: Cue[], lang: string, total: number, p
   }
   return ctx.startRendering()
 }
+
+/** Speaks each text separately (empty texts give null), for scene-by-scene narration. */
+export async function speakLines(texts: string[], lang: string, progress: Progress): Promise<(AudioBuffer | null)[]> {
+  const idx = texts.map((s, i) => (s.trim() ? i : -1)).filter((i) => i >= 0)
+  if (!idx.length) return texts.map(() => null)
+  const r = await speak(idx.map((i) => texts[i]), lang, progress)
+  const out: (AudioBuffer | null)[] = texts.map(() => null)
+  idx.forEach((i, n) => { const c = r.clips[n]; if (c?.length) out[i] = toBuffer(c, r.rate) })
+  return out
+}

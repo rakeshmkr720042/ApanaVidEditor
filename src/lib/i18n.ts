@@ -53,6 +53,18 @@ const hi: Record<string, string> = {
   'Pan left': 'बाएं खिसके', 'Pan right': 'दाएं खिसके', 'Pan up': 'ऊपर खिसके', 'Pan down': 'नीचे खिसके',
   'photos on the timeline. Changes apply to all of them.': 'फ़ोटो टाइमलाइन में हैं। बदलाव सब पर लगेंगे।',
   'Pick photos and they are laid out one after another as a video.': 'फ़ोटो चुनें, वे एक के बाद एक वीडियो की तरह लग जाएंगी।',
+  'Slides to video': 'स्लाइड से वीडियो', 'Slides / PDF to video': 'स्लाइड / PDF से वीडियो', 'scenes': 'सीन',
+  'Pick a PDF, a PowerPoint (.pptx) or photos. Each page becomes a scene; write what should be said on it.': 'PDF, PowerPoint (.pptx) या फ़ोटो चुनें। हर पेज एक सीन बनेगा; उस पर क्या बोलना है, लिखें।',
+  'Pick files': 'फ़ाइल चुनें', 'Add more': 'और जोड़ें', 'Clear': 'सब हटाएं', 'Seconds': 'सेकंड', 'auto': 'ऑटो',
+  'What the voice says on this scene': 'इस सीन पर आवाज़ क्या बोले', 'Caption (optional)': 'कैप्शन (ज़रूरी नहीं)',
+  'Voice': 'आवाज़', 'No voice': 'बिना आवाज़', 'AI voice': 'AI आवाज़', 'My audio': 'मेरा ऑडियो', 'Change': 'बदलें',
+  'Each scene lasts as long as its voice. The voice runs on your device; the model downloads once.': 'हर सीन उतनी देर चलेगा जितनी उसकी आवाज़। आवाज़ आपके डिवाइस पर बनती है; मॉडल एक बार डाउनलोड होता है।',
+  'shared across the scenes; set seconds on a scene to keep its time.': 'सभी सीन में बंटेगा; किसी सीन का समय तय करने के लिए सेकंड लिखें।',
+  'Each scene': 'हर सीन', 'Show the text as captions': 'टेक्स्ट को कैप्शन में दिखाएं', 'Slow zoom': 'धीमा ज़ूम', 'Fade': 'फ़ेड',
+  'Slide': 'स्लाइड', 'Zoom': 'ज़ूम', 'Create video': 'वीडियो बनाएं', 'Reading files…': 'फ़ाइलें पढ़ रहे हैं…',
+  'Adding scenes…': 'सीन जोड़ रहे हैं…', 'Pick an audio file': 'ऑडियो फ़ाइल चुनें',
+  'Write some text on the scenes for the voice to read.': 'आवाज़ के पढ़ने के लिए सीन पर कुछ टेक्स्ट लिखें।',
+  'scenes added to the timeline. Everything can be edited there.': 'सीन टाइमलाइन में जुड़ गए। वहां सब कुछ बदल सकते हैं।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()
