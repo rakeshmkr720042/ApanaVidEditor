@@ -14,7 +14,7 @@ export function isSimpleProject(p: Project, sources: Record<string, MediaSource>
     const s = sources[c.sourceId]
     return s?.kind === 'video' && s.width === first.width && s.height === first.height && ext(s.name) === ext(first.name) &&
       c.speed === 1 && !c.ramp && c.volume === 1 && !c.fadeIn && !c.fadeOut && !c.rotate && !c.flipH && !c.flipV &&
-      !c.crop && !c.filter && isNeutral(c.adjust) && !c.transition
+      !c.crop && !c.filter && isNeutral(c.adjust) && !c.transition && !c.kenBurns
   })
 }
 
