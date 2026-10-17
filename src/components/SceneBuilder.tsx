@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MediaSource } from '../types'
 import type { Editor } from '../model/useEditor'
-import { defaultSceneOptions, placeScenes, sceneLengths, type BuiltScene, type Scene, type SceneOptions } from '../model/scenes'
+import { defaultSceneOptions, placeScenes, planOf, sceneLengths, transitionLengths, type BuiltScene, type Scene, type SceneOptions } from '../model/scenes'
 import { filesToScenes } from '../lib/sceneImport'
 import { CARD_THEMES, drawTextCard, scriptToScenes, themeOf } from '../lib/scriptScenes'
 import { MAP_THEMES, drawMapPreview, drawMindStill, mindToScenes, node, parseOutline, renderMindVideo, tidy, toOutline, type MapSettings, type MindNode } from '../lib/mindmap'
 import { MindTree } from './MindTree'
+import { QuizEditor } from './QuizEditor'
+import {
+  QUIZ_THEMES, countdownSound, deckLang, defaultQuizSettings, drawQuizPreview, drawQuizStill, item, parseQuiz, quizToScenes, quizToText,
+  renderQuizVideo, tidyDeck, type QuizDeck, type QuizScene, type QuizSettings,
+} from '../lib/quiz'
+import { clipDuration } from '../model/timeline'
 import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
 import { saveMedia } from '../lib/db'
@@ -26,6 +32,10 @@ let mapDraft = { tab: 'outline' as 'outline' | 'tree', outline: '', tree: node('
 let mapMemo: MapSettings | null = null
 // the audio being turned into a video, and how
 let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as AudioLook, photos: [] as Blob[], cover: null as Blob | null, target: 12, listen: true, lang: 'auto', model: ASR_MODELS[0].id }
+// the quiz being written, and how it looks
+let quizDraft = { tab: 'text' as 'text' | 'list', text: '', deck: { title: '', items: [item('', ['', '', '', ''])] } as QuizDeck, picked: 0 }
+let quizMemo: QuizSettings = defaultQuizSettings()
+let quizModeSet = false // the user picked quiz or flashcards themselves
 const MAP_SLACK = 4 // extra seconds of still map at the end of each clip, so it can be lengthened on the timeline
 
 const TRANSITIONS = [
@@ -64,6 +74,29 @@ const MAP_HINT = `Healthy life
 - Sleep
   - 7 to 8 hours`
 
+const QUIZ_HINT = `# General knowledge
+
+Q: What is the capital of India?
+A) Mumbai
+B) New Delhi *
+C) Kolkata
+D) Chennai
+Explanation: New Delhi became the capital in 1931.
+
+Q: How many legs does a spider have?
+A: Eight`
+
+const QUIZ_SLACK = 2 // extra seconds of still answer at the end of each clip
+
+/** Puts freshly made quiz scenes where the old ones were (or at the end). */
+const withQuiz = (list: Scene[], got: Scene[]) => {
+  const at = list.findIndex((s) => s.quiz)
+  const rest = list.filter((s) => !s.quiz)
+  if (at < 0) return [...rest, ...got]
+  const before = list.slice(0, at).filter((s) => !s.quiz).length
+  return [...rest.slice(0, before), ...got, ...rest.slice(before)]
+}
+
 /** Waveform colours that suit the picture behind them. */
 const waveColors = (look: AudioLook, theme: string): [string, string] => {
   const th = themeOf(theme)
@@ -73,7 +106,7 @@ const waveColors = (look: AudioLook, theme: string): [string, string] => {
 const extOf = (b: Blob) => (b.type === 'image/png' ? 'png' : b.type === 'image/webp' ? 'webp' : 'jpg')
 
 /** Slides, PDF pages, photos or a pasted script → scenes you can script and time → clips on the timeline. */
-export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap' | 'audio'; onClose: () => void; onDone: (msg: string) => void }) {
+export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap' | 'audio' | 'quiz'; onClose: () => void; onDone: (msg: string) => void }) {
   const [scenes, setScenes] = useState<Scene[]>([])
   // a new audio → video run starts with the waveform and captions on
   const [o, setO] = useState(() => (start === 'audio' && !memo.wave ? (memo = { ...memo, wave: 'bars', captions: true, theme: memo.theme === 'clean' ? 'dark' : memo.theme }) : memo))
@@ -94,6 +127,11 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const setAudio = (patch: Partial<typeof audioDraft>) => setAd((v) => (audioDraft = { ...v, ...patch }))
   const [rec, setRec] = useState<{ mr: MediaRecorder; t0: number; now: number } | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [quizzing, setQuizzing] = useState(start === 'quiz')
+  const [qd, setQd] = useState(quizDraft)
+  const setQuizDraft = (patch: Partial<typeof quizDraft>) => setQd((v) => (quizDraft = { ...v, ...patch }))
+  const [qs, setQs] = useState(quizMemo)
+  const quizPreview = useRef<HTMLCanvasElement>(null)
   const audioInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const coverInput = useRef<HTMLInputElement>(null)
@@ -330,6 +368,89 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     } finally { setBusy(null) }
   }
 
+  // ---- quiz / flashcards → video
+
+  const currentDeck = useMemo((): QuizDeck => (qd.tab === 'text' ? parseQuiz(qd.text) : tidyDeck(qd.deck)), [qd.tab, qd.text, qd.deck])
+
+  const writeQuiz = (text: string) => {
+    setQuizDraft({ text })
+    // plain question / answer pairs read best as flashcards, until the user picks a mode
+    const d = parseQuiz(text)
+    if (!quizModeSet && d.items.length) {
+      const mode = d.items.some((i) => i.options.length) ? 'quiz' : 'cards'
+      if (mode !== qs.mode) setQs((v) => (quizMemo = { ...v, mode }))
+    }
+  }
+
+  const switchQuizTab = (tab: 'text' | 'list') => {
+    if (tab === qd.tab) return
+    if (tab === 'list') {
+      const d = parseQuiz(qd.text)
+      setQuizDraft({ tab, deck: d.items.length ? d : { title: d.title, items: [item('', qs.mode === 'quiz' ? ['', '', '', ''] : [])] }, picked: 0 })
+    } else setQuizDraft({ tab, text: currentDeck.items.length || currentDeck.title ? quizToText(currentDeck) : qd.text })
+  }
+
+  // live preview of the question being written, with its answer showing
+  useEffect(() => {
+    const c = quizPreview.current
+    if (!c || !quizzing || !currentDeck.items.length) return
+    let live = true
+    const id = setTimeout(() => {
+      const { w, h } = frame()
+      const off = document.createElement('canvas')
+      off.width = 480; off.height = Math.round((480 * h) / w)
+      const index = Math.min(qd.picked, currentDeck.items.length - 1)
+      const scene: QuizScene = { deck: currentDeck, settings: qs, part: { kind: 'item', index }, say2: '' }
+      void drawQuizPreview(scene, off, 'answer').then(() => {
+        if (!live) return
+        c.width = off.width; c.height = off.height
+        c.getContext('2d')!.drawImage(off, 0, 0)
+      })
+    }, 150)
+    return () => { live = false; clearTimeout(id) }
+  }, [currentDeck, qs, qd.picked, quizzing]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addQuiz = async () => {
+    setError(null)
+    try {
+      const { w, h } = frame()
+      const got = await quizToScenes(currentDeck, qs, w, h, (p) => setBusy({ label: t('Making scenes…'), p }))
+      setScenes((list) => withQuiz(list, got))
+      setQuizzing(false)
+      // the questions are on screen already, so no captions; a voice reads them in the quiz's language
+      const lang = deckLang(currentDeck)
+      if (!scenes.some((s) => !s.quiz)) {
+        set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice === 'track' ? 'none' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: false, transition: 'fade', transitionDuration: 0.4, kenBurns: false, fill: false })
+      }
+    } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
+  }
+
+  // a new look redraws the quiz scenes already made; a new mode or ending makes them again
+  const setQuizSettings = async (patch: Partial<QuizSettings>) => {
+    if ('mode' in patch) quizModeSet = true
+    const next = quizMemo = { ...qs, ...patch }
+    setQs(next)
+    const made = scenes.filter((s) => s.quiz)
+    if (!made.length) return
+    const deck = made[0].quiz!.deck
+    const { w, h } = frame()
+    setBusy({ label: t('Making scenes…'), p: 0 })
+    try {
+      if ('mode' in patch || 'recap' in patch || 'explain' in patch) {
+        const got = await quizToScenes(deck, next, w, h, (p) => setBusy({ label: t('Making scenes…'), p }))
+        setScenes((list) => withQuiz(list, got))
+        return
+      }
+      const done = new Map<string, Partial<Scene>>()
+      for (let i = 0; i < made.length; i++) {
+        setBusy({ label: t('Making scenes…'), p: i / made.length })
+        const quiz = { ...made[i].quiz!, settings: next }
+        done.set(made[i].id, { quiz, image: await drawQuizStill(quiz, w, h) })
+      }
+      setScenes((list) => list.map((s) => (done.has(s.id) ? { ...s, ...done.get(s.id) } : s)))
+    } finally { setBusy(null) }
+  }
+
   const pickTrack = async (f: File | undefined) => {
     if (!f) return
     try {
@@ -357,6 +478,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     const fake = scenes.map((scene) => ({
       scene, source: null as unknown as MediaSource,
       voice: speaking && scene.text.trim() ? ({ duration: scene.text.length / 14 } as MediaSource) : null,
+      voice2: speaking && scene.quiz?.say2.trim() ? ({ duration: scene.quiz.say2.length / 14 } as MediaSource) : null,
     }))
     return sceneLengths(fake, o, o.voice === 'track' ? track : null).reduce((a, b) => a + b, 0)
   }, [scenes, o, track, speaking])
@@ -369,7 +491,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       for (let i = 0; i < scenes.length; i++) {
         setBusy({ label: t('Adding scenes…'), p: i / scenes.length })
         const s = scenes[i]
-        if (s.mind) { built.push({ scene: s, source: null as unknown as MediaSource, voice: null }); continue } // made below, once its length is known
+        if (s.mind || s.quiz) { built.push({ scene: s, source: null as unknown as MediaSource, voice: null }); continue } // made below, once its length is known
         // a photo shown on several chapters is stored once
         let src = loaded.get(s.image)
         if (!src) {
@@ -382,15 +504,19 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       }
       if (speaking) {
         setBusy({ label: t('Recording voice-over…'), p: 0 })
-        const bufs = await speakLines(scenes.map((s) => s.text), o.lang, (stage, p) =>
+        // quiz answers are read in the same go, after the questions
+        const bufs = await speakLines([...scenes.map((s) => s.text), ...scenes.map((s) => s.quiz?.say2 ?? '')], o.lang, (stage, p) =>
           setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : t('Recording voice-over…'), p }))
-        for (let i = 0; i < bufs.length; i++) {
-          const b = bufs[i]
+        for (let k = 0; k < bufs.length; k++) {
+          const b = bufs[k]
           if (!b) continue
-          const src = await loadSource(encodeWav(b), `${scenes[i].name} ${t('Voice-over')}.wav`)
+          const i = k % scenes.length
+          const second = k >= scenes.length
+          const src = await loadSource(encodeWav(b), `${scenes[i].name} ${t(second ? 'Answer' : 'Voice-over')}.wav`)
           ed.addSource(src)
           await saveMedia(src)
-          built[i].voice = src
+          if (second) built[i].voice2 = src
+          else built[i].voice = src
         }
       }
       const maps = built.filter((b) => b.scene.mind)
@@ -411,6 +537,41 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           b.source = src
         }
       }
+      const quizzes = built.filter((b) => b.scene.quiz)
+      if (quizzes.length) {
+        // each quiz scene becomes a clip as long as its scene, starting after the incoming transition
+        const lens = sceneLengths(built, o, o.voice === 'track' ? track : null)
+        const trs = transitionLengths(lens, o)
+        const last = ed.project.clips[ed.project.clips.length - 1]
+        const firstIn = last?.transition ? Math.max(0, Math.min(last.transition.duration, clipDuration(last) / 2, (lens[0] + trs[0]) / 2)) : 0
+        const sounds = new Map<number, MediaSource>()
+        const { w, h } = frame()
+        for (let k = 0; k < quizzes.length; k++) {
+          setBusy({ label: t('Animating the quiz…'), p: k / quizzes.length })
+          const b = quizzes[k]
+          const i = built.indexOf(b)
+          const q = b.scene.quiz!
+          const plan = planOf(b)!
+          const offset = i === 0 ? firstIn : trs[i - 1]
+          const video = await renderQuizVideo(q, plan, w, h, offset + lens[i] + trs[i] + QUIZ_SLACK, offset).catch(() => null)
+          const src = video
+            ? await loadSource(video.blob, `${b.scene.name}.${video.ext}`)
+            : await loadSource(b.scene.image, `${b.scene.name}.png`)
+          ed.addSource(src)
+          await saveMedia(src)
+          b.source = src
+          if (q.settings.beep && q.part.kind === 'item') {
+            let sfx = sounds.get(q.settings.timer)
+            if (!sfx) {
+              sfx = await loadSource(encodeWav(countdownSound(q.settings.timer)), `${t('Countdown')} ${q.settings.timer}s.wav`)
+              ed.addSource(sfx)
+              await saveMedia(sfx)
+              sounds.set(q.settings.timer, sfx)
+            }
+            b.sfx = sfx
+          }
+        }
+      }
       if (o.voice === 'track' && track) { ed.addSource(track); await saveMedia(track) }
       const { w, h } = frame()
       ed.replaceProject(placeScenes(ed.project, built, o, o.voice === 'track' ? track : null, w / h))
@@ -424,8 +585,10 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet scene-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
-        <h2>{t(start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
-        <p className="muted small">{t(start === 'audio'
+        <h2>{t(start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
+        <p className="muted small">{t(start === 'quiz'
+          ? 'Write or paste questions with options, or flashcards. Each one gets a countdown, then the right answer is shown.'
+          : start === 'audio'
           ? 'Pick or record a podcast, talk or voice note. It is cut into chapters at its pauses; each gets a picture, captions of what is said, and a moving waveform.'
           : start === 'mindmap'
           ? 'Write an outline or build the map. The topic comes first, then each branch grows out with its points, one scene at a time.'
@@ -437,6 +600,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           <button className={`btn${pasting ? ' on' : ''}`} disabled={!!busy} onClick={() => setPasting((v) => !v)}>{t('Paste text')}</button>
           <button className={`btn${mapping ? ' on' : ''}`} disabled={!!busy} onClick={() => setMapping((v) => !v)}>{t('Mind map')}</button>
           <button className={`btn${listening ? ' on' : ''}`} disabled={!!busy} onClick={() => setListening((v) => !v)}>{t('Audio')}</button>
+          <button className={`btn${quizzing ? ' on' : ''}`} disabled={!!busy} onClick={() => setQuizzing((v) => !v)}>{t('Quiz')}</button>
           {scenes.length > 0 && <button className="btn" disabled={!!busy} onClick={() => setScenes([])}>{t('Clear')}</button>}
         </div>
 
@@ -514,6 +678,41 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           </div>
         )}
 
+        {quizzing && (
+          <div className="script-box quiz-box">
+            <Chips options={[{ value: 'text', label: 'Write or paste' }, { value: 'list', label: 'Edit list' }]} value={qd.tab} onChange={switchQuizTab} />
+            {qd.tab === 'text' ? (
+              <>
+                <textarea className="text-input" rows={10} value={qd.text} placeholder={QUIZ_HINT} autoFocus
+                  onChange={(e) => writeQuiz(e.target.value)} />
+                <p className="muted small">{t('Tip: start each question with Q:, put options on lines like A) B) C) and mark the right one with *, or add a line "Answer: B". For flashcards write Q: and A: lines, or front | back on one line.')}</p>
+              </>
+            ) : <QuizEditor deck={qd.deck} mode={qs.mode} onChange={(deck) => setQuizDraft({ deck })} onPick={(picked) => setQuizDraft({ picked })} />}
+            {currentDeck.items.length > 0 && (
+              <>
+                <p className="muted small">{currentDeck.items.length} {t(qs.mode === 'cards' ? 'cards' : 'questions')}
+                  {currentDeck.items.some((i) => !i.options.length && !i.answer) || currentDeck.items.some((i) => i.options.length && i.correct < 0 && !i.answer)
+                    ? ` · ${t('some have no answer yet')}` : ''}</p>
+                <canvas ref={quizPreview} className="mind-preview" />
+              </>
+            )}
+            <button className="btn primary" disabled={!!busy || !currentDeck.items.length} onClick={addQuiz}>{t('Make scenes')}</button>
+          </div>
+        )}
+
+        {(quizzing || scenes.some((s) => s.quiz)) && (
+          <>
+            <Chips options={[{ value: 'quiz', label: 'Quiz' }, { value: 'cards', label: 'Flashcards' }]} value={qs.mode} onChange={(mode) => { if (!busy) void setQuizSettings({ mode }) }} />
+            <span className="field-label">{t('Quiz style')}</span>
+            <Chips options={QUIZ_THEMES.map((c) => ({ value: c.id, label: c.label }))} value={qs.theme} onChange={(theme) => { if (!busy) void setQuizSettings({ theme }) }} />
+            <Slider label="Time to answer" min={3} max={10} step={1} value={qs.timer} format={(v) => `${v}s`}
+              onChange={(timer) => { quizMemo = { ...qs, timer }; setQs(quizMemo); setScenes((l) => l.map((s) => (s.quiz ? { ...s, quiz: { ...s.quiz, settings: { ...s.quiz.settings, timer } } } : s))) }} />
+            <Toggle label="Ticking sound" value={qs.beep} onChange={(beep) => { if (!busy) void setQuizSettings({ beep }) }} />
+            <Toggle label="Show explanations" value={qs.explain} onChange={(explain) => { if (!busy) void setQuizSettings({ explain }) }} />
+            <Toggle label="All answers at the end" value={qs.recap} onChange={(recap) => { if (!busy) void setQuizSettings({ recap }) }} />
+          </>
+        )}
+
         {(mapping || scenes.some((s) => s.mind)) && (
           <>
             <span className="field-label">{t('Map style')}</span>
@@ -542,7 +741,11 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                 <div className="scene-main">
                   <textarea className="text-input" rows={3} value={s.text} placeholder={t(speaking ? 'What the voice says on this scene' : 'Caption (optional)')}
                     onChange={(e) => update(s.id, { text: e.target.value })} />
-                  {s.audio ? (
+                  {s.quiz && speaking && s.quiz.part.kind === 'item' && (
+                    <textarea className="text-input" rows={2} value={s.quiz.say2} placeholder={t('What the voice says when the answer appears')}
+                      onChange={(e) => update(s.id, { quiz: { ...s.quiz!, say2: e.target.value } })} />
+                  )}
+                  {s.quiz ? null : s.audio ? (
                     <div className="scene-tools">
                       <span className="small muted">{fmtTime(s.audio.start)} – {fmtTime(s.audio.end)}</span>
                     </div>
@@ -593,7 +796,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                 <Chips options={[...WAVE_STYLES, { value: 'none', label: 'None' }]} value={o.wave ?? 'none'} onChange={(v) => setWave(v === 'none' ? null : v)} />
               </>
             )}
-            {noVoice && (
+            {noVoice && scenes.some((s) => !s.quiz) && (
               <Slider label="Each scene" min={1} max={20} step={0.5} value={o.seconds} format={(v) => `${v.toFixed(1)}s`} onChange={(seconds) => set({ seconds })} />
             )}
             <Toggle label="Show the text as captions" value={o.captions} onChange={(captions) => set({ captions })} />

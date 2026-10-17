@@ -66,7 +66,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [importing, setImporting] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | null>(null)
+  const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | null>(null)
   const [screenRec, setScreenRec] = useState(false)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
@@ -297,6 +297,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'script', label: 'Script to video', on: () => { player?.pause(); setScenes('text') } },
       { icon: 'mindmap', label: 'Mind map to video', on: () => { player?.pause(); setScenes('mindmap') } },
       { icon: 'podcast', label: 'Audio to video', on: () => { player?.pause(); setScenes('audio') } },
+      { icon: 'quiz', label: 'Quiz to video', on: () => { player?.pause(); setScenes('quiz') } },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
@@ -380,6 +381,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <button className="btn" onClick={() => setScenes('text')}><Icon name="script" size={18} /> {t('Script to video')}</button>
               <button className="btn" onClick={() => setScenes('mindmap')}><Icon name="mindmap" size={18} /> {t('Mind map to video')}</button>
               <button className="btn" onClick={() => setScenes('audio')}><Icon name="podcast" size={18} /> {t('Audio to video')}</button>
+              <button className="btn" onClick={() => setScenes('quiz')}><Icon name="quiz" size={18} /> {t('Quiz to video')}</button>
               <button className="btn" onClick={() => setScreenRec(true)}><Icon name="screen" size={18} /> {t('Record screen')}</button>
               <button className="btn" onClick={() => setPanel('templates')}><Icon name="template" size={18} /> {t('Intro/Outro')}</button>
             </div>
