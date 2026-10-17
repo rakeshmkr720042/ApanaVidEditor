@@ -117,6 +117,17 @@ const hi: Record<string, string> = {
   'Saved as a template': 'टेम्पलेट के रूप में सेव हो गया', 'Template saved': 'टेम्पलेट सेव हो गया',
   'Make your channel intro once (name, logo, music) and add it to any video with one tap.': 'अपना चैनल इंट्रो एक बार बनाएं (नाम, लोगो, म्यूज़िक) और किसी भी वीडियो में एक टैप में जोड़ें।',
   'Make an end screen once (subscribe button, next video) and add it to any video with one tap.': 'एंड स्क्रीन एक बार बनाएं (सब्सक्राइब बटन, अगला वीडियो) और किसी भी वीडियो में एक टैप में जोड़ें।',
+  'Quiz to video': 'क्विज़ से वीडियो', 'Quiz': 'क्विज़', 'Flashcards': 'फ़्लैशकार्ड', 'Write or paste': 'लिखें या पेस्ट करें', 'Edit list': 'लिस्ट बदलें',
+  'Quiz style': 'क्विज़ स्टाइल', 'Classroom': 'क्लासरूम', 'Pop': 'पॉप', 'Time to answer': 'जवाब का समय', 'Ticking sound': 'टिक-टिक आवाज़',
+  'Show explanations': 'व्याख्या दिखाएं', 'All answers at the end': 'आख़िर में सारे उत्तर', 'Question': 'सवाल', 'Card': 'कार्ड', 'Option': 'विकल्प',
+  'Answer': 'उत्तर', 'Right answer': 'सही उत्तर', 'Front (question)': 'आगे (सवाल)', 'Back (answer)': 'पीछे (उत्तर)',
+  'Explanation (optional)': 'व्याख्या (ज़रूरी नहीं)', 'Quiz title (optional)': 'क्विज़ का टाइटल (ज़रूरी नहीं)',
+  'Tap the letter of the right answer.': 'सही उत्तर के अक्षर पर टैप करें।', 'Write the answer.': 'उत्तर लिखें।',
+  'questions': 'सवाल', 'cards': 'कार्ड', 'some have no answer yet': 'कुछ का उत्तर अभी नहीं है', 'Countdown': 'काउंटडाउन',
+  'Animating the quiz…': 'क्विज़ एनिमेट हो रहा है…', 'No questions found': 'कोई सवाल नहीं मिला',
+  'What the voice says when the answer appears': 'उत्तर आने पर आवाज़ क्या बोले',
+  'Write or paste questions with options, or flashcards. Each one gets a countdown, then the right answer is shown.': 'विकल्पों वाले सवाल या फ़्लैशकार्ड लिखें या पेस्ट करें। हर सवाल पर काउंटडाउन चलेगा, फिर सही उत्तर दिखेगा।',
+  'Tip: start each question with Q:, put options on lines like A) B) C) and mark the right one with *, or add a line "Answer: B". For flashcards write Q: and A: lines, or front | back on one line.': 'सुझाव: हर सवाल Q: से शुरू करें, विकल्प A) B) C) वाली लाइनों में लिखें और सही वाले पर * लगाएं, या "Answer: B" लाइन जोड़ें। फ़्लैशकार्ड के लिए Q: और A: लाइनें लिखें, या एक लाइन में आगे | पीछे।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

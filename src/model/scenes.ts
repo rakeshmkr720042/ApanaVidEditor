@@ -6,6 +6,7 @@ import { defaultFrame, subtitleStyle } from '../engine/text'
 import { newWave, subtitleLook } from './useEditor'
 import { captionY, type AudioPart } from '../lib/audioScenes'
 import type { MindScene } from '../lib/mindmap'
+import { quizPlan, type QuizPlan, type QuizScene } from '../lib/quiz'
 
 /**
  * Scene builder: every "something → video" input (slides, PDF pages, photos, and later scripts,
@@ -21,6 +22,7 @@ export interface Scene {
   card?: TextCard // when the image is a drawn text card: what is on it, so it can be redrawn
   mind?: MindScene // one step of a mind map: becomes an animated clip when the scenes are placed
   audio?: AudioPart // a chapter of an audio file: timed to the sound, captions follow the speech
+  quiz?: QuizScene // a quiz question or flashcard: becomes an animated clip timed to its voice
 }
 
 /** What a text card shows: a big title, a titled list or paragraph, or a large quote. */
@@ -85,18 +87,26 @@ export interface BuiltScene {
   scene: Scene
   source: MediaSource // the scene's image, already added to the editor
   voice: MediaSource | null // its spoken text, when the AI voice is used
+  voice2?: MediaSource | null // a quiz answer, read when it appears
+  sfx?: MediaSource | null // countdown ticks under a quiz question
 }
+
+/** When things happen in a quiz scene, once its voices are known. */
+export const planOf = (b: BuiltScene): QuizPlan | null =>
+  b.scene.quiz ? quizPlan(b.scene.quiz, b.voice?.duration ?? 0, b.voice2?.duration ?? 0) : null
 
 /** How long each scene stays on screen, before transition overlap is added. */
 export function sceneLengths(built: BuiltScene[], o: SceneOptions, track: MediaSource | null): number[] {
   if (o.voice === 'track' && track) {
     // the user's own narration: share it out, but keep scenes they timed themselves
-    const fixed = built.reduce((s, b) => s + (b.scene.duration ?? 0), 0)
-    const free = built.filter((b) => b.scene.duration == null).length
+    const own = built.map((b) => planOf(b)?.end ?? b.scene.duration)
+    const fixed = own.reduce<number>((s, d) => s + (d ?? 0), 0)
+    const free = own.filter((d) => d == null).length
     const each = free ? Math.max(1, (track.duration - fixed) / free) : 0
-    return built.map((b) => b.scene.duration ?? each)
+    return own.map((d) => d ?? each)
   }
-  return built.map((b) => b.scene.duration ?? (b.voice ? VOICE_LEAD + b.voice.duration + VOICE_TAIL : Math.max(o.seconds, readingTime(b.scene))))
+  // a quiz scene is as long as its question, countdown and answer
+  return built.map((b) => planOf(b)?.end ?? b.scene.duration ?? (b.voice ? VOICE_LEAD + b.voice.duration + VOICE_TAIL : Math.max(o.seconds, readingTime(b.scene))))
 }
 
 /** Seconds needed to read a text card without a voice (about three words a second). */
@@ -104,6 +114,11 @@ export function readingTime(s: Scene) {
   if (!s.card) return 0
   const words = [s.card.title, ...s.card.lines].join(' ').split(/\s+/).filter(Boolean).length
   return Math.ceil(1.5 + words / 3)
+}
+
+/** How long the transition after each scene lasts (it overlaps the start of the next one). */
+export function transitionLengths(lens: number[], o: SceneOptions): number[] {
+  return lens.map((l, i) => (o.transition && i < lens.length - 1 ? Math.min(o.transitionDuration, l / 2, lens[i + 1] / 2) : 0))
 }
 
 /**
@@ -114,7 +129,8 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
   if (!built.length) return p
   const lens = sceneLengths(built, o, track)
   const first = p.clips.length
-  const trLen = (i: number) => (o.transition && i < built.length - 1 ? Math.min(o.transitionDuration, lens[i] / 2, lens[i + 1] / 2) : 0)
+  const trs = transitionLengths(lens, o)
+  const trLen = (i: number) => trs[i]
   const fresh: Clip[] = built.map((b, i) => {
     const type = o.transition === 'mix' ? MIX_TRANSITIONS[i % MIX_TRANSITIONS.length] : o.transition
     // a transition overlaps the next scene, so lengthen the clip to keep the scene's own time
@@ -154,6 +170,21 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
       }
       layers.push(l)
     }
+    const plan = planOf(b)
+    if (plan && b.voice2) {
+      const at = start + plan.voice2At
+      layers.push({
+        id: uid(), type: 'audio', sourceId: b.voice2.id, in: 0, start: at, end: Math.min(total, at + b.voice2.duration),
+        volume: 1, fadeIn: 0, fadeOut: 0, label: `${b.scene.name} ✓`, kind: 'voice',
+      })
+    }
+    if (plan && b.sfx) {
+      const at = start + plan.timerStart
+      layers.push({
+        id: uid(), type: 'audio', sourceId: b.sfx.id, in: 0, start: at, end: Math.min(total, at + b.sfx.duration),
+        volume: 0.5, fadeIn: 0, fadeOut: 0, label: b.sfx.name.replace(/\.[^.]+$/, ''), kind: 'sound',
+      })
+    }
     if (o.captions && b.scene.text.trim()) {
       const style = look ? { ...look.style } : subtitleStyle()
       if (!look && narrow) style.size = 0.03
@@ -178,14 +209,20 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
           }
         }
       } else {
-        const chunks = captionChunks(b.scene.text, lineLen)
-        const weight = chunks.reduce((s, c) => s + c.length, 0)
-        let t = speechStart
-        for (const c of chunks) {
-          const d = (speechLen * c.length) / weight
-          layers.push(caption(c, t, t + d))
-          t += d
+        const spread = (text: string, from: number, len: number) => {
+          const chunks = captionChunks(text, lineLen)
+          const weight = chunks.reduce((s, c) => s + c.length, 0)
+          let t = from
+          for (const c of chunks) {
+            const d = (len * c.length) / weight
+            layers.push(caption(c, t, t + d))
+            t += d
+          }
         }
+        // a quiz question's captions end when the countdown starts; the answer gets its own
+        spread(b.scene.text, speechStart, plan && !b.voice ? Math.max(0.5, plan.timerStart - VOICE_LEAD) : speechLen)
+        const q = b.scene.quiz
+        if (plan && q?.say2.trim()) spread(q.say2, start + plan.voice2At, b.voice2?.duration ?? Math.max(1, plan.end - plan.voice2At))
       }
     }
   })
