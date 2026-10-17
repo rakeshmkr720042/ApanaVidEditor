@@ -46,6 +46,13 @@ const hi: Record<string, string> = {
   'Save as .avp file': '.avp फ़ाइल में सेव करें', 'Open project file (.avp)': 'प्रोजेक्ट फ़ाइल खोलें (.avp)', 'Magnetic snap': 'मैग्नेटिक स्नैप',
   'Frame': 'फ़्रेम', 'Typewriter': 'टाइपराइटर', 'Bounce In': 'उछलकर आए', 'Slide In Left': 'बाएं से आए', 'Slide In Right': 'दाएं से आए',
   'Fade In': 'धीरे दिखे', 'Zoom In': 'ज़ूम होकर आए', 'None': 'कोई नहीं',
+  'Slideshow': 'स्लाइडशो', 'Photo slideshow': 'फ़ोटो स्लाइडशो', 'Photo': 'फ़ोटो', 'Add photos': 'फ़ोटो जोड़ें',
+  'Add music': 'म्यूज़िक जोड़ें', 'Change music': 'म्यूज़िक बदलें', 'Each photo': 'हर फ़ोटो', 'Mix': 'मिक्स',
+  'Transition length': 'ट्रांज़िशन का समय', 'Ken Burns': 'केन बर्न्स (धीमा ज़ूम)', 'Ken Burns (slow pan & zoom)': 'धीमा ज़ूम और पैन (केन बर्न्स)',
+  'Fill frame (crop photos)': 'पूरा फ़्रेम भरें (फ़ोटो काटें)', 'Zoom in': 'ज़ूम इन', 'Zoom out': 'ज़ूम आउट',
+  'Pan left': 'बाएं खिसके', 'Pan right': 'दाएं खिसके', 'Pan up': 'ऊपर खिसके', 'Pan down': 'नीचे खिसके',
+  'photos on the timeline. Changes apply to all of them.': 'फ़ोटो टाइमलाइन में हैं। बदलाव सब पर लगेंगे।',
+  'Pick photos and they are laid out one after another as a video.': 'फ़ोटो चुनें, वे एक के बाद एक वीडियो की तरह लग जाएंगी।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

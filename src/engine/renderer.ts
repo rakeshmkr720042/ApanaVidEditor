@@ -1,5 +1,6 @@
 import type { BlurLayer, Clip, MediaLayer, MediaSource, Project, VisualLayer } from '../types'
 import { activeAt, type LaidClip } from '../model/timeline'
+import { kenBurnsAt } from '../model/slideshow'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { drawSticker, drawText, ensureFont, fontLoaded, measureText, STICKER_BASE } from './text'
@@ -95,10 +96,10 @@ export class Renderer {
 
     const { a, b, progress } = activeAt(inp.items, inp.t)
     if (a) {
-      const fa = this.drawClipFrame(0, a.item.clip, inp)
+      const fa = this.drawClipFrame(0, a.item.clip, inp, a.local / a.item.dur)
       const pa = colorParams(a.item.clip.adjust, a.item.clip.filter, a.item.clip.filterAmount)
       if (b && a.item.clip.transition) {
-        const fb = this.drawClipFrame(1, b.item.clip, inp)
+        const fb = this.drawClipFrame(1, b.item.clip, inp, b.local / b.item.dur)
         const pb = colorParams(b.item.clip.adjust, b.item.clip.filter, b.item.clip.filterAmount)
         if (this.grader) {
           this.grader.drawTransition(fa, pa, fb, pb, a.item.clip.transition.type, progress, seed)
@@ -166,7 +167,7 @@ export class Renderer {
   }
 
   /** Draws a clip (crop, rotate, flip, fit/fill, background) into frames[i]. */
-  private drawClipFrame(i: number, clip: Clip, inp: RenderInput): Canvas {
+  private drawClipFrame(i: number, clip: Clip, inp: RenderInput, progress: number): Canvas {
     const out = this.frames[i]
     const c = ctx2d(out)
     const { W, H } = this
@@ -188,11 +189,11 @@ export class Renderer {
       c.drawImage(s, 0, 0, W, H)
       c.filter = 'none'
     }
-    this.placeFrame(c, f, clip, W, H, clip.fit)
+    this.placeFrame(c, f, clip, W, H, clip.fit, Math.min(1, Math.max(0, progress)))
     return out
   }
 
-  private placeFrame(c: Ctx, f: FrameImage, clip: Clip, W: number, H: number, fit: 'fit' | 'fill') {
+  private placeFrame(c: Ctx, f: FrameImage, clip: Clip, W: number, H: number, fit: 'fit' | 'fill', progress?: number) {
     const cr = clip.crop ?? { x: 0, y: 0, w: 1, h: 1 }
     const sx = cr.x * f.width, sy = cr.y * f.height, sw = cr.w * f.width, sh = cr.h * f.height
     const rot = clip.rotate % 180 !== 0
@@ -200,6 +201,11 @@ export class Renderer {
     const s = fit === 'fit' ? Math.min(W / dw0, H / dh0) : Math.max(W / dw0, H / dh0)
     c.save()
     c.translate(W / 2, H / 2)
+    if (clip.kenBurns && progress !== undefined) {
+      const kb = kenBurnsAt(clip.kenBurns, progress)
+      c.translate(kb.dx * W, kb.dy * H)
+      c.scale(kb.scale, kb.scale)
+    }
     c.rotate((clip.rotate * Math.PI) / 180)
     c.scale(clip.flipH ? -1 : 1, clip.flipV ? -1 : 1)
     c.drawImage(f.image, sx, sy, sw, sh, (-sw * s) / 2, (-sh * s) / 2, sw * s, sh * s)

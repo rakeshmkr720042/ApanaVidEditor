@@ -20,6 +20,8 @@ import { BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, TextPanel } from 
 import { AudioPanel } from '../panels/AudioPanel'
 import { AIPanel } from '../panels/AIPanel'
 import { WatermarkPanel } from '../panels/WatermarkPanel'
+import { PhotoPanel, SlideshowPanel } from '../panels/SlideshowPanel'
+import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
 
 interface Loaded { id: string; name: string; project: Project; sources: Record<string, MediaSource> }
 
@@ -44,7 +46,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
-  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | null
+  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'slideshow' | 'photo' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -63,6 +65,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [exporting, setExporting] = useState(false)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
+  const photoInput = useRef<HTMLInputElement>(null)
+  const slideOpts = useRef<SlideshowOptions>(defaultSlideshow())
+  const pickPhotos = (o: SlideshowOptions) => { slideOpts.current = o; photoInput.current?.click() }
 
   // restore sources once; videos imported before waveforms existed get one in the background
   useEffect(() => {
@@ -129,7 +134,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const togglePlay = useCallback(() => { if (!player) return; if (player.playing) player.pause(); else player.play() }, [player])
   const seek = useCallback((tt: number) => { if (player?.playing) player.pause(); player?.seek(tt) }, [player])
 
-  const importFiles = async (files: FileList | File[], target: 'main' | 'overlay') => {
+  const importFiles = async (files: FileList | File[], target: 'main' | 'overlay' | 'slides') => {
     const list = [...files]
     if (!list.length) return
     setImporting((n) => n + list.length)
@@ -152,7 +157,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       }
     }
     if (!added.length) return
-    if (target === 'main') ed.appendClips(added)
+    if (target === 'slides') ed.addSlides(added.filter((s) => s.kind === 'image'), slideOpts.current)
+    else if (target === 'main') ed.appendClips(added)
     else for (const s of added) ed.addOverlay(time, s)
   }
 
@@ -181,7 +187,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? clipAtPlayhead
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'filters', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'slideshow', 'filters', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -226,7 +232,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   type Tool = { icon: IconName; label: string; on: () => void; disabled?: boolean; active?: boolean }
   let tools: Tool[]
   if (selClip) {
+    const photo = ed.sources[selClip.sourceId]?.kind === 'image'
     tools = [
+      ...(photo ? [{ icon: 'image', label: 'Photo', on: () => setPanel('photo') } as Tool] : []),
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
@@ -264,6 +272,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   } else {
     tools = [
       { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
+      { icon: 'image', label: 'Slideshow', on: () => setPanel('slideshow') },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
@@ -298,6 +307,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if ((panel === 'overlay' || panel === 'chroma') && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} chroma={panel === 'chroma'} onClose={closePanel} />
   else if (panel === 'blur' && selLayer?.type === 'blur') panelView = <BlurPanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'watermark') panelView = <WatermarkPanel ed={ed} time={time} onClose={closePanel} />
+  else if (panel === 'slideshow') panelView = <SlideshowPanel ed={ed} onClose={closePanel} onAddPhotos={pickPhotos} onMusic={() => setPanel('audio')} />
+  else if (panel === 'photo' && selClip) panelView = <PhotoPanel ed={ed} clip={selClip} onClose={closePanel} />
   else if (panel === 'ai') panelView = <AIPanel ed={ed} onClose={closePanel} />
   else if (panel === 'subtitles') panelView = <SubtitlePanel ed={ed} t={time} onClose={closePanel} onSeek={seek} />
   else if (panel === 'audio') panelView = (
@@ -337,6 +348,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <Icon name="plus" size={44} />
               <span>{t('Import video')}</span>
             </button>
+            <button className="btn" onClick={() => pickPhotos(defaultSlideshow())}><Icon name="image" size={18} /> {t('Photo slideshow')}</button>
             <p className="muted">{t('Pick videos or photos from your phone. Everything stays on your device.')}</p>
           </div>
         )}
@@ -384,6 +396,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       )}
 
       <input ref={mainInput} type="file" accept="video/*,image/*,audio/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'main'); e.target.value = '' }} />
+      <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'slides'); e.target.value = '' }} />
       <input ref={overlayInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'overlay'); e.target.value = '' }} />
 
       {exporting && <ExportSheet project={ed.project} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}

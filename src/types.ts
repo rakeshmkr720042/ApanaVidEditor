@@ -37,6 +37,9 @@ export interface Crop { x: number; y: number; w: number; h: number } // normalis
 
 export interface Transition { type: string; duration: number }
 
+/** Slow pan/zoom over a clip, mostly for photos in a slideshow. */
+export type KenBurns = 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down'
+
 export interface Clip {
   id: string
   sourceId: string
@@ -56,6 +59,7 @@ export interface Clip {
   filterAmount: number // 0..1
   adjust: Adjust
   transition: Transition | null // transition into the next clip
+  kenBurns?: KenBurns | null // missing in projects saved before slideshows
 }
 
 export interface Box {

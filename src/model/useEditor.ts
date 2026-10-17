@@ -4,6 +4,7 @@ import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
 import { clipSegments, defaultAdjust, layoutClips, newClip, sourceAt } from './timeline'
+import { applySlideshow, type SlideshowOptions } from './slideshow'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
 
@@ -69,6 +70,17 @@ export function useEditor(initial: Project) {
     h.set({ ...p, clips: [...p.clips.slice(0, idx), ...clips, ...p.clips.slice(idx)] })
     return clips
   }, [h])
+
+  /** Adds photos as slides and lays every photo out as a slideshow, in one undo step. */
+  const addSlides = useCallback((srcs: MediaSource[], o: SlideshowOptions) => {
+    const p = ref.current
+    const clips = srcs.map((s) => newClip(s, uid()))
+    h.set(applySlideshow({ ...p, clips: [...p.clips, ...clips] }, sourcesRef.current, o))
+  }, [h])
+
+  const setSlideshow = useCallback((o: SlideshowOptions) => {
+    commit(applySlideshow(ref.current, sourcesRef.current, o))
+  }, [commit])
 
   const addLayer = useCallback((l: Layer) => {
     const p = ref.current
@@ -205,7 +217,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, appendClips, updateClip, updateAllClips, updateLayer, setSettings, setWatermark,
+    addSource, appendClips, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, setSettings, setWatermark,
     addText, addSticker, addBlur, addOverlay, addAudio, addLayer,
     remove, duplicate, split, moveClip, replaceProject,
   }
