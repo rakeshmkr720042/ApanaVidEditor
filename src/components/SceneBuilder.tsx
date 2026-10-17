@@ -3,6 +3,8 @@ import type { MediaSource } from '../types'
 import type { Editor } from '../model/useEditor'
 import { defaultSceneOptions, placeScenes, sceneLengths, type BuiltScene, type Scene, type SceneOptions } from '../model/scenes'
 import { filesToScenes } from '../lib/sceneImport'
+import { CARD_THEMES, drawTextCard, scriptToScenes, themeOf } from '../lib/scriptScenes'
+import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
 import { saveMedia } from '../lib/db'
 import { fmtTime } from '../lib/format'
@@ -13,6 +15,7 @@ import { t } from '../lib/i18n'
 
 // remembered while the app is open, so the next deck starts with the same choices
 let memo: SceneOptions = defaultSceneOptions()
+let draft = '' // pasted script, kept if the sheet is closed before making scenes
 
 const TRANSITIONS = [
   { value: 'none', label: 'None' }, { value: 'fade', label: 'Fade' }, { value: 'slideleft', label: 'Slide' },
@@ -25,31 +28,87 @@ function Thumb({ blob }: { blob: Blob }) {
   return <img src={url} alt="" />
 }
 
+const isText = (f: File) => /^text\/(plain|markdown)/.test(f.type) || /\.(txt|md|markdown)$/i.test(f.name)
+const hasDeva = (s: string) => /[ऀ-ॿ]/.test(s)
+
+const SCRIPT_HINT = `# My topic
+
+Introduction
+A short paragraph about what this video covers.
+
+Key points:
+- First point
+- Second point
+- Third point
+
+> A line worth remembering.`
+
 const extOf = (b: Blob) => (b.type === 'image/png' ? 'png' : b.type === 'image/webp' ? 'webp' : 'jpg')
 
-/** Slides, PDF pages or photos → scenes you can script and time → clips on the timeline. */
-export function SceneBuilder({ ed, onClose, onDone }: { ed: Editor; onClose: () => void; onDone: (msg: string) => void }) {
+/** Slides, PDF pages, photos or a pasted script → scenes you can script and time → clips on the timeline. */
+export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text'; onClose: () => void; onDone: (msg: string) => void }) {
   const [scenes, setScenes] = useState<Scene[]>([])
   const [o, setO] = useState(memo)
   const [track, setTrack] = useState<MediaSource | null>(null)
   const [busy, setBusy] = useState<{ label: string; p: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pasting, setPasting] = useState(start === 'text')
+  const [script, setScript] = useState(draft)
   const fileInput = useRef<HTMLInputElement>(null)
   const trackInput = useRef<HTMLInputElement>(null)
   const set = (patch: Partial<SceneOptions>) => setO((v) => (memo = { ...v, ...patch }))
 
-  useEffect(() => { fileInput.current?.click() }, [])
+  useEffect(() => { if (start === 'files') fileInput.current?.click() }, [start])
 
   const addFiles = async (files: File[]) => {
     if (!files.length) return
     setError(null)
     setBusy({ label: t('Reading files…'), p: 0 })
     try {
-      const got = await filesToScenes(files, (label, p) => setBusy({ label, p }))
+      const texts = files.filter(isText)
+      const got = await filesToScenes(files.filter((f) => !isText(f)), (label, p) => setBusy({ label, p }))
+      for (const f of texts) got.push(...await textScenes(await f.text()))
       setScenes((s) => [...s, ...got])
       // pages that came with text are worth reading aloud: suggest the voice
-      if (!scenes.length && o.voice === 'none' && got.some((s) => s.text) && VOICES[o.lang]) set({ voice: 'ai', captions: true })
+      if (!scenes.length && o.voice === 'none' && got.some((s) => s.text) && VOICES[o.lang]) set({ voice: 'ai', captions: !got.every((s) => s.card) })
     } catch (e) { setError((e as Error).message) } finally { setBusy(null) }
+  }
+
+  // text cards are drawn at the project's frame size (16:9 for a new project)
+  const frame = () => { const { w, h } = outputSize(ed.project, ed.sources, 1080); return { w, h } }
+
+  const textScenes = (raw: string) => {
+    const { w, h } = frame()
+    return scriptToScenes(raw, themeOf(o.theme), w, h, (p) => setBusy({ label: t('Making scenes…'), p }))
+  }
+
+  const addScript = async () => {
+    setError(null)
+    try {
+      const got = await textScenes(script)
+      setScenes((s) => [...s, ...got])
+      setPasting(false)
+      setScript(draft = '')
+      // the card already shows the words, so no captions; a voice reads them in the text's language
+      const lang = hasDeva(got.map((s) => s.text).join(' ')) ? 'hi' : 'en'
+      if (!scenes.length) set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: false })
+    } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
+  }
+
+  const setTheme = async (theme: string) => {
+    set({ theme })
+    const cards = scenes.filter((s) => s.card)
+    if (!cards.length) return
+    const { w, h } = frame()
+    setBusy({ label: t('Making scenes…'), p: 0 })
+    try {
+      const images = new Map<string, Blob>()
+      for (let i = 0; i < cards.length; i++) {
+        setBusy({ label: t('Making scenes…'), p: i / cards.length })
+        images.set(cards[i].id, await drawTextCard(cards[i].card!, themeOf(theme), w, h))
+      }
+      setScenes((list) => list.map((s) => (images.has(s.id) ? { ...s, image: images.get(s.id)! } : s)))
+    } finally { setBusy(null) }
   }
 
   const pickTrack = async (f: File | undefined) => {
@@ -119,12 +178,31 @@ export function SceneBuilder({ ed, onClose, onDone }: { ed: Editor; onClose: () 
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet scene-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
-        <h2>{t('Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
-        <p className="muted small">{t('Pick a PDF, a PowerPoint (.pptx) or photos. Each page becomes a scene; write what should be said on it.')}</p>
+        <h2>{t(start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
+        <p className="muted small">{t(start === 'text'
+          ? 'Paste a script or report. Headings, paragraphs and bullet lists each become a scene with a text card, read by the voice.'
+          : 'Pick a PDF, a PowerPoint (.pptx) or photos. Each page becomes a scene; write what should be said on it.')}</p>
         <div className="row">
           <button className="btn" disabled={!!busy} onClick={() => fileInput.current?.click()}>{t(scenes.length ? 'Add more' : 'Pick files')}</button>
+          <button className={`btn${pasting ? ' on' : ''}`} disabled={!!busy} onClick={() => setPasting((v) => !v)}>{t('Paste text')}</button>
           {scenes.length > 0 && <button className="btn" disabled={!!busy} onClick={() => setScenes([])}>{t('Clear')}</button>}
         </div>
+
+        {pasting && (
+          <div className="script-box">
+            <textarea className="text-input" rows={9} value={script} placeholder={SCRIPT_HINT} autoFocus
+              onChange={(e) => setScript(draft = e.target.value)} />
+            <p className="muted small">{t('Tip: a short line on its own is a heading, lines starting with - are points, a blank line starts a new scene.')}</p>
+            <button className="btn primary" disabled={!!busy || !script.trim()} onClick={addScript}>{t('Make scenes')}</button>
+          </div>
+        )}
+
+        {(pasting || scenes.some((s) => s.card)) && (
+          <>
+            <span className="field-label">{t('Card style')}</span>
+            <Chips options={CARD_THEMES.map((c) => ({ value: c.id, label: c.label }))} value={o.theme} onChange={(v) => { if (!busy) void setTheme(v) }} />
+          </>
+        )}
 
         {scenes.length > 0 && (
           <div className="scene-list">
@@ -193,7 +271,7 @@ export function SceneBuilder({ ed, onClose, onDone }: { ed: Editor; onClose: () 
         {error && <p className="small error-text">{error}</p>}
 
         <input ref={fileInput} type="file" multiple hidden
-          accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx,image/*"
+          accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx,image/*,text/plain,.txt,.md"
           onChange={(e) => { if (e.target.files) addFiles([...e.target.files]); e.target.value = '' }} />
         <input ref={trackInput} type="file" accept="audio/*" hidden onChange={(e) => { pickTrack(e.target.files?.[0]); e.target.value = '' }} />
       </div>

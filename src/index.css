@@ -336,6 +336,9 @@ input, textarea { font: inherit; color: inherit; }
 .scene-tools { display: flex; align-items: center; gap: 2px; }
 .scene-tools .grow { flex: 1; }
 .scene-secs { width: 64px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-size: 13px; }
+.script-box { display: grid; gap: 6px; margin-top: 6px; }
+.script-box .text-input { font-size: 14px; line-height: 1.45; min-height: 160px; resize: vertical; }
+.btn.on { border-color: var(--accent); color: var(--accent); }
 /* ---------- caption frame (subtitles panel) */
 .sub-frame { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; margin: 6px 0; }
 .sub-frame summary { cursor: pointer; font-weight: 600; font-size: 14px; }
