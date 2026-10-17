@@ -11,10 +11,18 @@ import { subtitleStyle } from '../engine/text'
  */
 export interface Scene {
   id: string
-  image: Blob // what is shown (a photo, a rendered PDF page or slide)
+  image: Blob // what is shown (a photo, a rendered PDF page or slide, a text card)
   name: string
   text: string // spoken by the AI voice and/or shown as captions
   duration: number | null // seconds on screen; null = automatic (voice length, or the default)
+  card?: TextCard // when the image is a drawn text card: what is on it, so it can be redrawn
+}
+
+/** What a text card shows: a big title, a titled list or paragraph, or a large quote. */
+export interface TextCard {
+  kind: 'title' | 'bullets' | 'text' | 'quote'
+  title: string
+  lines: string[] // bullet points, or the paragraph / quote as one line
 }
 
 export type VoiceMode = 'none' | 'ai' | 'track'
@@ -28,10 +36,11 @@ export interface SceneOptions {
   transitionDuration: number
   kenBurns: boolean
   fill: boolean // crop to fill the frame (off keeps whole slides visible)
+  theme: string // look of text cards made from a script
 }
 
 export const defaultSceneOptions = (): SceneOptions => ({
-  seconds: 5, voice: 'none', lang: 'hi', captions: false, transition: 'fade', transitionDuration: 0.5, kenBurns: false, fill: false,
+  seconds: 5, voice: 'none', lang: 'hi', captions: false, transition: 'fade', transitionDuration: 0.5, kenBurns: false, fill: false, theme: 'clean',
 })
 
 const KB_SOFT = ['zoom-in', 'zoom-out'] as const
@@ -77,7 +86,14 @@ export function sceneLengths(built: BuiltScene[], o: SceneOptions, track: MediaS
     const each = free ? Math.max(1, (track.duration - fixed) / free) : 0
     return built.map((b) => b.scene.duration ?? each)
   }
-  return built.map((b) => b.scene.duration ?? (b.voice ? VOICE_LEAD + b.voice.duration + VOICE_TAIL : o.seconds))
+  return built.map((b) => b.scene.duration ?? (b.voice ? VOICE_LEAD + b.voice.duration + VOICE_TAIL : Math.max(o.seconds, readingTime(b.scene))))
+}
+
+/** Seconds needed to read a text card without a voice (about three words a second). */
+export function readingTime(s: Scene) {
+  if (!s.card) return 0
+  const words = [s.card.title, ...s.card.lines].join(' ').split(/\s+/).filter(Boolean).length
+  return Math.ceil(1.5 + words / 3)
 }
 
 /**

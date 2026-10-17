@@ -66,7 +66,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [importing, setImporting] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [scenes, setScenes] = useState(false)
+  const [scenes, setScenes] = useState<'files' | 'text' | null>(null)
   const [screenRec, setScreenRec] = useState(false)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
@@ -289,7 +289,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'template', label: 'Intro/Outro', on: () => { player?.pause(); setPanel('templates') } },
       { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
       { icon: 'image', label: 'Slideshow', on: () => setPanel('slideshow') },
-      { icon: 'slides', label: 'Slides to video', on: () => { player?.pause(); setScenes(true) } },
+      { icon: 'slides', label: 'Slides to video', on: () => { player?.pause(); setScenes('files') } },
+      { icon: 'script', label: 'Script to video', on: () => { player?.pause(); setScenes('text') } },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
@@ -368,7 +369,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
             </button>
             <div className="row empty-more">
               <button className="btn" onClick={() => pickPhotos(defaultSlideshow())}><Icon name="image" size={18} /> {t('Photo slideshow')}</button>
-              <button className="btn" onClick={() => setScenes(true)}><Icon name="slides" size={18} /> {t('Slides / PDF to video')}</button>
+              <button className="btn" onClick={() => setScenes('files')}><Icon name="slides" size={18} /> {t('Slides / PDF to video')}</button>
+              <button className="btn" onClick={() => setScenes('text')}><Icon name="script" size={18} /> {t('Script to video')}</button>
               <button className="btn" onClick={() => setScreenRec(true)}><Icon name="screen" size={18} /> {t('Record screen')}</button>
               <button className="btn" onClick={() => setPanel('templates')}><Icon name="template" size={18} /> {t('Intro/Outro')}</button>
             </div>
@@ -422,7 +424,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'slides'); e.target.value = '' }} />
       <input ref={overlayInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'overlay'); e.target.value = '' }} />
 
-      {scenes && <SceneBuilder ed={ed} onClose={() => setScenes(false)} onDone={(msg) => { setScenes(false); ed.setSel(null); setPanel(null); setToast(msg) }} />}
+      {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
       {screenRec && <ScreenRecorder onClose={() => setScreenRec(false)} onDone={addRecording} />}
       {exporting && <ExportSheet project={ed.project} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>
