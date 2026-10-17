@@ -1,8 +1,10 @@
-import type { AudioLayer, Clip, MediaSource, Project, TextLayer } from '../types'
+import type { AudioLayer, CaptionFramePreset, Clip, MediaSource, Project, TextLayer, WaveLayer, WaveStyle } from '../types'
 import { uid } from '../lib/format'
 import { layoutClips, newClip } from './timeline'
 import { MIX_TRANSITIONS } from './slideshow'
-import { subtitleStyle } from '../engine/text'
+import { defaultFrame, subtitleStyle } from '../engine/text'
+import { newWave, subtitleLook } from './useEditor'
+import { captionY, type AudioPart } from '../lib/audioScenes'
 import type { MindScene } from '../lib/mindmap'
 
 /**
@@ -18,6 +20,7 @@ export interface Scene {
   duration: number | null // seconds on screen; null = automatic (voice length, or the default)
   card?: TextCard // when the image is a drawn text card: what is on it, so it can be redrawn
   mind?: MindScene // one step of a mind map: becomes an animated clip when the scenes are placed
+  audio?: AudioPart // a chapter of an audio file: timed to the sound, captions follow the speech
 }
 
 /** What a text card shows: a big title, a titled list or paragraph, or a large quote. */
@@ -39,10 +42,15 @@ export interface SceneOptions {
   kenBurns: boolean
   fill: boolean // crop to fill the frame (off keeps whole slides visible)
   theme: string // look of text cards made from a script
+  wave: WaveStyle | null // animated waveform over the user's own audio track
+  waveColor: string
+  waveColor2: string
+  captionFrame: 'auto' | Exclude<CaptionFramePreset, 'custom' | 'left' | 'right'>
 }
 
 export const defaultSceneOptions = (): SceneOptions => ({
   seconds: 5, voice: 'none', lang: 'hi', captions: false, transition: 'fade', transitionDuration: 0.5, kenBurns: false, fill: false, theme: 'clean',
+  wave: null, waveColor: '#ffffff', waveColor2: '#7dd3fc', captionFrame: 'auto',
 })
 
 const KB_SOFT = ['zoom-in', 'zoom-out'] as const
@@ -102,7 +110,7 @@ export function readingTime(s: Scene) {
  * Appends scenes to the end of the timeline: one photo clip per scene, plus its voice and
  * captions placed under it. Returns the new project (the caller commits it as one undo step).
  */
-export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, track: MediaSource | null): Project {
+export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, track: MediaSource | null, ratio = 16 / 9): Project {
   if (!built.length) return p
   const lens = sceneLengths(built, o, track)
   const first = p.clips.length
@@ -121,6 +129,15 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
   const { items, total } = layoutClips(clips)
 
   const layers = [...p.layers]
+  const withTrack = o.voice === 'track' && track
+  const trackStart = withTrack ? items[first].start + items[first].transIn : null
+  // new captions match the ones already in the project; otherwise they keep clear of the waveform
+  const look = subtitleLook(p.layers)
+  const wave = withTrack ? o.wave : null
+  const capY = look?.y ?? captionY(wave)
+  const frame = look ? look.frame : o.captionFrame === 'auto' ? null : defaultFrame(o.captionFrame)
+  const narrow = ratio < 1 // tall frames need smaller captions with shorter lines
+  const lineLen = narrow ? 26 : 42
   const devanagari = (s: string) => /[ऀ-ॿ]/.test(s)
   built.forEach((b, i) => {
     const it = items[first + i]
@@ -138,29 +155,51 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
       layers.push(l)
     }
     if (o.captions && b.scene.text.trim()) {
-      const chunks = captionChunks(b.scene.text)
-      const weight = chunks.reduce((s, c) => s + c.length, 0)
-      let t = speechStart
-      const style = subtitleStyle()
+      const style = look ? { ...look.style } : subtitleStyle()
+      if (!look && narrow) style.size = 0.03
       if (devanagari(b.scene.text)) style.font = 'Noto Sans Devanagari'
-      for (const c of chunks) {
-        const d = (speechLen * c.length) / weight
-        const l: TextLayer = {
-          id: uid(), type: 'text', text: c, subtitle: true, start: t, end: Math.min(total, t + d), style,
-          box: { x: 0.5, y: 0.86, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none',
+      const caption = (text: string, from: number, to: number): TextLayer => ({
+        id: uid(), type: 'text', text, subtitle: true, start: from, end: Math.min(total, to), style,
+        box: { x: 0.5, y: capY, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none',
+        frame: frame && { ...frame, rect: { ...frame.rect } },
+      })
+      const a = b.scene.audio
+      if (a && a.cues.length && b.scene.text.trim() === a.heard.trim() && trackStart != null) {
+        // speech recognised from the audio: each line shows while it is being said
+        for (const c of a.cues) {
+          // a long line is shown in parts, two short lines at a time
+          const parts = captionChunks(c.text, lineLen)
+          const weight = parts.reduce((s, x) => s + x.length, 0)
+          let t = trackStart + c.start
+          for (const x of parts) {
+            const d = ((c.end - c.start) * x.length) / weight
+            layers.push(caption(x, t, t + d))
+            t += d
+          }
         }
-        layers.push(l)
-        t += d
+      } else {
+        const chunks = captionChunks(b.scene.text, lineLen)
+        const weight = chunks.reduce((s, c) => s + c.length, 0)
+        let t = speechStart
+        for (const c of chunks) {
+          const d = (speechLen * c.length) / weight
+          layers.push(caption(c, t, t + d))
+          t += d
+        }
       }
     }
   })
 
-  if (o.voice === 'track' && track) {
-    const start = items[first].start + items[first].transIn
+  if (withTrack && trackStart != null) {
+    const end = Math.min(total, trackStart + track.duration)
     layers.push({
-      id: uid(), type: 'audio', sourceId: track.id, in: 0, start, end: Math.min(total, start + track.duration),
+      id: uid(), type: 'audio', sourceId: track.id, in: 0, start: trackStart, end,
       volume: 1, fadeIn: 0, fadeOut: 0, label: track.name.replace(/\.[^.]+$/, ''), kind: 'voice',
     })
+    if (wave) {
+      const w: WaveLayer = { ...newWave(track.id, wave), start: trackStart, end, color: o.waveColor, color2: o.waveColor2 }
+      layers.push(w)
+    }
   }
   return { ...p, clips, layers }
 }

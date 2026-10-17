@@ -159,7 +159,20 @@ export interface AudioLayer extends LayerBase {
   kind: 'music' | 'sound' | 'voice'
 }
 
-export type Layer = TextLayer | StickerLayer | MediaLayer | BlurLayer | AudioLayer
+export type WaveStyle = 'bars' | 'line' | 'circle'
+
+/** An animated picture of a sound (audio bars, a spectrum line, or a ring), moving with that sound. */
+export interface WaveLayer extends LayerBase {
+  type: 'wave'
+  sourceId: string // the audio or video whose sound it follows
+  in: number // source time at the layer's start
+  style: WaveStyle
+  color: string
+  color2: string // the bars blend into this towards their tips
+  box: Box
+}
+
+export type Layer = TextLayer | StickerLayer | MediaLayer | BlurLayer | AudioLayer | WaveLayer
 export type VisualLayer = Exclude<Layer, AudioLayer>
 
 export type AspectRatio = 'original' | '16:9' | '9:16' | '1:1' | '4:5' | '4:3' | '3:4' | '21:9'

@@ -127,7 +127,7 @@ export async function buildFromDesign(d: TemplateDesign, load: SourceLoader) {
   return { clips: [clip], layers, sources, duration: total }
 }
 
-const sourceIdOf = (l: Layer) => (l.type === 'media' || l.type === 'audio' ? l.sourceId : null)
+const sourceIdOf = (l: Layer) => (l.type === 'media' || l.type === 'audio' || l.type === 'wave' ? l.sourceId : null)
 
 /** The media a set of clips and layers needs, ready to store in a template. */
 export function templateMedia(clips: Clip[], layers: Layer[], sources: Record<string, MediaSource>): TemplateRecord['media'] {
@@ -170,7 +170,7 @@ export function placeTemplate(p: Project, tpl: TemplateRecord, where: 'start' | 
   const moved = p.layers.map((l) => (shift ? ({ ...l, start: l.start + shift, end: l.end + shift } as Layer) : l))
   const added = tpl.layers.map((l) => {
     const copy = { ...l, id: uid(), start: l.start + tplStart, end: l.end + tplStart } as Layer
-    if (copy.type === 'media' || copy.type === 'audio') copy.sourceId = mapId(copy.sourceId)
+    if (copy.type === 'media' || copy.type === 'audio' || copy.type === 'wave') copy.sourceId = mapId(copy.sourceId)
     if ('box' in copy) copy.box = { ...copy.box }
     return copy
   })

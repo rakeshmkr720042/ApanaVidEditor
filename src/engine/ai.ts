@@ -114,6 +114,11 @@ export async function transcribe(
   progress('work', 0)
   const audio = await timelineAudio(project, sources)
   if (!audio) throw new Error('This video has no sound to listen to')
+  return transcribeSamples(audio, opts, progress)
+}
+
+/** Speech to text on 16 kHz mono samples (the array is handed to the worker, so pass a copy to keep it). */
+export async function transcribeSamples(audio: Float32Array, opts: { model: string; language: string; toEnglish: boolean }, progress: Progress): Promise<Cue[]> {
   const language = opts.language === 'auto' ? null : opts.language.split('-')[0]
   const r = await call({ type: 'asr', audio, model: opts.model, language, task: opts.toEnglish ? 'translate' : 'transcribe' }, progress, [audio.buffer])
   if (r.type !== 'asr') throw new Error('Unexpected reply')

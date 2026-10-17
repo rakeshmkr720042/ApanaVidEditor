@@ -17,7 +17,7 @@ import { SceneBuilder } from './SceneBuilder'
 import { CropEditor } from './CropEditor'
 import { Icon, type IconName } from './Icon'
 import { AdjustPanel, FilterPanel, FormatPanel, SpeedPanel, TransitionPanel, VolumePanel } from '../panels/ClipPanels'
-import { BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, TextPanel } from '../panels/LayerPanels'
+import { BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, TextPanel, WavePanel } from '../panels/LayerPanels'
 import { AudioPanel } from '../panels/AudioPanel'
 import { AIPanel } from '../panels/AIPanel'
 import { WatermarkPanel } from '../panels/WatermarkPanel'
@@ -49,7 +49,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
-  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'templates' | 'slideshow' | 'photo' | null
+  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'templates' | 'slideshow' | 'photo' | 'wave' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -66,7 +66,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [importing, setImporting] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | null>(null)
+  const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | null>(null)
   const [screenRec, setScreenRec] = useState(false)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
@@ -280,7 +280,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') } as Tool,
       ],
       blur: [{ icon: 'blur', label: 'Blur', on: () => setPanel('blur') } as Tool],
-      audio: [{ icon: 'volume', label: 'Volume', on: () => setPanel('volume') } as Tool],
+      audio: [
+        { icon: 'volume', label: 'Volume', on: () => setPanel('volume') } as Tool,
+        { icon: 'wave', label: 'Waveform', on: () => { if (selLayer.type === 'audio') { ed.addWave(selLayer); setPanel('wave') } } } as Tool,
+      ],
+      wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
     }[selLayer.type]
     tools = [...specific, ...common]
   } else {
@@ -292,6 +296,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'slides', label: 'Slides to video', on: () => { player?.pause(); setScenes('files') } },
       { icon: 'script', label: 'Script to video', on: () => { player?.pause(); setScenes('text') } },
       { icon: 'mindmap', label: 'Mind map to video', on: () => { player?.pause(); setScenes('mindmap') } },
+      { icon: 'podcast', label: 'Audio to video', on: () => { player?.pause(); setScenes('audio') } },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
@@ -325,6 +330,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
   else if ((panel === 'overlay' || panel === 'chroma') && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} chroma={panel === 'chroma'} onClose={closePanel} />
   else if (panel === 'blur' && selLayer?.type === 'blur') panelView = <BlurPanel ed={ed} layer={selLayer} onClose={closePanel} />
+  else if (panel === 'wave' && selLayer?.type === 'wave') panelView = <WavePanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'watermark') panelView = <WatermarkPanel ed={ed} time={time} onClose={closePanel} />
   else if (panel === 'slideshow') panelView = <SlideshowPanel ed={ed} onClose={closePanel} onAddPhotos={pickPhotos} onMusic={() => setPanel('audio')} />
   else if (panel === 'photo' && selClip) panelView = <PhotoPanel ed={ed} clip={selClip} onClose={closePanel} />
@@ -373,6 +379,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <button className="btn" onClick={() => setScenes('files')}><Icon name="slides" size={18} /> {t('Slides / PDF to video')}</button>
               <button className="btn" onClick={() => setScenes('text')}><Icon name="script" size={18} /> {t('Script to video')}</button>
               <button className="btn" onClick={() => setScenes('mindmap')}><Icon name="mindmap" size={18} /> {t('Mind map to video')}</button>
+              <button className="btn" onClick={() => setScenes('audio')}><Icon name="podcast" size={18} /> {t('Audio to video')}</button>
               <button className="btn" onClick={() => setScreenRec(true)}><Icon name="screen" size={18} /> {t('Record screen')}</button>
               <button className="btn" onClick={() => setPanel('templates')}><Icon name="template" size={18} /> {t('Intro/Outro')}</button>
             </div>

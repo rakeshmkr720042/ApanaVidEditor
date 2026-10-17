@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BlurLayer, MediaLayer, StickerLayer, TextAnim, TextLayer } from '../types'
+import type { BlurLayer, MediaLayer, StickerLayer, TextAnim, TextLayer, WaveLayer } from '../types'
 import type { Editor } from '../model/useEditor'
 import { subtitleLook } from '../model/useEditor'
 import { CaptionFrameEditor } from './CaptionFramePanel'
@@ -8,6 +8,7 @@ import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { parseSrt, toSrt } from '../lib/srt'
 import { fmtTime, uid } from '../lib/format'
 import { subtitleStyle } from '../engine/text'
+import { WAVE_STYLES } from '../engine/visualizer'
 import { t } from '../lib/i18n'
 
 interface P { ed: Editor; onClose: () => void }
@@ -175,6 +176,39 @@ export function BlurPanel({ ed, layer, onClose }: P & { layer: BlurLayer }) {
       <Chips options={[{ value: 'ellipse', label: '◯ Oval' }, { value: 'rect', label: '▭ Box' }]} value={layer.shape} onChange={(shape) => set({ shape })} />
       <Slider label="Strength" min={0} max={1} value={layer.strength} format={(v) => `${Math.round(v * 100)}`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ strength: v })} />
       <p className="muted small">{t('Drag the box on the video to cover a face, number plate or anything private.')}</p>
+    </Panel>
+  )
+}
+
+export function WavePanel({ ed, layer, onClose }: P & { layer: WaveLayer }) {
+  const set = (patch: Partial<WaveLayer>) => ed.updateLayer<WaveLayer>(layer.id, patch)
+  const audio = ed.project.layers.filter((l) => l.type === 'audio' && ed.sources[l.sourceId])
+  return (
+    <Panel title="Waveform" onClose={onClose}>
+      <Chips options={[...WAVE_STYLES]} value={layer.style}
+        onChange={(style) => set({ style, box: { ...layer.box, y: style === 'circle' ? 0.5 : layer.style === 'circle' ? 0.87 : layer.box.y } })} />
+      <span className="field-label">{t('Colour')}</span>
+      <ColorRow value={layer.color} onChange={(c) => set({ color: c ?? '#ffffff' })} />
+      <span className="field-label">{t('Tip colour')}</span>
+      <ColorRow value={layer.color2} onChange={(c) => set({ color2: c ?? layer.color })} />
+      <Slider label="Size" min={0.3} max={2} value={layer.box.scale} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ box: { ...layer.box, scale: v } })} />
+      <Slider label="Opacity" min={0.1} max={1} value={layer.box.opacity} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ box: { ...layer.box, opacity: v } })} />
+      {audio.length > 1 && (
+        <>
+          <span className="field-label">{t('Moves with')}</span>
+          <select className="select" value={layer.sourceId} onChange={(e) => {
+            const a = audio.find((l) => l.type === 'audio' && l.sourceId === e.target.value)
+            if (a?.type === 'audio') set({ sourceId: a.sourceId, in: a.in + (layer.start - a.start) })
+          }}>
+            {audio.map((l) => l.type === 'audio' && <option key={l.id} value={l.sourceId}>{l.label}</option>)}
+          </select>
+        </>
+      )}
+      <div className="row">
+        <button className="btn small" onClick={() => set({ box: { ...layer.box, x: 0.5, y: layer.style === 'circle' ? 0.5 : 0.87, rotation: 0 } })}>{t(layer.style === 'circle' ? 'Centre' : 'Bottom')}</button>
+        <button className="btn small" onClick={() => set({ box: { ...layer.box, x: 0.5, y: layer.style === 'circle' ? 0.5 : 0.13, rotation: 0, scale: layer.style === 'circle' ? 1 : layer.box.scale } })}>{t(layer.style === 'circle' ? 'Reset' : 'Top')}</button>
+      </div>
+      <p className="muted small">{t('Drag the waveform on the video to move it.')}</p>
     </Panel>
   )
 }

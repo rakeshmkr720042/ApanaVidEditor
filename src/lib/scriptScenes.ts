@@ -177,7 +177,7 @@ export const themeOf = (id: string) => CARD_THEMES.find((x) => x.id === id) ?? C
 /** One piece of text in a card's layout, sized relative to the body text. */
 interface Run { text: string; size: number; weight: number; color: string; bullet?: boolean; gap: number; rule?: boolean }
 
-function wrap(g: CanvasRenderingContext2D, text: string, width: number): string[] {
+export function wrap(g: CanvasRenderingContext2D, text: string, width: number): string[] {
   const lines: string[] = []
   let cur = ''
   for (const w of text.split(/\s+/).filter(Boolean)) {
