@@ -3,6 +3,7 @@ import { uid } from '../lib/format'
 import { layoutClips, newClip } from './timeline'
 import { MIX_TRANSITIONS } from './slideshow'
 import { subtitleStyle } from '../engine/text'
+import type { MindScene } from '../lib/mindmap'
 
 /**
  * Scene builder: every "something → video" input (slides, PDF pages, photos, and later scripts,
@@ -16,6 +17,7 @@ export interface Scene {
   text: string // spoken by the AI voice and/or shown as captions
   duration: number | null // seconds on screen; null = automatic (voice length, or the default)
   card?: TextCard // when the image is a drawn text card: what is on it, so it can be redrawn
+  mind?: MindScene // one step of a mind map: becomes an animated clip when the scenes are placed
 }
 
 /** What a text card shows: a big title, a titled list or paragraph, or a large quote. */
