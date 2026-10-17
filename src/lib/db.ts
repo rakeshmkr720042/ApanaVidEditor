@@ -1,4 +1,4 @@
-import type { MediaSource, Project } from '../types'
+import type { Clip, Layer, MediaSource, Project } from '../types'
 
 /** Projects and their media are kept in IndexedDB so work survives reloads and works offline. */
 export interface ProjectRecord {
@@ -11,18 +11,19 @@ export interface ProjectRecord {
   duration: number
 }
 
-type MediaMeta = Omit<MediaSource, 'url' | 'file'>
+export type MediaMeta = Omit<MediaSource, 'url' | 'file'>
 interface MediaRecord { id: string; blob: Blob; meta: MediaMeta }
 
 let dbp: Promise<IDBDatabase> | null = null
 
 function db() {
   dbp ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open('clipcut', 1)
+    const req = indexedDB.open('clipcut', 2)
     req.onupgradeneeded = () => {
       const d = req.result
       if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', { keyPath: 'id' })
       if (!d.objectStoreNames.contains('media')) d.createObjectStore('media', { keyPath: 'id' })
+      if (!d.objectStoreNames.contains('templates')) d.createObjectStore('templates', { keyPath: 'id' })
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -60,6 +61,28 @@ export async function saveMedia(src: MediaSource) {
 }
 
 export const getMedia = (id: string) => run<MediaRecord | undefined>('media', 'readonly', (s) => s.get(id))
+
+/**
+ * A reusable intro or outro: clips and layers on their own 0-based timeline, with the media they
+ * need kept inside the record so deleting a project never breaks a template.
+ */
+export interface TemplateRecord {
+  id: string
+  name: string
+  kind: 'intro' | 'outro'
+  updatedAt: number
+  duration: number
+  thumb: string | null
+  clips: Clip[]
+  layers: Layer[]
+  media: { id: string; file: Blob; meta: MediaMeta }[]
+  design?: unknown // quick-builder settings, so the template can be edited again
+}
+
+export const listTemplates = () =>
+  run<TemplateRecord[]>('templates', 'readonly', (s) => s.getAll()).then((l) => l.sort((a, b) => b.updatedAt - a.updatedAt))
+export const saveTemplate = (t: TemplateRecord) => run('templates', 'readwrite', (s) => s.put(t))
+export const deleteTemplate = (id: string) => run('templates', 'readwrite', (s) => s.delete(id))
 
 export async function requestPersistence() {
   try { await navigator.storage?.persist?.() } catch { /* not supported */ }

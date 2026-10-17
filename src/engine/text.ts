@@ -1,4 +1,4 @@
-import type { StickerLayer, TextAnim, TextLayer, TextStyle } from '../types'
+import type { CaptionFrame, CaptionFramePreset, StickerLayer, TextAnim, TextLayer, TextStyle } from '../types'
 
 export const FONTS = [
   'Poppins', 'Montserrat', 'Noto Sans Devanagari', 'Hind', 'Bebas Neue', 'Anton', 'Oswald', 'Teko', 'Bangers',
@@ -144,6 +144,7 @@ function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: numb
 }
 
 export function drawText(ctx: Ctx, layer: TextLayer, t: number, W: number, H: number) {
+  if (layer.frame) { drawFramedText(ctx, layer, layer.frame, t, W, H); return }
   const st = layer.style
   const a = animState(layer, t)
   if (a.alpha <= 0.001 || a.scale <= 0.001) return
@@ -186,6 +187,128 @@ export function drawText(ctx: Ctx, layer: TextLayer, t: number, W: number, H: nu
     }
     ctx.fillStyle = st.color
     ctx.fillText(line, x, y)
+    ctx.shadowColor = 'transparent'
+  })
+  ctx.restore()
+}
+
+// ---------- caption frames
+
+export const FRAME_RECTS: Record<Exclude<CaptionFramePreset, 'custom'>, CaptionFrame['rect']> = {
+  bottom: { x: 0, y: 0.8, w: 1, h: 0.2 },
+  top: { x: 0, y: 0, w: 1, h: 0.2 },
+  left: { x: 0, y: 0, w: 0.5, h: 1 },
+  right: { x: 0.5, y: 0, w: 0.5, h: 1 },
+  center: { x: 0.15, y: 0.35, w: 0.7, h: 0.3 },
+}
+
+export const defaultFrame = (preset: CaptionFramePreset = 'bottom'): CaptionFrame => ({
+  preset, rect: { ...FRAME_RECTS[preset === 'custom' ? 'center' : preset] },
+  fill: '#000000', fillOpacity: 0.6, border: null, borderWidth: 1, radius: 0, valign: 'middle',
+})
+
+/** Splits text into lines no wider than maxW (keeps the user's own line breaks). */
+function wrapLines(ctx: Ctx, text: string, maxW: number) {
+  const out: string[] = []
+  for (const para of text.split('\n')) {
+    const words = para.split(/ +/)
+    let line = ''
+    for (const w of words) {
+      const next = line ? `${line} ${w}` : w
+      if (line && ctx.measureText(next).width > maxW) { out.push(line); line = w } else line = next
+    }
+    out.push(line)
+  }
+  return out
+}
+
+/** Lays out framed text: wraps to the frame and shrinks the font until every line fits. */
+export function layoutFramed(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, W: number, H: number) {
+  const st = layer.style
+  const fw = frame.rect.w * W, fh = frame.rect.h * H
+  let px = Math.max(4, st.size * H)
+  for (let i = 0; i < 12; i++) {
+    const pad = Math.min(fw, fh) * 0.08 + px * 0.3
+    ctx.font = fontString(st, px)
+    if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D).letterSpacing = `${st.letterSpacing * px}px`
+    const lines = wrapLines(ctx, layer.text, Math.max(10, fw - pad * 2))
+    const lh = px * 1.25
+    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width))
+    if ((lines.length * lh <= fh - pad * 2 && widest <= fw - pad * 2) || px <= 6) return { px, lh, pad, lines }
+    px *= 0.88
+  }
+  const pad = px * 0.3
+  return { px, lh: px * 1.25, pad, lines: wrapLines(ctx, layer.text, fw - pad * 2) }
+}
+
+function drawFramedText(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, t: number, W: number, H: number) {
+  const st = layer.style
+  const a = animState(layer, t)
+  if (a.alpha <= 0.001 || a.scale <= 0.001) return
+  const x = frame.rect.x * W, y = frame.rect.y * H, w = frame.rect.w * W, h = frame.rect.h * H
+  ctx.save()
+  ctx.globalAlpha = layer.box.opacity * a.alpha
+  // animations move/scale the whole frame around its centre
+  ctx.translate(x + w / 2 + a.dx * H, y + h / 2 + a.dy * H)
+  ctx.scale(a.scale, a.scale)
+  const r = frame.radius * Math.min(w, h) / 2
+  if (frame.fillOpacity > 0) {
+    ctx.save()
+    ctx.globalAlpha *= frame.fillOpacity
+    ctx.fillStyle = frame.fill
+    roundRect(ctx, -w / 2, -h / 2, w, h, r)
+    ctx.fill()
+    ctx.restore()
+  }
+  if (frame.border && frame.borderWidth > 0) {
+    const bw = frame.borderWidth * Math.min(W, H) * 0.006
+    ctx.strokeStyle = frame.border
+    ctx.lineWidth = bw
+    roundRect(ctx, -w / 2 + bw / 2, -h / 2 + bw / 2, w - bw, h - bw, Math.max(0, r - bw / 2))
+    ctx.stroke()
+  }
+  ctx.beginPath()
+  ctx.rect(-w / 2, -h / 2, w, h)
+  ctx.clip()
+  const m = layoutFramed(ctx, layer, frame, W, H)
+  let lines = m.lines
+  if (a.chars < 1) {
+    let n = Math.floor(layer.text.length * a.chars)
+    lines = lines.map((l) => { const s = l.slice(0, Math.max(0, n)); n -= l.length + 1; return s })
+  }
+  ctx.font = fontString(st, m.px)
+  if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D).letterSpacing = `${st.letterSpacing * m.px}px`
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = st.align
+  ctx.lineJoin = 'round'
+  const tx = st.align === 'left' ? -w / 2 + m.pad : st.align === 'right' ? w / 2 - m.pad : 0
+  const blockH = (lines.length - 1) * m.lh
+  const top = frame.valign === 'top' ? -h / 2 + m.pad + m.px / 2 : frame.valign === 'bottom' ? h / 2 - m.pad - m.px / 2 - blockH : -blockH / 2
+  lines.forEach((line, i) => {
+    const ly = top + i * m.lh
+    if (st.background && frame.fillOpacity === 0) {
+      // per-line highlight, only when the frame itself is see-through
+      const lw = ctx.measureText(line).width
+      if (lw > 0) {
+        const lx = st.align === 'left' ? tx : st.align === 'right' ? tx - lw : tx - lw / 2
+        ctx.fillStyle = st.background
+        roundRect(ctx, lx - m.px * 0.25, ly - m.lh / 2, lw + m.px * 0.5, m.lh, m.px * 0.2)
+        ctx.fill()
+      }
+    }
+    if (st.shadow) {
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'
+      ctx.shadowBlur = m.px * 0.15
+      ctx.shadowOffsetY = m.px * 0.04
+    }
+    if (st.stroke) {
+      ctx.strokeStyle = st.stroke
+      ctx.lineWidth = Math.max(1, st.strokeWidth * m.px * 0.2)
+      ctx.strokeText(line, tx, ly)
+      ctx.shadowColor = 'transparent'
+    }
+    ctx.fillStyle = st.color
+    ctx.fillText(line, tx, ly)
     ctx.shadowColor = 'transparent'
   })
   ctx.restore()
