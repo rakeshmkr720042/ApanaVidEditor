@@ -4,6 +4,8 @@ import type { Editor } from '../model/useEditor'
 import { defaultSceneOptions, placeScenes, sceneLengths, type BuiltScene, type Scene, type SceneOptions } from '../model/scenes'
 import { filesToScenes } from '../lib/sceneImport'
 import { CARD_THEMES, drawTextCard, scriptToScenes, themeOf } from '../lib/scriptScenes'
+import { MAP_THEMES, drawMapPreview, drawMindStill, mindToScenes, node, parseOutline, renderMindVideo, tidy, toOutline, type MapSettings, type MindNode } from '../lib/mindmap'
+import { MindTree } from './MindTree'
 import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
 import { saveMedia } from '../lib/db'
@@ -16,6 +18,10 @@ import { t } from '../lib/i18n'
 // remembered while the app is open, so the next deck starts with the same choices
 let memo: SceneOptions = defaultSceneOptions()
 let draft = '' // pasted script, kept if the sheet is closed before making scenes
+// the mind map being written, kept the same way
+let mapDraft = { tab: 'outline' as 'outline' | 'tree', outline: '', tree: node('', [node('')]), overview: true }
+let mapMemo: MapSettings | null = null
+const MAP_SLACK = 4 // extra seconds of still map at the end of each clip, so it can be lengthened on the timeline
 
 const TRANSITIONS = [
   { value: 'none', label: 'None' }, { value: 'fade', label: 'Fade' }, { value: 'slideleft', label: 'Slide' },
@@ -43,10 +49,20 @@ Key points:
 
 > A line worth remembering.`
 
+const MAP_HINT = `Healthy life
+- Food
+  - Fruits and vegetables
+  - Enough water
+- Exercise
+  - Walk every day
+  - Yoga
+- Sleep
+  - 7 to 8 hours`
+
 const extOf = (b: Blob) => (b.type === 'image/png' ? 'png' : b.type === 'image/webp' ? 'webp' : 'jpg')
 
 /** Slides, PDF pages, photos or a pasted script → scenes you can script and time → clips on the timeline. */
-export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text'; onClose: () => void; onDone: (msg: string) => void }) {
+export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap'; onClose: () => void; onDone: (msg: string) => void }) {
   const [scenes, setScenes] = useState<Scene[]>([])
   const [o, setO] = useState(memo)
   const [track, setTrack] = useState<MediaSource | null>(null)
@@ -54,6 +70,15 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const [error, setError] = useState<string | null>(null)
   const [pasting, setPasting] = useState(start === 'text')
   const [script, setScript] = useState(draft)
+  const [mapping, setMapping] = useState(start === 'mindmap')
+  const [md, setMd] = useState(mapDraft)
+  const [ms, setMs] = useState<MapSettings>(() => {
+    if (mapMemo) return mapMemo
+    const { w, h } = outputSize(ed.project, ed.sources, 1080)
+    return { theme: 'light', layout: w >= h ? 'radial' : 'tree', focus: true } // portrait frames fit a top-down tree better
+  })
+  const preview = useRef<HTMLCanvasElement>(null)
+  const setDraft = (patch: Partial<typeof mapDraft>) => setMd((v) => (mapDraft = { ...v, ...patch }))
   const fileInput = useRef<HTMLInputElement>(null)
   const trackInput = useRef<HTMLInputElement>(null)
   const set = (patch: Partial<SceneOptions>) => setO((v) => (memo = { ...v, ...patch }))
@@ -111,6 +136,68 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     } finally { setBusy(null) }
   }
 
+  const currentMap = useMemo((): MindNode | null => {
+    const m = md.tab === 'outline' ? parseOutline(md.outline, t('Mind map')) : tidy(md.tree)
+    return m && m.text ? m : null
+  }, [md.tab, md.outline, md.tree])
+
+  const switchTab = (tab: 'outline' | 'tree') => {
+    if (tab === md.tab) return
+    if (tab === 'tree') setDraft({ tab, tree: parseOutline(md.outline, t('Mind map')) ?? md.tree })
+    else setDraft({ tab, outline: md.tree.text.trim() ? toOutline(tidy(md.tree)) : md.outline })
+  }
+
+  // live preview of the whole map while it is written
+  useEffect(() => {
+    const c = preview.current
+    if (!c || !currentMap) return
+    let live = true
+    const id = setTimeout(() => {
+      const { w, h } = frame()
+      const off = document.createElement('canvas')
+      off.width = 480; off.height = Math.round((480 * h) / w)
+      void drawMapPreview(currentMap, ms, off).then(() => {
+        if (!live) return
+        c.width = off.width; c.height = off.height
+        c.getContext('2d')!.drawImage(off, 0, 0)
+      })
+    }, 150)
+    return () => { live = false; clearTimeout(id) }
+  }, [currentMap, ms]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addMap = async () => {
+    if (!currentMap) return
+    setError(null)
+    try {
+      const { w, h } = frame()
+      const got = await mindToScenes(currentMap, ms, md.overview, w, h, (p) => setBusy({ label: t('Making scenes…'), p }), t('Whole map'))
+      setScenes((s) => [...s, ...got])
+      setMapping(false)
+      // each step starts where the last one ended, so plain cuts look seamless; the map itself moves
+      const lang = /[ऀ-ॿ]/.test(got.map((s) => s.text).join(' ')) ? 'hi' : 'en'
+      if (!scenes.length) set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: false, transition: null, kenBurns: false })
+    } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
+  }
+
+  // a new look or layout redraws the map scenes already made
+  const setMapSettings = async (patch: Partial<MapSettings>) => {
+    const next = mapMemo = { ...ms, ...patch }
+    setMs(next)
+    const maps = scenes.filter((s) => s.mind)
+    if (!maps.length) return
+    const { w, h } = frame()
+    setBusy({ label: t('Making scenes…'), p: 0 })
+    try {
+      const done = new Map<string, Partial<typeof maps[number]>>()
+      for (let i = 0; i < maps.length; i++) {
+        setBusy({ label: t('Making scenes…'), p: i / maps.length })
+        const mind = { ...maps[i].mind!, settings: next }
+        done.set(maps[i].id, { mind, image: await drawMindStill(mind, w, h) })
+      }
+      setScenes((list) => list.map((s) => (done.has(s.id) ? { ...s, ...done.get(s.id) } : s)))
+    } finally { setBusy(null) }
+  }
+
   const pickTrack = async (f: File | undefined) => {
     if (!f) return
     try {
@@ -148,6 +235,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       for (let i = 0; i < scenes.length; i++) {
         setBusy({ label: t('Adding scenes…'), p: i / scenes.length })
         const s = scenes[i]
+        if (s.mind) { built.push({ scene: s, source: null as unknown as MediaSource, voice: null }); continue } // made below, once its length is known
         const src = await loadSource(s.image, `${s.name}.${extOf(s.image)}`)
         ed.addSource(src)
         await saveMedia(src)
@@ -166,6 +254,24 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           built[i].voice = src
         }
       }
+      const maps = built.filter((b) => b.scene.mind)
+      if (maps.length) {
+        // each map step becomes a clip as long as its scene: lines draw, points pop in, then it holds
+        const lens = sceneLengths(built, o, o.voice === 'track' ? track : null)
+        const { w, h } = frame()
+        for (let k = 0; k < maps.length; k++) {
+          setBusy({ label: t('Animating the mind map…'), p: k / maps.length })
+          const b = maps[k]
+          const secs = lens[built.indexOf(b)] + (o.transition ? o.transitionDuration : 0) + MAP_SLACK
+          const video = await renderMindVideo(b.scene.mind!, w, h, secs).catch(() => null)
+          const src = video
+            ? await loadSource(video.blob, `${b.scene.name}.${video.ext}`)
+            : await loadSource(b.scene.image, `${b.scene.name}.png`)
+          ed.addSource(src)
+          await saveMedia(src)
+          b.source = src
+        }
+      }
       if (o.voice === 'track' && track) { ed.addSource(track); await saveMedia(track) }
       ed.replaceProject(placeScenes(ed.project, built, o, o.voice === 'track' ? track : null))
       onDone(`${built.length} ${t('scenes added to the timeline. Everything can be edited there.')}`)
@@ -178,13 +284,16 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet scene-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
-        <h2>{t(start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
-        <p className="muted small">{t(start === 'text'
+        <h2>{t(start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
+        <p className="muted small">{t(start === 'mindmap'
+          ? 'Write an outline or build the map. The topic comes first, then each branch grows out with its points, one scene at a time.'
+          : start === 'text'
           ? 'Paste a script or report. Headings, paragraphs and bullet lists each become a scene with a text card, read by the voice.'
           : 'Pick a PDF, a PowerPoint (.pptx) or photos. Each page becomes a scene; write what should be said on it.')}</p>
         <div className="row">
           <button className="btn" disabled={!!busy} onClick={() => fileInput.current?.click()}>{t(scenes.length ? 'Add more' : 'Pick files')}</button>
           <button className={`btn${pasting ? ' on' : ''}`} disabled={!!busy} onClick={() => setPasting((v) => !v)}>{t('Paste text')}</button>
+          <button className={`btn${mapping ? ' on' : ''}`} disabled={!!busy} onClick={() => setMapping((v) => !v)}>{t('Mind map')}</button>
           {scenes.length > 0 && <button className="btn" disabled={!!busy} onClick={() => setScenes([])}>{t('Clear')}</button>}
         </div>
 
@@ -195,6 +304,31 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
             <p className="muted small">{t('Tip: a short line on its own is a heading, lines starting with - are points, a blank line starts a new scene.')}</p>
             <button className="btn primary" disabled={!!busy || !script.trim()} onClick={addScript}>{t('Make scenes')}</button>
           </div>
+        )}
+
+        {mapping && (
+          <div className="script-box mind-box">
+            <Chips options={[{ value: 'outline', label: 'Write outline' }, { value: 'tree', label: 'Build map' }]} value={md.tab} onChange={switchTab} />
+            {md.tab === 'outline' ? (
+              <>
+                <textarea className="text-input" rows={9} value={md.outline} placeholder={MAP_HINT} autoFocus
+                  onChange={(e) => setDraft({ outline: e.target.value })} />
+                <p className="muted small">{t('Tip: the first line is the topic, lines starting with - are branches, indent a line to put it under the one above.')}</p>
+              </>
+            ) : <MindTree map={md.tree} onChange={(tree) => setDraft({ tree })} />}
+            {currentMap && <canvas ref={preview} className="mind-preview" />}
+            <Toggle label="Show the whole map at the end" value={md.overview} onChange={(overview) => setDraft({ overview })} />
+            <button className="btn primary" disabled={!!busy || !currentMap} onClick={addMap}>{t('Make scenes')}</button>
+          </div>
+        )}
+
+        {(mapping || scenes.some((s) => s.mind)) && (
+          <>
+            <span className="field-label">{t('Map style')}</span>
+            <Chips options={MAP_THEMES.map((c) => ({ value: c.id, label: c.label }))} value={ms.theme} onChange={(theme) => { if (!busy) void setMapSettings({ theme }) }} />
+            <Chips options={[{ value: 'radial', label: 'Radial' }, { value: 'tree', label: 'Tree' }]} value={ms.layout} onChange={(layout) => { if (!busy) void setMapSettings({ layout }) }} />
+            <Toggle label="Zoom to each branch" value={ms.focus} onChange={(focus) => { if (!busy) void setMapSettings({ focus }) }} />
+          </>
         )}
 
         {(pasting || scenes.some((s) => s.card)) && (
