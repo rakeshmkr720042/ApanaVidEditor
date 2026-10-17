@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Player } from '../engine/player'
 import type { Editor } from '../model/useEditor'
-import type { VisualLayer } from '../types'
+import type { Layer, VisualLayer } from '../types'
+
+type Rect = { x: number; y: number; w: number; h: number }
+
+/** Blur areas and framed captions are placed as a rectangle rather than a centre + scale. */
+const rectOf = (l: Layer): Rect | null => (l.type === 'blur' ? l.rect : l.type === 'text' && l.frame ? l.frame.rect : null)
 
 interface Props {
   ed: Editor
@@ -17,7 +22,7 @@ interface Props {
 type Gesture =
   | { kind: 'move'; id: string; x0: number; y0: number; bx: number; by: number }
   | { kind: 'wm'; x0: number; y0: number; cx: number; cy: number }
-  | { kind: 'scale'; id: string; cx: number; cy: number; d0: number; a0: number; s0: number; r0: number; rect0?: { x: number; y: number; w: number; h: number } }
+  | { kind: 'scale'; id: string; cx: number; cy: number; d0: number; a0: number; s0: number; r0: number; rect0?: Rect }
 
 /** The video canvas plus handles to move, scale and rotate text, stickers, overlays and blur areas. */
 export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit }: Props) {
@@ -87,7 +92,8 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
     lastTap.current = Date.now()
     ed.setSel({ type: 'layer', id: l.id })
     ed.begin()
-    const bx = l.type === 'blur' ? l.rect.x : l.box.x, by = l.type === 'blur' ? l.rect.y : l.box.y
+    const lr = rectOf(l)
+    const bx = lr ? lr.x : l.type !== 'blur' ? l.box.x : 0, by = lr ? lr.y : l.type !== 'blur' ? l.box.y : 0
     gesture.current = { kind: 'move', id: l.id, x0: p.x, y0: p.y, bx, by }
   }
 
@@ -97,11 +103,12 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
     e.currentTarget.setPointerCapture(e.pointerId)
     const p = toCanvas(e)
     ed.begin()
+    const sr = rectOf(selected)
     gesture.current = {
       kind: 'scale', id: selected.id, cx: rect.cx, cy: rect.cy,
       d0: Math.hypot(p.x - rect.cx, p.y - rect.cy) || 1, a0: Math.atan2(p.y - rect.cy, p.x - rect.cx),
       s0: selected.type === 'blur' ? 1 : selected.box.scale, r0: selected.type === 'blur' ? 0 : selected.box.rotation,
-      rect0: selected.type === 'blur' ? { ...selected.rect } : undefined,
+      rect0: sr ? { ...sr } : undefined,
     }
   }
 
@@ -116,22 +123,36 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
     }
     const l = ed.project.layers.find((x) => x.id === g.id)
     if (!l || l.type === 'audio') return
+    const setRect = (r: Rect) => {
+      if (l.type === 'blur') ed.updateLayer(l.id, { rect: r })
+      else if (l.type === 'text' && l.frame) ed.updateLayer(l.id, { frame: { ...l.frame, rect: r, preset: 'custom' } })
+    }
+    const lr = rectOf(l)
     if (g.kind === 'move') {
       let nx = g.bx + (p.x - g.x0) / W, ny = g.by + (p.y - g.y0) / H
-      if (l.type !== 'blur') {
+      if (lr) {
+        // caption frames stay on screen; blur areas may hang off the edge
+        if (l.type === 'text') { nx = Math.max(0, Math.min(1 - lr.w, nx)); ny = Math.max(0, Math.min(1 - lr.h, ny)) }
+        setRect({ ...lr, x: nx, y: ny })
+      } else if (l.type !== 'blur') {
         // snap to centre lines
         if (Math.abs(nx - 0.5) < 0.015) nx = 0.5
         if (Math.abs(ny - 0.5) < 0.015) ny = 0.5
         ed.updateLayer(l.id, { box: { ...l.box, x: nx, y: ny } })
-      } else ed.updateLayer(l.id, { rect: { ...l.rect, x: nx, y: ny } })
+      }
     } else {
       const d = Math.hypot(p.x - g.cx, p.y - g.cy)
       const k = d / g.d0
-      if (l.type === 'blur' && g.rect0) {
+      if (lr && g.rect0) {
         const r0 = g.rect0
         const cx = r0.x + r0.w / 2, cy = r0.y + r0.h / 2
-        const w = Math.max(0.03, Math.min(1, Math.abs(p.x / W - cx) * 2)), h = Math.max(0.03, Math.min(1, Math.abs(p.y / H - cy) * 2))
-        ed.updateLayer(l.id, { rect: { x: cx - w / 2, y: cy - h / 2, w, h } })
+        let w = Math.max(0.05, Math.min(1, Math.abs(p.x / W - cx) * 2)), h = Math.max(0.05, Math.min(1, Math.abs(p.y / H - cy) * 2))
+        let x = cx - w / 2, y = cy - h / 2
+        if (l.type === 'text') {
+          x = Math.max(0, x); y = Math.max(0, y)
+          w = Math.min(w, 1 - x); h = Math.min(h, 1 - y)
+        }
+        setRect({ x, y, w, h })
       } else if (l.type !== 'blur') {
         let rot = g.r0 + ((Math.atan2(p.y - g.cy, p.x - g.cx) - g.a0) * 180) / Math.PI
         for (const snap of [-180, -90, 0, 90, 180]) if (Math.abs(rot - snap) < 4) rot = snap

@@ -9,4 +9,10 @@ contextBridge.exposeInMainWorld('desktop', {
     return () => ipcRenderer.removeListener('desktop:open-files', listener)
   },
   ready: () => ipcRenderer.send('desktop:ready'),
+  onPickScreen(cb) {
+    const listener = (_e, sources) => cb(sources)
+    ipcRenderer.on('desktop:pick-screen', listener)
+    return () => ipcRenderer.removeListener('desktop:pick-screen', listener)
+  },
+  pickScreen: (id) => ipcRenderer.send('desktop:picked-screen', id),
 })

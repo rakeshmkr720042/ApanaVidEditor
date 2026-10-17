@@ -38,7 +38,7 @@ export function outputSize(project: Project, sources: Record<string, MediaSource
   let ratio: number
   const a = project.settings.aspect
   if (a === 'original') {
-    const c = project.clips[0]
+    const c = project.clips.find((x) => !x.fromTemplate) ?? project.clips[0]
     const s = c && sources[c.sourceId]
     if (s && s.width && s.height) {
       let w = s.width * (c.crop?.w ?? 1), h = s.height * (c.crop?.h ?? 1)
@@ -225,6 +225,10 @@ export class Renderer {
   layerRect(l: VisualLayer, sources: Record<string, MediaSource>) {
     const { W, H } = this
     if (l.type === 'blur') return { cx: (l.rect.x + l.rect.w / 2) * W, cy: (l.rect.y + l.rect.h / 2) * H, w: l.rect.w * W, h: l.rect.h * H, rotation: 0 }
+    if (l.type === 'text' && l.frame) {
+      const r = l.frame.rect
+      return { cx: (r.x + r.w / 2) * W, cy: (r.y + r.h / 2) * H, w: r.w * W, h: r.h * H, rotation: 0 }
+    }
     if (l.type === 'text') {
       const m = measureText(this.ctx, l, H)
       return { cx: l.box.x * W, cy: l.box.y * H, w: m.w * l.box.scale, h: m.h * l.box.scale, rotation: l.box.rotation }

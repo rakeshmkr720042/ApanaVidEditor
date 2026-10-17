@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BlurLayer, MediaLayer, StickerLayer, TextAnim, TextLayer } from '../types'
 import type { Editor } from '../model/useEditor'
+import { subtitleLook } from '../model/useEditor'
+import { CaptionFrameEditor } from './CaptionFramePanel'
 import { ANIMS, FONTS, STICKERS, TEXT_PRESETS, ensureFont, prefetchFonts } from '../engine/text'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { parseSrt, toSrt } from '../lib/srt'
@@ -31,7 +33,7 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
   const style = (patch: Partial<TextLayer['style']>) => ed.updateLayer<TextLayer>(layer.id, (l) => ({ style: { ...l.style, ...patch } }))
   return (
     <Panel title="Text" onClose={onClose} tall>
-      <Chips options={[{ value: 'edit', label: 'Edit' }, { value: 'font', label: 'Font' }, { value: 'style', label: 'Style' }, { value: 'anim', label: 'Animation' }]} value={tab} onChange={setTab} />
+      <Chips options={[{ value: 'edit', label: 'Edit' }, { value: 'font', label: 'Font' }, { value: 'style', label: 'Style' }, { value: 'frame', label: 'Position' }, { value: 'anim', label: 'Animation' }]} value={tab} onChange={setTab} />
       {tab === 'edit' && (
         <>
           <textarea className="text-input" value={layer.text} autoFocus rows={3} onChange={(e) => set({ text: e.target.value })} placeholder={t('Type here')} />
@@ -77,6 +79,15 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
             <Toggle label="Italic" value={layer.style.italic} onChange={(italic) => style({ italic })} />
             <Toggle label="Shadow" value={layer.style.shadow} onChange={(shadow) => style({ shadow })} />
           </div>
+        </>
+      )}
+      {tab === 'frame' && (
+        <>
+          {layer.subtitle && <p className="muted small">{t('Applies to all subtitles.')}</p>}
+          <CaptionFrameEditor ed={ed} frame={layer.frame} onChange={(frame) => {
+            if (layer.subtitle) ed.updateLayers((l) => l.type === 'text' && l.subtitle, () => ({ frame: frame && { ...frame, rect: { ...frame.rect } } }))
+            else set({ frame })
+          }} />
         </>
       )}
       {tab === 'anim' && <AnimPicker inA={layer.animIn} outA={layer.animOut} onChange={(p) => set(p)} />}
@@ -174,9 +185,10 @@ export function SubtitlePanel({ ed, t: time, onClose, onSeek }: P & { t: number;
   const importSrt = async (f: File) => {
     const cues = parseSrt(await f.text())
     const p = ed.project
+    const like = subtitleLook(p.layers)
     const layers: TextLayer[] = cues.map((c) => ({
-      id: uid(), type: 'text', text: c.text, subtitle: true, start: c.start, end: c.end, style: subtitleStyle(),
-      box: { x: 0.5, y: 0.86, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none',
+      id: uid(), type: 'text', text: c.text, subtitle: true, start: c.start, end: c.end, style: like?.style ?? subtitleStyle(),
+      box: { x: 0.5, y: like?.y ?? 0.86, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none', frame: like?.frame ?? null,
     }))
     ed.replaceProject({ ...p, layers: [...p.layers, ...layers] })
   }
@@ -191,7 +203,7 @@ export function SubtitlePanel({ ed, t: time, onClose, onSeek }: P & { t: number;
     const first = subs.find((s) => ed.sel?.type === 'layer' && s.id === ed.sel.id) ?? subs[0]
     if (!first) return
     const p = ed.project
-    ed.replaceProject({ ...p, layers: p.layers.map((l) => (l.type === 'text' && l.subtitle ? { ...l, style: { ...first.style }, box: { ...l.box, y: first.box.y } } : l)) })
+    ed.replaceProject({ ...p, layers: p.layers.map((l) => (l.type === 'text' && l.subtitle ? { ...l, style: { ...first.style }, box: { ...l.box, y: first.box.y }, frame: first.frame ?? null } : l)) })
   }
   return (
     <Panel title="Subtitles" onClose={onClose} tall actions={<button className="btn small" onClick={() => ed.addText(time, true)}>+ {t('Add')}</button>}>
@@ -201,6 +213,12 @@ export function SubtitlePanel({ ed, t: time, onClose, onSeek }: P & { t: number;
         <button className="btn small" disabled={!subs.length} onClick={applyStyleAll}>{t('Same style for all')}</button>
       </div>
       <input ref={file} type="file" accept=".srt,text/plain" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importSrt(f); e.target.value = '' }} />
+      {subs.length > 0 && (
+        <details className="sub-frame">
+          <summary>{t('Caption position & frame')}</summary>
+          <CaptionFrameEditor ed={ed} frame={subs[0].frame} onChange={(frame) => ed.updateLayers((l) => l.type === 'text' && l.subtitle, () => ({ frame: frame && { ...frame, rect: { ...frame.rect } } }))} />
+        </details>
+      )}
       {!subs.length && <p className="muted small">{t('Play to the moment someone speaks, tap Add, and type what they say. Each subtitle shows for 2.5 s; drag its ends on the timeline to change that.')}</p>}
       <div className="sub-list">
         {subs.map((s) => (
