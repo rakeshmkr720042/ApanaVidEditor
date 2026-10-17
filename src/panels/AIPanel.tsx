@@ -71,6 +71,7 @@ export function AIPanel({ ed, onClose }: P) {
     const layers: TextLayer[] = next.map((c) => ({
       id: uid(), type: 'text', text: c.text, subtitle: true, start: c.start, end: Math.min(c.end, total || c.end),
       style: { ...style, font }, box: { x: 0.5, y, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none',
+      frame: subs[0]?.frame ? { ...subs[0].frame, rect: { ...subs[0].frame.rect } } : null,
     }))
     ed.replaceProject({ ...p, layers: [...p.layers.filter((l) => !(l.type === 'text' && l.subtitle)), ...layers] })
     memo.subLang = lang

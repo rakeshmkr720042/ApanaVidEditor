@@ -12,6 +12,12 @@ export type Selection = { type: 'clip'; id: string } | { type: 'layer'; id: stri
 
 export const emptyProject = (): Project => ({ clips: [], layers: [], settings: { aspect: 'original', background: 'black', fps: 30 } })
 
+/** Style, height and frame of the existing subtitles, for new ones to match. */
+export function subtitleLook(layers: Layer[]) {
+  const s = layers.find((l): l is TextLayer => l.type === 'text' && l.subtitle)
+  return s ? { style: { ...s.style }, y: s.box.y, frame: s.frame ? { ...s.frame, rect: { ...s.frame.rect } } : null } : null
+}
+
 const centerBox = () => ({ x: 0.5, y: 0.5, scale: 1, rotation: 0, opacity: 1 })
 
 /** All editing operations on a project, with undo/redo. */
@@ -53,6 +59,12 @@ export function useEditor(initial: Project) {
     commit({ ...p, layers: p.layers.map((l) => (l.id === id ? ({ ...l, ...(typeof patch === 'function' ? patch(l as L) : patch) } as Layer) : l)) })
   }, [commit])
 
+  /** Patches every layer that matches, as one edit (e.g. the frame of all subtitles). */
+  const updateLayers = useCallback((match: (l: Layer) => boolean, patch: (l: Layer) => Partial<Layer>) => {
+    const p = ref.current
+    commit({ ...p, layers: p.layers.map((l) => (match(l) ? ({ ...l, ...patch(l) } as Layer) : l)) })
+  }, [commit])
+
   const setSettings = useCallback((patch: Partial<ProjectSettings>) => {
     const p = ref.current
     commit({ ...p, settings: { ...p.settings, ...patch } })
@@ -63,9 +75,9 @@ export function useEditor(initial: Project) {
     commit({ ...p, watermark: { ...(p.watermark ?? defaultWatermark()), ...patch } })
   }, [commit])
 
-  const appendClips = useCallback((srcs: MediaSource[], at?: number) => {
+  const appendClips = useCallback((srcs: MediaSource[], at?: number, patch?: Partial<Clip>) => {
     const p = ref.current
-    const clips = srcs.map((s) => newClip(s, uid()))
+    const clips = srcs.map((s) => ({ ...newClip(s, uid()), ...patch }))
     const idx = at ?? p.clips.length
     h.set({ ...p, clips: [...p.clips.slice(0, idx), ...clips, ...p.clips.slice(idx)] })
     return clips
@@ -98,10 +110,13 @@ export function useEditor(initial: Project) {
   }
 
   const addText = useCallback((t: number, subtitle = false, text = subtitle ? 'Subtitle' : 'Your text') => {
+    // a new subtitle looks like (and sits in the same frame as) the ones already there
+    const like = subtitle ? subtitleLook(ref.current.layers) : null
     const l: TextLayer = {
       id: uid(), type: 'text', text, subtitle, ...span(t, subtitle ? 2.5 : 3),
-      style: subtitle ? subtitleStyle() : defaultTextStyle(),
-      box: { ...centerBox(), y: subtitle ? 0.86 : 0.5 }, animIn: subtitle ? 'none' : 'fade', animOut: subtitle ? 'none' : 'fade',
+      style: like?.style ?? (subtitle ? subtitleStyle() : defaultTextStyle()),
+      box: { ...centerBox(), y: like?.y ?? (subtitle ? 0.86 : 0.5) }, animIn: subtitle ? 'none' : 'fade', animOut: subtitle ? 'none' : 'fade',
+      frame: like?.frame ?? null,
     }
     addLayer(l)
     return l
@@ -217,7 +232,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, appendClips, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, setSettings, setWatermark,
+    addSource, appendClips, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
     addText, addSticker, addBlur, addOverlay, addAudio, addLayer,
     remove, duplicate, split, moveClip, replaceProject,
   }

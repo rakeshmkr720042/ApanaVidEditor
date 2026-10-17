@@ -1,7 +1,7 @@
 // Electron main process for the Windows desktop app. The built Vite app (dist/) is served
 // from a privileged app:// scheme so it gets a secure origin with cross-origin isolation
 // headers (COOP/COEP, needed for SharedArrayBuffer) and a CSP, like the hosted web app.
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, net, protocol, session, shell } from 'electron'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -164,6 +164,37 @@ function createWindow() {
   win.loadURL(devUrl ?? appUrl)
 }
 
+// Screen recording: Electron has no built-in screen picker, so the screens and windows are sent to
+// the app, which shows its own picker and answers with the chosen id (or null to cancel).
+let screenPick = null
+function handleDisplayMedia() {
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    if (!win) return callback(null)
+    let sources
+    try {
+      sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } })
+    } catch {
+      return callback(null)
+    }
+    screenPick?.(null)
+    screenPick = (id) => {
+      screenPick = null
+      const s = sources.find((x) => x.id === id)
+      if (!s) return callback(null)
+      // system sound can only be captured on Windows
+      callback({ video: s, ...(request.audioRequested && process.platform === 'win32' ? { audio: 'loopback' } : {}) })
+    }
+    win.webContents.send('desktop:pick-screen', sources.map((s) => ({
+      id: s.id, name: s.name, thumb: s.thumbnail.toDataURL(), screen: s.id.startsWith('screen:'),
+    })))
+  })
+}
+
+ipcMain.on('desktop:picked-screen', (e, id) => {
+  if (e.sender !== win?.webContents) return
+  screenPick?.(typeof id === 'string' ? id : null)
+})
+
 ipcMain.on('desktop:ready', (e) => {
   if (e.sender !== win?.webContents) return
   rendererReady = true
@@ -183,6 +214,7 @@ if (!app.requestSingleInstanceLock()) {
   })
   app.whenReady().then(() => {
     serveDist()
+    handleDisplayMedia()
     buildMenu()
     createWindow()
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow() })

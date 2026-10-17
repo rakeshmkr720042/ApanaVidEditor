@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
+import type { Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
 import { useEditor } from '../model/useEditor'
 import { Player } from '../engine/player'
 import { activeAt } from '../model/timeline'
@@ -23,6 +23,8 @@ import { AIPanel } from '../panels/AIPanel'
 import { WatermarkPanel } from '../panels/WatermarkPanel'
 import { PhotoPanel, SlideshowPanel } from '../panels/SlideshowPanel'
 import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
+import { TemplatesPanel } from '../panels/TemplatesPanel'
+import { ScreenRecorder } from './ScreenRecorder'
 
 interface Loaded { id: string; name: string; project: Project; sources: Record<string, MediaSource> }
 
@@ -47,7 +49,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
-  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'slideshow' | 'photo' | null
+  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'slideshow' | 'photo' | 'templates' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -65,6 +67,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [scenes, setScenes] = useState(false)
+  const [screenRec, setScreenRec] = useState(false)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
@@ -98,7 +101,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   useEffect(() => { player?.setProject(ed.project, ed.sources) }, [player, ed.project, ed.sources])
 
   const saveNow = useCallback(() => {
-    const first = ed.project.clips[0]
+    const first = ed.project.clips.find((c) => !c.fromTemplate) ?? ed.project.clips[0]
     return saveProject({
       id: initial.id, name, updatedAt: Date.now(), data: ed.project, mediaIds: Object.keys(ed.sources),
       thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: ed.layout.total,
@@ -164,6 +167,15 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     else for (const s of added) ed.addOverlay(time, s)
   }
 
+  /** A finished screen recording goes to the end of the timeline, cropped to the chosen area. */
+  const addRecording = async (file: File, crop: Crop | null) => {
+    const src = await loadSource(file, file.name)
+    ed.addSource(src)
+    await saveMedia(src)
+    ed.appendClips([src], undefined, crop ? { crop } : undefined)
+    setToast(t('Screen recording added to the timeline'))
+  }
+
   // desktop app: File > Open Video / files opened from Explorer
   const importRef = useRef(importFiles)
   useEffect(() => { importRef.current = importFiles })
@@ -189,7 +201,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? clipAtPlayhead
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'slideshow', 'filters', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'slideshow', 'templates', 'filters', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -273,6 +285,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     tools = [...specific, ...common]
   } else {
     tools = [
+      { icon: 'screen', label: 'Record screen', on: () => { player?.pause(); setScreenRec(true) } },
+      { icon: 'template', label: 'Intro/Outro', on: () => { player?.pause(); setPanel('templates') } },
       { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
       { icon: 'image', label: 'Slideshow', on: () => setPanel('slideshow') },
       { icon: 'slides', label: 'Slides to video', on: () => { player?.pause(); setScenes(true) } },
@@ -312,6 +326,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'watermark') panelView = <WatermarkPanel ed={ed} time={time} onClose={closePanel} />
   else if (panel === 'slideshow') panelView = <SlideshowPanel ed={ed} onClose={closePanel} onAddPhotos={pickPhotos} onMusic={() => setPanel('audio')} />
   else if (panel === 'photo' && selClip) panelView = <PhotoPanel ed={ed} clip={selClip} onClose={closePanel} />
+  else if (panel === 'templates') panelView = <TemplatesPanel ed={ed} onClose={closePanel} onToast={setToast} />
   else if (panel === 'ai') panelView = <AIPanel ed={ed} onClose={closePanel} />
   else if (panel === 'subtitles') panelView = <SubtitlePanel ed={ed} t={time} onClose={closePanel} onSeek={seek} />
   else if (panel === 'audio') panelView = (
@@ -351,9 +366,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <Icon name="plus" size={44} />
               <span>{t('Import video')}</span>
             </button>
-            <div className="row">
+            <div className="row empty-more">
               <button className="btn" onClick={() => pickPhotos(defaultSlideshow())}><Icon name="image" size={18} /> {t('Photo slideshow')}</button>
               <button className="btn" onClick={() => setScenes(true)}><Icon name="slides" size={18} /> {t('Slides / PDF to video')}</button>
+              <button className="btn" onClick={() => setScreenRec(true)}><Icon name="screen" size={18} /> {t('Record screen')}</button>
+              <button className="btn" onClick={() => setPanel('templates')}><Icon name="template" size={18} /> {t('Intro/Outro')}</button>
             </div>
             <p className="muted">{t('Pick videos or photos from your phone. Everything stays on your device.')}</p>
           </div>
@@ -406,6 +423,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       <input ref={overlayInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'overlay'); e.target.value = '' }} />
 
       {scenes && <SceneBuilder ed={ed} onClose={() => setScenes(false)} onDone={(msg) => { setScenes(false); ed.setSel(null); setPanel(null); setToast(msg) }} />}
+      {screenRec && <ScreenRecorder onClose={() => setScreenRec(false)} onDone={addRecording} />}
       {exporting && <ExportSheet project={ed.project} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>
   )

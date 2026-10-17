@@ -3,7 +3,12 @@ interface DesktopBridge {
   platform: string
   onOpenFiles(cb: (files: { name: string; data: Uint8Array }[]) => void): () => void
   ready(): void
+  /** Screen recording: the shell asks which screen or window to capture. */
+  onPickScreen?(cb: (sources: ScreenSource[]) => void): () => void
+  pickScreen?(id: string | null): void
 }
+
+export interface ScreenSource { id: string; name: string; thumb: string; screen: boolean }
 
 export const desktop = (window as unknown as { desktop?: DesktopBridge }).desktop
 export const isDesktop = !!desktop
