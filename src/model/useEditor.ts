@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BlurLayer, Clip, Layer, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Watermark } from '../types'
+import type { AudioLayer, BlurLayer, Clip, Layer, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -17,6 +17,12 @@ export function subtitleLook(layers: Layer[]) {
   const s = layers.find((l): l is TextLayer => l.type === 'text' && l.subtitle)
   return s ? { style: { ...s.style }, y: s.box.y, frame: s.frame ? { ...s.frame, rect: { ...s.frame.rect } } : null } : null
 }
+
+/** A wave layer with the default look for its style: bars and lines near the bottom, a ring in the middle. */
+export const newWave = (sourceId: string, style: WaveLayer['style']): WaveLayer => ({
+  id: uid(), type: 'wave', sourceId, in: 0, start: 0, end: 1, style, color: '#ffffff', color2: '#7dd3fc',
+  box: { x: 0.5, y: style === 'circle' ? 0.5 : 0.87, scale: 1, rotation: 0, opacity: 0.95 },
+})
 
 const centerBox = () => ({ x: 0.5, y: 0.5, scale: 1, rotation: 0, opacity: 1 })
 
@@ -152,6 +158,12 @@ export function useEditor(initial: Project) {
     addLayer(l)
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Adds an animated waveform that moves with an audio layer's sound, over the same time span. */
+  const addWave = useCallback((a: AudioLayer) => {
+    const l: WaveLayer = { ...newWave(a.sourceId, 'bars'), start: a.start, end: a.end, in: a.in }
+    addLayer(l)
+  }, [addLayer])
+
   const remove = useCallback(() => {
     const p = ref.current
     if (!sel) return
@@ -187,7 +199,7 @@ export function useEditor(initial: Project) {
       const l = p.layers.find((x) => x.id === sel.id)
       if (!l || t <= l.start + 0.1 || t >= l.end - 0.1) return
       const right = { ...l, id: uid(), start: t } as Layer
-      if (right.type === 'media' || right.type === 'audio') right.in = (l as MediaLayer).in + (t - l.start)
+      if (right.type === 'media' || right.type === 'audio' || right.type === 'wave') right.in = (l as MediaLayer).in + (t - l.start)
       h.set({ ...p, layers: p.layers.flatMap((x) => (x.id === l.id ? [{ ...l, end: t } as Layer, right] : [x])) })
       setSel({ type: 'layer', id: right.id })
       return
@@ -233,7 +245,7 @@ export function useEditor(initial: Project) {
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
     addSource, appendClips, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
-    addText, addSticker, addBlur, addOverlay, addAudio, addLayer,
+    addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
     remove, duplicate, split, moveClip, replaceProject,
   }
 }

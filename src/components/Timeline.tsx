@@ -25,7 +25,7 @@ type Drag =
   | { kind: 'layer-move'; id: string; x0: number; start0: number; end0: number; moved: boolean }
   | { kind: 'reorder'; id: string; x: number; to: number }
 
-const LAYER_COLORS: Record<Layer['type'], string> = { text: '#8b5cf6', sticker: '#f59e0b', media: '#14b8a6', blur: '#64748b', audio: '#22c55e' }
+const LAYER_COLORS: Record<Layer['type'], string> = { text: '#8b5cf6', sticker: '#f59e0b', media: '#14b8a6', blur: '#64748b', audio: '#22c55e', wave: '#0ea5e9' }
 
 function layerLabel(l: Layer) {
   switch (l.type) {
@@ -33,6 +33,7 @@ function layerLabel(l: Layer) {
     case 'sticker': return l.emoji
     case 'media': return '▣ Overlay'
     case 'blur': return l.mode === 'pixelate' ? '▦ Pixelate' : '◌ Blur'
+    case 'wave': return `〰 ${l.style === 'circle' ? 'Circle' : l.style === 'line' ? 'Line' : 'Bars'}`
     case 'audio': return (l.kind === 'voice' ? '🎙 ' : l.kind === 'sound' ? '🔔 ' : '♪ ') + l.label
   }
 }
@@ -137,7 +138,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       }
     } else if (d.kind === 'layer-trim') {
       const l = project.layers.find((x) => x.id === d.id)!
-      const hasSrc = l.type === 'media' || l.type === 'audio'
+      const hasSrc = l.type === 'media' || l.type === 'audio' || l.type === 'wave'
       const srcDur = hasSrc ? sources[(l as { sourceId: string }).sourceId]?.duration ?? Infinity : Infinity
       const targets = snapEdges(l.id)
       if (d.side === 'in') {

@@ -4,6 +4,7 @@ import { kenBurnsAt } from '../model/slideshow'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { drawSticker, drawText, ensureFont, fontLoaded, measureText, STICKER_BASE } from './text'
+import { drawWave, waveData, waveReady, waveSize } from './visualizer'
 import { drawUserWatermark, watermarkCenter, watermarkSize, watermarkVisible } from './watermark'
 
 export interface FrameImage { image: CanvasImageSource; width: number; height: number }
@@ -126,6 +127,11 @@ export class Renderer {
       } else if (l.type === 'sticker') drawSticker(ctx, l, inp.t, W, H)
       else if (l.type === 'media') this.drawMediaLayer(l, inp, seed)
       else if (l.type === 'blur') this.drawBlur(l)
+      else if (l.type === 'wave') {
+        const src = inp.sources[l.sourceId]
+        // until the sound is analysed the bars lie flat; a redraw follows
+        drawWave(ctx, l, src ? waveData(src, () => this.onNeedsRedraw?.()) : null, l.in + (inp.t - l.start), W, H)
+      }
     }
 
     const wm = inp.project.watermark
@@ -155,6 +161,12 @@ export class Renderer {
     if (!wm?.enabled) return
     if (wm.kind === 'text') await ensureFont(wm.font)
     else if (wm.sourceId) { this.watermarkImage(sources[wm.sourceId]); await this.wmImage?.ready }
+  }
+
+  /** Waits until every wave layer's sound is analysed, so exported bars move from the first frame. */
+  async prepareWaves(project: Project, sources: Record<string, MediaSource>) {
+    const ids = new Set(project.layers.flatMap((l) => (l.type === 'wave' && sources[l.sourceId] ? [l.sourceId] : [])))
+    await Promise.all([...ids].map((id) => waveReady(sources[id])))
   }
 
   /** Where the user watermark is at time t, in canvas pixels, for dragging it on the preview. */
@@ -238,6 +250,10 @@ export class Renderer {
     if (l.type === 'text') {
       const m = measureText(this.ctx, l, H)
       return { cx: l.box.x * W, cy: l.box.y * H, w: m.w * l.box.scale, h: m.h * l.box.scale, rotation: l.box.rotation }
+    }
+    if (l.type === 'wave') {
+      const { w, h } = waveSize(l, W, H)
+      return { cx: l.box.x * W, cy: l.box.y * H, w, h, rotation: l.box.rotation }
     }
     if (l.type === 'sticker') {
       const s = STICKER_BASE * H * 1.15 * l.box.scale
