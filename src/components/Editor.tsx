@@ -13,6 +13,7 @@ import { onPendingFiles, takePendingFiles } from '../lib/desktop'
 import { Timeline } from './Timeline'
 import { Preview } from './Preview'
 import { ExportSheet } from './ExportSheet'
+import { SceneBuilder } from './SceneBuilder'
 import { CropEditor } from './CropEditor'
 import { Icon, type IconName } from './Icon'
 import { AdjustPanel, FilterPanel, FormatPanel, SpeedPanel, TransitionPanel, VolumePanel } from '../panels/ClipPanels'
@@ -65,6 +66,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [importing, setImporting] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [scenes, setScenes] = useState(false)
   const [screenRec, setScreenRec] = useState(false)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
@@ -211,7 +213,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || exporting) return
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || exporting || scenes) return
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) ed.redo(); else ed.undo() }
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); ed.redo() }
@@ -287,6 +289,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'template', label: 'Intro/Outro', on: () => { player?.pause(); setPanel('templates') } },
       { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
       { icon: 'image', label: 'Slideshow', on: () => setPanel('slideshow') },
+      { icon: 'slides', label: 'Slides to video', on: () => { player?.pause(); setScenes(true) } },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
@@ -365,6 +368,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
             </button>
             <div className="row empty-more">
               <button className="btn" onClick={() => pickPhotos(defaultSlideshow())}><Icon name="image" size={18} /> {t('Photo slideshow')}</button>
+              <button className="btn" onClick={() => setScenes(true)}><Icon name="slides" size={18} /> {t('Slides / PDF to video')}</button>
               <button className="btn" onClick={() => setScreenRec(true)}><Icon name="screen" size={18} /> {t('Record screen')}</button>
               <button className="btn" onClick={() => setPanel('templates')}><Icon name="template" size={18} /> {t('Intro/Outro')}</button>
             </div>
@@ -418,6 +422,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'slides'); e.target.value = '' }} />
       <input ref={overlayInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'overlay'); e.target.value = '' }} />
 
+      {scenes && <SceneBuilder ed={ed} onClose={() => setScenes(false)} onDone={(msg) => { setScenes(false); ed.setSel(null); setPanel(null); setToast(msg) }} />}
       {screenRec && <ScreenRecorder onClose={() => setScreenRec(false)} onDone={addRecording} />}
       {exporting && <ExportSheet project={ed.project} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>

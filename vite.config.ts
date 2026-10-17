@@ -29,7 +29,7 @@ export default defineConfig({
       },
       workbox: {
         // App shell is precached; the 32 MB ffmpeg core and the fonts are cached on first use.
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,woff2}'],
         globIgnores: ['ffmpeg/**', 'fonts/**'],
         runtimeCaching: [
           {

@@ -36,6 +36,14 @@ Zoom In.
   original sound is lowered and the voice track lands on the timeline, so it is in the export.
 The library and models download on first use (45–250 MB for captions, ~30 MB per voice) and stay in the browser cache.
 
+**Slides to video** (the "Slides to video" tool, or "Slides / PDF to video" on an empty project): pick a PDF, a
+PowerPoint (.pptx) or photos and each page, slide or photo becomes a scene. PDF pages are rendered exactly (pdf.js) and
+their text fills in the script; PowerPoint slides are redrawn as clean cards (title, bullets, main picture) with the
+speaker notes as the script. Edit what is said on each scene, reorder, set seconds, then pick a voice: none (fixed time
+per scene), the offline AI voice (each scene lasts as long as its narration) or your own recording shared across the
+scenes. Captions, transitions and a slow zoom are optional. Everything lands on the normal timeline as photo clips,
+subtitles and voice tracks, so it can be edited like any other project.
+
 **Export**: platform presets (YouTube 1080p 16:9, Instagram Reel 1080×1920, WhatsApp Status 720×1280, Twitter/X 720p,
 Square 1080×1080) that set frame shape, size and frame rate in one tap; MP4 (H.264/AAC), WebM (VP9/Vorbis), MOV, GIF and MP3; 480p to 2K; 24/25/30/60 fps; aspect ratio change
 (9:16, 1:1, 16:9, 4:5…) with blurred, black or white background; removable watermark; cover thumbnail selector;
@@ -84,6 +92,7 @@ In the repository go to Settings > Pages and set Source to "GitHub Actions" once
 - Preview renders at screen size; export renders frame-by-frame at the chosen resolution.
 
 ## Layout
+- `src/model/scenes.ts`, `src/lib/sceneImport.ts` – scene builder: files → scenes → timeline (base for more "X to video" inputs)
 - `src/model/` – project model, timeline maths (speed, ramps, transitions), editor operations with undo
 - `src/engine/renderer.ts` – shared renderer for preview and export (frame → WebGL grading/transitions → layers)
 - `src/engine/gl.ts`, `filters.ts`, `transitions.ts` – shaders, filter presets, transitions
