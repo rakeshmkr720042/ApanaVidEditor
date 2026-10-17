@@ -60,6 +60,7 @@ export interface Clip {
   adjust: Adjust
   transition: Transition | null // transition into the next clip
   kenBurns?: KenBurns | null // missing in projects saved before slideshows
+  fromTemplate?: boolean // part of an intro/outro; never decides the "original" frame shape
 }
 
 export interface Box {
@@ -92,6 +93,20 @@ export interface TextStyle {
   letterSpacing: number
 }
 
+export type CaptionFramePreset = 'bottom' | 'top' | 'left' | 'right' | 'center' | 'custom'
+
+/** A fixed box the text sits in (a bottom strip, the left half of the screen…), wrapping to fit it. */
+export interface CaptionFrame {
+  preset: CaptionFramePreset
+  rect: { x: number; y: number; w: number; h: number } // normalised, top-left
+  fill: string // #rrggbb
+  fillOpacity: number // 0..1
+  border: string | null
+  borderWidth: number // 0..3, like overlay borders
+  radius: number // 0..1 of the short side's half
+  valign: 'top' | 'middle' | 'bottom'
+}
+
 export interface TextLayer extends LayerBase {
   type: 'text'
   text: string
@@ -100,6 +115,7 @@ export interface TextLayer extends LayerBase {
   box: Box
   animIn: TextAnim
   animOut: TextAnim
+  frame?: CaptionFrame | null // when set, box position/scale/rotation are ignored
 }
 
 export interface StickerLayer extends LayerBase {
