@@ -1,7 +1,7 @@
 // Electron main process for the Windows desktop app. The built Vite app (dist/) is served
 // from a privileged app:// scheme so it gets a secure origin with cross-origin isolation
 // headers (COOP/COEP, needed for SharedArrayBuffer) and a CSP, like the hosted web app.
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, net, protocol, safeStorage, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, net, powerSaveBlocker, protocol, safeStorage, session, shell } from 'electron'
 import { createHash, randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -37,6 +37,13 @@ const isolationHeaders = {
   'Cross-Origin-Embedder-Policy': 'credentialless',
   'Cross-Origin-Resource-Policy': 'same-origin',
 }
+
+// Exports run frame by frame in the page, so keep it at full speed while the window is
+// minimised, covered by another window or in the background.
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true } },
@@ -150,6 +157,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   })
   win.once('ready-to-show', () => win?.show())
@@ -286,6 +294,14 @@ ipcMain.handle('desktop:google-fetch', async (e, { url, method, headers, body })
   if (typeof url !== 'string' || !url.startsWith('https://www.googleapis.com/')) throw new Error('Not allowed')
   const res = await net.fetch(url, { method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(10 * 60_000) })
   return { status: res.status, location: res.headers.get('location'), range: res.headers.get('range'), text: await res.text() }
+})
+
+// Keeps the computer awake (the screen may still turn off) while an export runs.
+let awakeId = null
+ipcMain.on('desktop:keep-awake', (e, on) => {
+  if (e.sender !== win?.webContents) return
+  if (on && awakeId === null) awakeId = powerSaveBlocker.start('prevent-app-suspension')
+  else if (!on && awakeId !== null) { powerSaveBlocker.stop(awakeId); awakeId = null }
 })
 
 ipcMain.on('desktop:ready', (e) => {

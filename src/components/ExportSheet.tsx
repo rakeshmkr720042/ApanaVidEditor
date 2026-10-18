@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AspectRatio, MediaSource, Project } from '../types'
 import { exportProject, estimateSize, Cancelled, type ExportJob, type Format, type Resolution, type SizeMode } from '../engine/exporter'
+import { runsInBackground } from '../engine/background'
 import { exportFast, isSimpleProject } from '../lib/export'
 import { resetFFmpeg } from '../lib/ffmpeg'
 import { isNative, saveNative } from '../lib/save'
@@ -154,7 +155,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
           <>
             <h2>{running.n > 1 ? `${running.i + 1}/${running.n} · ` : ''}{t(running.label)}</h2>
             <div className="progress"><div style={{ width: `${Math.round(running.p * 100)}%` }} /></div>
-            <p className="muted">{Math.round(running.p * 100)}% · {t('keep this screen open')}</p>
+            <p className="muted">{Math.round(running.p * 100)}% · {t(runsInBackground ? 'you can switch to other apps meanwhile' : isNative ? 'keep this screen open' : 'you can switch tabs, just keep this tab open')}</p>
             <button className="btn wide" onClick={cancel}>{t('Cancel')}</button>
           </>
         ) : (

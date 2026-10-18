@@ -2,6 +2,7 @@ import type { AspectRatio, MediaSource, Project } from '../types'
 import { layoutClips } from '../model/timeline'
 import { getFFmpeg, runFFmpeg } from '../lib/ffmpeg'
 import { mixAudio } from './audiomix'
+import { sleep, stayAwake } from './background'
 import { openReader, type FrameReader } from './frames'
 import { encodeWav } from './music'
 import { mediaNeeds } from './player'
@@ -137,7 +138,8 @@ export async function exportProject(
   const aac = ['-c:a', 'aac', '-b:a', `${size.audioK}k`]
   const vorbis = ['-c:a', 'libvorbis', '-q:a', String(size.vorbisQ)]
   const x264 = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(size.crf), '-g', String(Math.round(fps * size.keySecs)), '-pix_fmt', 'yuv420p']
-  const ff = await getFFmpeg()
+  const release = stayAwake()
+  const ff = await getFFmpeg().catch((e) => { release(); throw e })
   const cleanup: string[] = []
   const write = async (name: string, data: Uint8Array) => { await ff.writeFile(name, data); cleanup.push(name) }
 
@@ -206,7 +208,8 @@ export async function exportProject(
         const vf = new VideoFrame(renderer.canvas, { timestamp: Math.round((n * 1e6) / fps), duration: Math.round(1e6 / fps) })
         enc.encode(vf, { keyFrame: n % keyEvery === 0 })
         vf.close()
-        while (enc.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 2))
+        // wait for the encoder to catch up; 'dequeue' fires as soon as it takes a frame
+        while (enc.encodeQueueSize > 4) await Promise.race([new Promise((r) => enc.addEventListener('dequeue', r, { once: true })), sleep(20)])
         if (n % 3 === 0) onProgress(0.08 + (n / frameCount) * 0.8, `Rendering ${Math.round((n / frameCount) * 100)}%`)
       }
       await enc.flush()
@@ -282,6 +285,7 @@ export async function exportProject(
     onProgress(1, 'Done')
     return { blob: new Blob([data.slice().buffer], { type }), ext, cover, width: w, height: h, encoder: encoderName }
   } finally {
+    release()
     for (const f of cleanup) await ff.deleteFile(f).catch(() => {})
   }
 }
