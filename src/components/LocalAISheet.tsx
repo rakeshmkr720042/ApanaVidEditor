@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { DEFAULT_URL, getLocalAI, listModels, pickModel, setLocalAI } from '../lib/localai'
 import { isDesktop } from '../lib/desktop'
+import { getVoiceClone, setVoiceClone, testSpace } from '../engine/voiceclone'
 import { Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
 
@@ -13,6 +14,19 @@ export function LocalAISheet({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null)
   const save = (patch: Parameters<typeof setLocalAI>[0]) => setC(setLocalAI(patch))
   const web = !Capacitor.isNativePlatform() && !isDesktop
+
+  // personal voice cloning: off and empty until the user adds their own Space
+  const [vc, setVc] = useState(getVoiceClone)
+  const [vcStatus, setVcStatus] = useState<{ ok: boolean; text: string } | null>(null)
+  const saveVc = (patch: Parameters<typeof setVoiceClone>[0]) => { setVc(setVoiceClone(patch)); setVcStatus(null) }
+  const testVc = async () => {
+    setBusy(true); setVcStatus(null)
+    try {
+      await testSpace(vc.url)
+      saveVc({ on: true })
+      setVcStatus({ ok: true, text: t('Connected. "My voice (clone)" is now in AI Dub → Voice-over.') })
+    } catch (e) { setVcStatus({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
+  }
 
   const test = async () => {
     setBusy(true); setStatus(null)
@@ -60,6 +74,16 @@ export function LocalAISheet({ onClose }: { onClose: () => void }) {
             {t('From a phone: on the laptop run the line below and restart Ollama, allow it in Windows Firewall, then type the laptop\'s Wi-Fi address here, like http://192.168.1.5:11434 (ipconfig shows it as IPv4). Both must be on the same Wi-Fi. Use the Android app for this; the web page can only reach localhost.')}{'\n'}<code>setx OLLAMA_HOST "0.0.0.0"</code>
           </div>
         </details>
+        <h2>{t('My voice (personal)')}</h2>
+        <p className="muted small">{t('Dub videos in your own voice with your voice cloning server (a free Hugging Face Space). Your voice sample is sent to that server, so this needs internet.')}</p>
+        <Toggle label="Use voice cloning" value={vc.on} onChange={(on) => saveVc({ on })} />
+        <label className="field-label" htmlFor="vc-url">{t('Voice cloning server URL')}</label>
+        <input id="vc-url" className="text-input" inputMode="url" value={vc.url} placeholder="username/apana-voice-clone" spellCheck={false}
+          onChange={(e) => saveVc({ url: e.target.value.trim() })} />
+        <div className="row">
+          <button className="btn primary" disabled={busy || !vc.url} onClick={testVc}>{t(busy ? 'Connecting…' : 'Test connection')}</button>
+        </div>
+        {vcStatus && <p className={`small ${vcStatus.ok ? 'ok-text' : 'error-text'}`}>{vcStatus.text}</p>}
         <button className="btn" disabled={busy} onClick={onClose}>{t('Done')}</button>
       </div>
     </div>

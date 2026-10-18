@@ -7,9 +7,10 @@ import { uid } from '../lib/format'
 import { t } from '../lib/i18n'
 import { ensureFont, subtitleStyle } from '../engine/text'
 import { encodeWav } from '../engine/music'
-import { loadSource, sharedAudioContext } from '../lib/media'
-import { saveMedia } from '../lib/db'
+import { decodeAudio, loadSource, sharedAudioContext } from '../lib/media'
+import { deleteVoiceSample, getVoiceSample, saveMedia, saveVoiceSample } from '../lib/db'
 import { getLocalAI, localAI, setLocalAI } from '../lib/localai'
+import { CLONE_LANGS, referenceWav, voiceCloneSpace } from '../engine/voiceclone'
 import {
   ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, langName, sampleVoice, setEmail, transcribe, translateCues,
   type Progress,
@@ -18,7 +19,7 @@ import {
 interface P { ed: Editor; onClose: () => void }
 
 // remembered while the editor is open, so closing the panel loses nothing
-const memo = { tab: 'captions', model: ASR_MODELS[1].id, spoken: 'auto', toEnglish: false, subLang: 'auto', target: 'hi', voice: 'hi', duck: 0.15 }
+const memo = { tab: 'captions', model: ASR_MODELS[1].id, spoken: 'auto', toEnglish: false, subLang: 'auto', target: 'hi', voice: 'hi', duck: 0.15, mine: false }
 
 const DEVANAGARI = ['hi', 'mr', 'ne']
 
@@ -50,6 +51,84 @@ export function AIPanel({ ed, onClose }: P) {
   useEffect(() => () => playing.current?.stop(), [])
   useEffect(() => { memo.tab = tab }, [tab])
 
+  // ---- the user's own voice sample, for cloning
+  const [sample, setSample] = useState<{ blob: Blob; secs: number } | null>(null)
+  const [rec, setRec] = useState<{ mr: MediaRecorder; start: number } | null>(null)
+  const [now, setNow] = useState(0)
+  // personal voice cloning appears only when switched on in the Local AI sheet
+  const [cloneOn] = useState(() => !!voiceCloneSpace())
+  const mine = cloneOn && memo.mine
+  useEffect(() => {
+    if (!cloneOn) return
+    getVoiceSample().then(async (blob) => {
+      if (!blob) return
+      const b = await decodeAudio(blob)
+      setSample({ blob, secs: b?.duration ?? 0 })
+    }).catch(() => {})
+  }, [cloneOn])
+  useEffect(() => {
+    if (!rec) return
+    const i = setInterval(() => {
+      setNow(Date.now())
+      if (Date.now() - rec.start > 30000) rec.mr.stop()
+    }, 250)
+    return () => clearInterval(i)
+  }, [rec])
+  useEffect(() => () => { if (rec && rec.mr.state !== 'inactive') rec.mr.stop() }, [rec])
+
+  const keepSample = async (raw: Blob) => {
+    const buf = await decodeAudio(raw)
+    if (!buf) throw new Error(t('Could not read this audio'))
+    if (buf.duration < 5) throw new Error(t('The voice sample is too short. Speak for at least 10 seconds.'))
+    const wav = await referenceWav(buf)
+    await saveVoiceSample(wav).catch(() => {})
+    setSample({ blob: wav, secs: Math.min(30, buf.duration) })
+  }
+
+  const startRec = async () => {
+    setError(null); setDone(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      const mr = new MediaRecorder(stream)
+      const parts: Blob[] = []
+      mr.ondataavailable = (e) => parts.push(e.data)
+      mr.onstop = () => {
+        stream.getTracks().forEach((tr) => tr.stop())
+        setRec(null)
+        keepSample(new Blob(parts, { type: mr.mimeType || 'audio/webm' })).catch((e) => setError((e as Error).message))
+      }
+      mr.start()
+      setRec({ mr, start: Date.now() })
+      setNow(Date.now())
+    } catch {
+      setError(t('Microphone permission is needed to record a voiceover.'))
+    }
+  }
+
+  const importSample = (f: File | undefined) => {
+    if (!f) return
+    setError(null); setDone(null)
+    keepSample(f).catch((e) => setError((e as Error).message))
+  }
+
+  const playSample = async () => {
+    if (!sample) return
+    stopSample()
+    const buf = await decodeAudio(sample.blob)
+    if (!buf) return
+    const ctx = sharedAudioContext()
+    await ctx.resume()
+    const n = ctx.createBufferSource()
+    n.buffer = buf
+    n.connect(ctx.destination)
+    n.start()
+    playing.current = n
+  }
+
+  const removeSample = () => { stopSample(); setSample(null); deleteVoiceSample().catch(() => {}) }
+  const reference = mine ? sample?.blob ?? null : null
+  const voiceCodes = mine ? CLONE_LANGS : Object.keys(VOICES)
+
   const subs = ed.project.layers.filter((l): l is TextLayer => l.type === 'text' && l.subtitle).sort((a, b) => a.start - b.start)
   const cues: Cue[] = subs.map((s) => ({ start: s.start, end: s.end, text: s.text }))
   const total = ed.layout.total
@@ -77,7 +156,7 @@ export function AIPanel({ ed, onClose }: P) {
     }))
     ed.replaceProject({ ...p, layers: [...p.layers.filter((l) => !(l.type === 'text' && l.subtitle)), ...layers] })
     memo.subLang = lang
-    if (VOICES[lang]) memo.voice = lang
+    if ((mine ? CLONE_LANGS : Object.keys(VOICES)).includes(lang)) memo.voice = lang
   }
 
   const generate = () => run(t('Listening to the video…'), async () => {
@@ -100,7 +179,7 @@ export function AIPanel({ ed, onClose }: P) {
   const stopSample = () => { playing.current?.stop(); playing.current = null }
   const preview = () => run(t('Making a sample…'), async () => {
     stopSample()
-    const buf = await sampleVoice(cues[0]?.text ?? 'Hello', memo.voice, progress(t('Making a sample…')))
+    const buf = await sampleVoice(cues[0]?.text ?? 'Hello', memo.voice, progress(t('Making a sample…')), reference)
     if (!buf) return ''
     const ctx = sharedAudioContext()
     await ctx.resume()
@@ -114,8 +193,8 @@ export function AIPanel({ ed, onClose }: P) {
 
   const dub = () => run(t('Recording voice-over…'), async () => {
     stopSample()
-    const buf = await buildVoiceOver(cues, memo.voice, total, progress(t('Recording voice-over…')))
-    const name = `${t('Voice-over')} (${langName(memo.voice)})`
+    const buf = await buildVoiceOver(cues, memo.voice, total, progress(t('Recording voice-over…')), reference)
+    const name = `${t(mine ? 'My voice' : 'Voice-over')} (${langName(memo.voice)})`
     const src = await loadSource(encodeWav(buf), `${name}.wav`)
     ed.addSource(src)
     await saveMedia(src)
@@ -180,15 +259,50 @@ export function AIPanel({ ed, onClose }: P) {
         <>
           <p className="muted small">{t('Reads every subtitle aloud at its time and lays the voice over your video. Translate first to dub into another language.')}</p>
           {!cues.length && <p className="small warn">{t('Add subtitles first: use Auto captions or import an .srt file.')}</p>}
+          {cloneOn && <>
+          <span className="field-label">{t('Voice')}</span>
+          <Chips options={[{ value: 'ai', label: 'AI voice (offline)' }, { value: 'mine', label: 'My voice (clone)' }]} value={mine ? 'mine' : 'ai'}
+            onChange={(v) => {
+              const next = v === 'mine'
+              const codes = next ? CLONE_LANGS : Object.keys(VOICES)
+              set({ mine: next, voice: codes.includes(memo.voice) ? memo.voice : codes.includes(memo.subLang) ? memo.subLang : codes[1] ?? codes[0] })
+            }} />
+          </>}
+          {mine && (
+            <div className="clone-box">
+              <p className="muted small">{t('Record 15 to 30 seconds of yourself speaking clearly in a quiet room. Your voice is sent to your voice cloning server to make the voice-over, so this needs internet.')}</p>
+              {rec ? (
+                <div className="row">
+                  <span className="small rec-live">● {t('Recording')} {Math.floor((now - rec.start) / 1000)}s / 30s</span>
+                  <button className="btn primary" onClick={() => rec.mr.stop()}>{t('Stop')}</button>
+                </div>
+              ) : (
+                <div className="row">
+                  <button className="btn" disabled={!!busy} onClick={startRec}>🎙 {t(sample ? 'Record again' : 'Record my voice')}</button>
+                  <label className="btn">
+                    {t('Import audio')}
+                    <input type="file" accept="audio/*,video/*" hidden onChange={(e) => { importSample(e.target.files?.[0]); e.target.value = '' }} />
+                  </label>
+                </div>
+              )}
+              {sample && !rec && (
+                <div className="row">
+                  <span className="small ok-text">✓ {t('Voice sample ready')} ({Math.round(sample.secs)}s)</span>
+                  <button className="btn" onClick={playSample}>▶</button>
+                  <button className="btn" onClick={removeSample}>{t('Delete')}</button>
+                </div>
+              )}
+            </div>
+          )}
           <span className="field-label">{t('Voice language (should match the subtitles)')}</span>
-          <LangSelect value={memo.voice} codes={Object.keys(VOICES)} onChange={(voice) => set({ voice })} />
-          {memo.subLang !== 'auto' && !VOICES[memo.subLang] && (
-            <p className="small warn">{langName(memo.subLang)}: {t('no offline voice yet. Voices available:')} {Object.keys(VOICES).map(langName).join(', ')}.</p>
+          <LangSelect value={memo.voice} codes={voiceCodes} onChange={(voice) => set({ voice })} />
+          {memo.subLang !== 'auto' && !voiceCodes.includes(memo.subLang) && (
+            <p className="small warn">{langName(memo.subLang)}: {t('no offline voice yet. Voices available:')} {voiceCodes.map(langName).join(', ')}.</p>
           )}
           <Slider label="Original sound" min={0} max={1} value={memo.duck} format={(v) => `${Math.round(v * 100)}%`} onChange={(duck) => set({ duck })} />
           <div className="row">
-            <button className="btn" disabled={!!busy || !cues.length} onClick={preview}>▶ {t('Hear sample')}</button>
-            <button className="btn primary" disabled={!!busy || !cues.length} onClick={dub}>{t('Create voice-over')}</button>
+            <button className="btn" disabled={!!busy || !!rec || !cues.length || (mine && !sample)} onClick={preview}>▶ {t('Hear sample')}</button>
+            <button className="btn primary" disabled={!!busy || !!rec || !cues.length || (mine && !sample)} onClick={dub}>{t('Create voice-over')}</button>
           </div>
         </>
       )}
