@@ -4,6 +4,7 @@ import type { Cue } from './srt'
 import { ensureFont } from '../engine/text'
 import { wrap, type CardTheme } from './scriptScenes'
 import { uid } from './format'
+import { planPictures, type Leftover, type Pic } from './rawMedia'
 
 /**
  * Audio overview → video: a podcast, talk or voice note is cut into chapters at its pauses (and at
@@ -19,7 +20,8 @@ export interface AudioPart {
   end: number
   cues: Cue[] // speech in this chapter, in audio time
   heard: string // the transcript as recognised; when the scene text no longer matches, captions are spread evenly
-  look: AudioLook
+  look: AudioLook // 'photos': one of the user's pictures; otherwise a drawn card
+  pic?: string // id of the user's picture shown, when there is one
   title: string // drawn on cards
   sub: string
 }
@@ -193,28 +195,36 @@ export async function bitmapOf(b: Blob | null) {
   try { return await createImageBitmap(b) } catch { return null }
 }
 
-/** Splits audio into chapter scenes: timed to the sound, with the speech of each as its text. */
+/**
+ * Splits audio into chapter scenes: timed to the sound, with the speech of each as its text. With
+ * the user's own pictures, each chapter gets the one that matches what is said (or the next in
+ * order); chapters left over get a title card, or the pictures again with `leftover: 'repeat'`.
+ */
 export async function audioToScenes(p: {
   duration: number; gaps: Gap[]; cues: Cue[]; target: number; title: string; look: AudioLook
-  photos: Blob[]; cover: Blob | null; theme: CardTheme; wave: WaveStyle | null; W: number; H: number; progress: (p: number) => void
-}): Promise<Scene[]> {
+  pics: Pic[]; leftover: Leftover; cover: Blob | null; theme: CardTheme; wave: WaveStyle | null; W: number; H: number; progress: (p: number) => void
+}): Promise<{ scenes: Scene[]; matched: number; byAI: boolean; unused: number }> {
   const cuts = chapterCuts(p.duration, p.gaps, p.cues, p.target)
   const bounds = [0, ...cuts, p.duration]
-  const look: AudioLook = p.look === 'photos' && !p.photos.length ? 'card' : p.look === 'cover' && !p.cover ? 'card' : p.look
+  const look: AudioLook = p.look === 'photos' && !p.pics.length ? 'card' : p.look === 'cover' && !p.cover ? 'card' : p.look
   const cover = look === 'cover' ? await bitmapOf(p.cover) : null
-  const scenes: Scene[] = []
-  for (let i = 0; i + 1 < bounds.length; i++) {
-    p.progress(i / (bounds.length - 1))
-    const start = bounds[i], end = bounds[i + 1]
+  const chapters = bounds.slice(0, -1).map((start, i) => {
+    const end = bounds[i + 1]
     const cues = p.cues.filter((c) => { const m = (c.start + c.end) / 2; return m >= start && (m < end || i === bounds.length - 2) })
-    const text = cues.map((c) => c.text.trim()).join(' ')
-    const sub = i === 0 && bounds.length > 2 ? '' : headingOf(text)
-    const part: AudioPart = { start, end, cues, heard: text, look, title: p.title, sub }
-    const image = look === 'photos'
-      ? p.photos[i % p.photos.length]
-      : await drawAudioCard({ title: p.title, sub, theme: p.theme, cover, wave: p.wave, W: p.W, H: p.H })
-    scenes.push({ id: uid(), image, name: sub || `${p.title} ${i + 1}`, text, duration: end - start, audio: part })
+    return { start, end, cues, text: cues.map((c) => c.text.trim()).join(' ') }
+  })
+  const choice = look === 'photos' ? await planPictures(chapters.map((c) => c.text), p.pics, p.leftover) : null
+  const scenes: Scene[] = []
+  for (let i = 0; i < chapters.length; i++) {
+    p.progress(i / chapters.length)
+    const { start, end, cues, text } = chapters[i]
+    const sub = i === 0 && chapters.length > 1 ? '' : headingOf(text)
+    const pic = choice?.plan[i] != null ? p.pics[choice.plan[i]!] : null
+    const part: AudioPart = { start, end, cues, heard: text, look: pic ? 'photos' : look === 'photos' ? 'card' : look, pic: pic?.id, title: p.title, sub }
+    const image = pic ? pic.image : await drawAudioCard({ title: p.title, sub, theme: p.theme, cover, wave: p.wave, W: p.W, H: p.H })
+    scenes.push({ id: uid(), image, media: pic?.media, name: sub || `${p.title} ${i + 1}`, text, duration: end - start, audio: part })
   }
   cover?.close()
-  return scenes
+  const shown = new Set(choice?.plan.filter((x) => x != null))
+  return { scenes, matched: choice?.matched ?? 0, byAI: choice?.byAI ?? false, unused: p.pics.length - shown.size }
 }

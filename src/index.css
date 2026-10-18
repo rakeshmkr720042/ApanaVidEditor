@@ -333,7 +333,7 @@ input, textarea { font: inherit; color: inherit; }
 .scene-thumb span { position: absolute; left: 4px; top: 4px; font-size: 11px; background: rgba(0,0,0,.65); color: #fff; border-radius: 4px; padding: 0 5px; }
 .scene-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .scene-main .text-input { font-size: 14px; padding: 6px 8px; background: var(--panel); }
-.scene-tools { display: flex; align-items: center; gap: 2px; }
+.scene-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
 .scene-tools .grow { flex: 1; }
 .scene-secs { width: 64px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-size: 13px; }
 .script-box { display: grid; gap: 6px; margin-top: 6px; }
@@ -399,6 +399,16 @@ input, textarea { font: inherit; color: inherit; }
 .audio-box .text-input { min-height: 0; }
 .audio-box .row .select { flex: 1; min-width: 0; }
 .btn.rec { color: #ff5a5a; border-color: #ff5a5a; }
+/* raw material: the user's own slides, photos, GIFs and clips */
+.thumb-badge { position: absolute; right: 4px; top: 4px; font-size: 10px; font-style: normal; background: rgba(0,0,0,.7); color: #fff; border-radius: 4px; padding: 0 4px; pointer-events: none; }
+.pic-pool .thumb-badge { top: auto; bottom: 3px; right: 3px; }
+.pic-pool { display: flex; flex-wrap: wrap; gap: 6px; }
+.pic-pool.pick { flex-basis: 100%; margin-top: 4px; }
+.pic-pool .pic { position: relative; width: 72px; padding: 0; border: 2px solid transparent; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+.pic-pool .pic.on { border-color: var(--accent, #7dd3fc); }
+.pic-pool .pic img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; display: block; background: #000; }
+.pic-pool .card-choice { min-height: 44px; font-size: 11px; border: 1px dashed var(--line, #444); }
+.pic-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(0,0,0,.75); color: #fff; font-size: 11px; line-height: 20px; padding: 0; cursor: pointer; }
 .scene-swap { display: block; width: 96px; margin-top: 4px; font-size: 11px; padding: 3px 0; border-radius: 6px; border: 1px solid var(--line, #333); background: transparent; color: inherit; cursor: pointer; }
 
 /* quiz → video */
