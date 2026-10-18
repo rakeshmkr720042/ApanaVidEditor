@@ -1,5 +1,5 @@
 import type { MediaSource, Project } from '../types'
-import { clipSegments, layoutClips } from '../model/timeline'
+import { clipSegments, layerSpeed, layoutClips } from '../model/timeline'
 import { decodeAudio } from '../lib/media'
 import { encodeWav } from './music'
 import { runFFmpeg, getFFmpeg } from '../lib/ffmpeg'
@@ -100,13 +100,20 @@ export async function mixAudio(
     g.gain.setValueAtTime(fi > 0 ? 0 : l.volume, l.start)
     if (fi > 0) g.gain.linearRampToValueAtTime(l.volume, l.start + Math.min(fi, len))
     if (fo > 0) { g.gain.setValueAtTime(l.volume, Math.max(l.start, l.end - fo)); g.gain.linearRampToValueAtTime(0, l.end) }
-    const node = ctx.createBufferSource()
-    node.buffer = buf
-    node.connect(g)
-    if (l.in < buf.duration) {
-      node.start(l.start, l.in, Math.min(len, buf.duration - l.in))
-      any = true
+    if (l.in >= buf.duration) continue
+    const sp = layerSpeed(l)
+    let part: AudioBuffer | null = buf
+    let from = l.in
+    if (Math.abs(sp - 1) > 1e-3) {
+      part = await stretch(slice(buf, l.in, Math.min(buf.duration, l.in + len * sp)), sp)
+      from = 0
     }
+    if (!part) continue
+    const node = ctx.createBufferSource()
+    node.buffer = part
+    node.connect(g)
+    node.start(l.start, from, Math.min(len, part.duration - from))
+    any = true
   }
   onProgress?.(1)
   if (!any) return null

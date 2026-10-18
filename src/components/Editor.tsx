@@ -16,7 +16,7 @@ import { ExportSheet } from './ExportSheet'
 import { SceneBuilder } from './SceneBuilder'
 import { CropEditor } from './CropEditor'
 import { Icon, type IconName } from './Icon'
-import { AdjustPanel, FilterPanel, FormatPanel, SpeedPanel, TransitionPanel, VolumePanel } from '../panels/ClipPanels'
+import { AdjustPanel, FilterPanel, FormatPanel, LayerSpeedPanel, SpeedPanel, TransitionPanel, VolumePanel } from '../panels/ClipPanels'
 import { BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, TextPanel, WavePanel } from '../panels/LayerPanels'
 import { AudioPanel } from '../panels/AudioPanel'
 import { AIPanel } from '../panels/AIPanel'
@@ -343,6 +343,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ],
       sticker: [{ icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers') } as Tool],
       media: [
+        ...(ed.sources[(selLayer as MediaLayer).sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
         { icon: 'overlay', label: 'Overlay', on: () => setPanel('overlay') } as Tool,
         { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma') } as Tool,
         { icon: 'filter', label: 'Filters', on: () => setPanel('filters') } as Tool,
@@ -350,6 +351,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ],
       blur: [{ icon: 'blur', label: 'Blur', on: () => setPanel('blur') } as Tool],
       audio: [
+        { icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool,
         { icon: 'volume', label: 'Volume', on: () => setPanel('volume') } as Tool,
         { icon: 'wave', label: 'Waveform', on: () => { if (selLayer.type === 'audio') { ed.addWave(selLayer); setPanel('wave') } } } as Tool,
       ],
@@ -358,6 +360,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     tools = [...capsAll, ...specific, ...common]
   } else {
     tools = [
+      { icon: 'speed', label: 'Speed', on: () => openClipPanel('speed'), disabled: !targetClip },
       { icon: 'screen', label: 'Record screen', on: () => { player?.pause(); setScreenRec(true) } },
       { icon: 'template', label: 'Intro/Outro', on: () => { player?.pause(); setPanel('templates') } },
       { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
@@ -378,7 +381,6 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'watermark', label: 'Watermark', on: () => setPanel('watermark'), disabled: empty },
       { icon: 'filter', label: 'Filters', on: () => openClipPanel('filters'), disabled: !targetClip },
       { icon: 'adjust', label: 'Adjust', on: () => openClipPanel('adjust'), disabled: !targetClip },
-      { icon: 'speed', label: 'Speed', on: () => openClipPanel('speed'), disabled: !targetClip },
       { icon: 'format', label: 'Format', on: () => setPanel('format') },
     ]
   }
@@ -386,7 +388,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const closePanel = () => setPanel(null)
   let panelView: React.ReactNode = null
   const tclip = targetClip
-  if (panel === 'speed' && tclip) panelView = <SpeedPanel ed={ed} clip={tclip} onClose={closePanel} />
+  if (panel === 'speed' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <LayerSpeedPanel ed={ed} layer={selLayer} onClose={closePanel} />
+  else if (panel === 'speed' && tclip) panelView = <SpeedPanel ed={ed} clip={tclip} onClose={closePanel} />
   else if (panel === 'volume' && selLayer?.type === 'audio') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, fadeIn: selLayer.fadeIn, fadeOut: selLayer.fadeOut }} onClose={closePanel} />
   else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} />
   else if (panel === 'filters' && selLayer?.type === 'media') panelView = <FilterPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />

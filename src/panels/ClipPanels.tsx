@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Adjust, AspectRatio, Clip, MediaLayer } from '../types'
+import type { Adjust, AspectRatio, AudioLayer, Clip, MediaLayer } from '../types'
 import type { Editor } from '../model/useEditor'
 import { defaultAdjust, SPEED_RAMPS } from '../model/timeline'
 import { ADJUST_SLIDERS, colorParams, FILTER_GROUPS, FILTERS } from '../engine/filters'
@@ -23,7 +23,7 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
             onStart={ed.begin} onEnd={ed.end}
             onChange={(v) => ed.updateClip(clip.id, { speed: Math.round(Math.pow(2, v) * 100) / 100, ramp: null })}
           />
-          <Chips options={[0.25, 0.5, 1, 1.5, 2, 3, 4].map((s) => ({ value: s, label: `${s}x` }))} value={clip.ramp ? null : clip.speed} onChange={(s) => ed.updateClip(clip.id, { speed: s, ramp: null })} wrap />
+          <Chips options={SPEED_CHIPS} value={clip.ramp ? null : clip.speed} onChange={(s) => ed.updateClip(clip.id, { speed: s, ramp: null })} wrap />
         </>
       ) : (
         <div className="grid ramps">
@@ -43,6 +43,30 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
     </Panel>
   )
 }
+
+/** Speed of a video or sound on its own track (no speed ramps there). */
+export function LayerSpeedPanel({ ed, layer, onClose }: P & { layer: MediaLayer | AudioLayer }) {
+  const src = ed.sources[layer.sourceId]
+  // the layer keeps the same part of the video, so it gets shorter when faster and longer when slower
+  const set = (s: number) => ed.updateLayer<MediaLayer | AudioLayer>(layer.id, (l) => {
+    const len = ((l.end - l.start) * (l.speed ?? 1)) / s
+    const room = src ? (src.duration - l.in) / s : Infinity
+    return { speed: s, end: l.start + Math.max(0.2, Math.min(room, len)) }
+  })
+  return (
+    <Panel title="Speed" onClose={onClose}>
+      <Slider
+        label="Speed" min={-2} max={2} step={0.01} value={Math.log2(layer.speed ?? 1)}
+        format={(v) => `${Math.pow(2, v).toFixed(2)}x`}
+        onStart={ed.begin} onEnd={ed.end}
+        onChange={(v) => set(Math.round(Math.pow(2, v) * 100) / 100)}
+      />
+      <Chips options={SPEED_CHIPS} value={layer.speed ?? 1} onChange={set} wrap />
+    </Panel>
+  )
+}
+
+const SPEED_CHIPS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4].map((s) => ({ value: s, label: `${s}x` }))
 
 export function VolumePanel({ ed, target, onClose }: P & { target: { kind: 'clip'; clip: Clip } | { kind: 'layer'; id: string; volume: number; fadeIn?: number; fadeOut?: number } }) {
   const vol = target.kind === 'clip' ? target.clip.volume : target.volume

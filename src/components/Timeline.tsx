@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Clip, Layer } from '../types'
 import { MIN_CLIP } from '../types'
 import type { Editor } from '../model/useEditor'
-import { clipDuration, IMAGE_DURATION } from '../model/timeline'
+import { clipDuration, IMAGE_DURATION, layerSpeed } from '../model/timeline'
 import { trackKind, trackName } from '../model/tracks'
 import { fmtTime } from '../lib/format'
 import { t as tl } from '../lib/i18n'
@@ -26,7 +26,7 @@ const LANE = 34 // height of one track row
 
 type Drag =
   | { kind: 'clip-trim'; id: string; side: 'in' | 'out'; x0: number; in0: number; out0: number; speed: number }
-  | { kind: 'layer-trim'; id: string; side: 'in' | 'out'; x0: number; start0: number; end0: number; in0: number }
+  | { kind: 'layer-trim'; id: string; side: 'in' | 'out'; x0: number; start0: number; end0: number; in0: number; speed: number }
   | { kind: 'layer-move'; id: string; x0: number; y0: number; start0: number; end0: number; moved: boolean }
   | { kind: 'reorder'; id: string; x: number; to: number }
 
@@ -200,12 +200,12 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       if (d.side === 'in') {
         let start = d.start0 + dt
         start = Math.max(0, Math.min(d.end0 - 0.2, start + snapShift([start], targets)))
-        if (hasSrc) start = Math.max(start, d.start0 - d.in0)
-        ed.updateLayer(l.id, hasSrc ? { start, in: d.in0 + (start - d.start0) } : { start })
+        if (hasSrc) start = Math.max(start, d.start0 - d.in0 / d.speed)
+        ed.updateLayer(l.id, hasSrc ? { start, in: d.in0 + (start - d.start0) * d.speed } : { start })
       } else {
         let end = d.end0 + dt
         end = Math.max(d.start0 + 0.2, end + snapShift([end], targets))
-        if (hasSrc) end = Math.min(end, d.start0 + (srcDur - d.in0))
+        if (hasSrc) end = Math.min(end, d.start0 + (srcDur - d.in0) / d.speed)
         ed.updateLayer(l.id, { end })
       }
     } else if (d.kind === 'layer-move') {
@@ -399,8 +399,8 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                     setDrag({ kind: 'layer-move', id: l.id, x0: e.clientX, y0: e.clientY, start0: l.start, end0: l.end, moved: false })
                   }}
                 >
-                  {src?.thumbs[0] && <img className="tl-wave" src={src.thumbs[0]} alt="" draggable={false} style={{ width: (src.duration * pps), left: -(l as { in: number }).in * pps }} />}
-                  <span>{l.type === 'media' && sources[l.sourceId] ? `▣ ${sources[l.sourceId].name}` : layerLabel(l)}</span>
+                  {src?.thumbs[0] && <img className="tl-wave" src={src.thumbs[0]} alt="" draggable={false} style={{ width: (src.duration * pps) / layerSpeed(l), left: -((l as { in: number }).in * pps) / layerSpeed(l) }} />}
+                  <span>{l.type === 'media' && sources[l.sourceId] ? `▣ ${sources[l.sourceId].name}` : layerLabel(l)}{layerSpeed(l) !== 1 && ` · ${layerSpeed(l)}x`}</span>
                   {selected && (['in', 'out'] as const).map((side) => (
                     <div
                       key={side}
@@ -408,7 +408,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                       onPointerDown={(e) => {
                         capture(e)
                         ed.begin()
-                        setDrag({ kind: 'layer-trim', id: l.id, side, x0: e.clientX, start0: l.start, end0: l.end, in0: (l as { in?: number }).in ?? 0 })
+                        setDrag({ kind: 'layer-trim', id: l.id, side, x0: e.clientX, start0: l.start, end0: l.end, in0: (l as { in?: number }).in ?? 0, speed: layerSpeed(l) })
                       }}
                       onClick={(e) => e.stopPropagation()}
                     />
