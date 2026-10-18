@@ -8,6 +8,12 @@ interface DesktopBridge {
   pickScreen?(id: string | null): void
   /** Reads a web page or picture outside the browser's cross-origin rules (Article to video). */
   fetchUrl?(url: string): Promise<{ ok: boolean; status: number; type: string; url: string; data: Uint8Array }>
+  /** YouTube upload: Google sign-in in the default browser (loopback + PKCE). The refresh token comes back encrypted. */
+  googleSignIn?(o: { clientId: string; clientSecret: string; scope: string }): Promise<{ access: string; expiresIn: number; refresh?: string }>
+  googleCancel?(): void
+  googleRefresh?(o: { clientId: string; clientSecret: string; refresh: string }): Promise<{ access: string; expiresIn: number }>
+  /** A request to www.googleapis.com from the main process. */
+  googleFetch?(r: { url: string; method: string; headers: Record<string, string>; body?: Uint8Array | string }): Promise<{ status: number; location: string | null; range: string | null; text: string }>
 }
 
 export interface ScreenSource { id: string; name: string; thumb: string; screen: boolean }

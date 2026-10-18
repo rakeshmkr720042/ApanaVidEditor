@@ -16,4 +16,8 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   pickScreen: (id) => ipcRenderer.send('desktop:picked-screen', id),
   fetchUrl: (url) => ipcRenderer.invoke('desktop:fetch', url),
+  googleSignIn: (opts) => ipcRenderer.invoke('desktop:google-signin', opts),
+  googleCancel: () => ipcRenderer.send('desktop:google-cancel'),
+  googleRefresh: (opts) => ipcRenderer.invoke('desktop:google-refresh', opts),
+  googleFetch: (req) => ipcRenderer.invoke('desktop:google-fetch', req),
 })
