@@ -167,7 +167,9 @@ input, textarea { font: inherit; color: inherit; }
 .panel.tall { max-height: 56dvh; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 6px; gap: 8px; }
 .panel-actions { display: flex; gap: 6px; }
-.panel-body { overflow-y: auto; padding: 4px 14px 14px; display: grid; gap: 10px; align-content: start; }
+/* Rows take their full height (max-content): with plain auto rows a short panel squashes
+   sideways-scrolling rows (.chips, .colors) and cuts their buttons and swatches in half. */
+.panel-body { overflow-y: auto; padding: 4px 14px 14px; display: grid; gap: 10px; align-content: start; grid-auto-rows: max-content; }
 .field-label { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
 
 .slider { display: grid; grid-template-columns: 92px 1fr 46px; align-items: center; gap: 8px; font-size: 13px; }
@@ -185,7 +187,7 @@ input, textarea { font: inherit; color: inherit; }
 .slider input[type=range]::-moz-range-progress { height: 4px; background: var(--accent); }
 .slider input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 0; }
 
-.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; flex-shrink: 0; }
 .chips::-webkit-scrollbar { display: none; }
 .chips.wrap { flex-wrap: wrap; overflow: visible; }
 .chips button { padding: 7px 13px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel-2); font-size: 13px; white-space: nowrap; flex: 0 0 auto; }
@@ -200,7 +202,7 @@ input, textarea { font: inherit; color: inherit; }
 .row-toggles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .row-toggles .toggle { font-size: 13px; }
 
-.colors { display: flex; gap: 8px; overflow-x: auto; padding: 2px; scrollbar-width: none; }
+.colors { display: flex; gap: 8px; overflow-x: auto; padding: 2px; scrollbar-width: none; flex-shrink: 0; }
 .swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.15); flex: 0 0 auto; padding: 0; display: grid; place-items: center; font-size: 14px; }
 .swatch.on { outline: 2px solid #fff; outline-offset: 2px; }
 .swatch.none { background: var(--panel-2); }
@@ -269,7 +271,7 @@ input, textarea { font: inherit; color: inherit; }
 .sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 30; }
 .sheet {
   width: 100%; max-width: 560px; background: var(--panel); border-radius: 18px 18px 0 0;
-  padding: 10px 18px calc(18px + env(safe-area-inset-bottom)); max-height: 92dvh; overflow: auto; display: grid; gap: 8px;
+  padding: 10px 18px calc(18px + env(safe-area-inset-bottom)); max-height: 92dvh; overflow: auto; display: grid; gap: 8px; grid-auto-rows: max-content;
 }
 @media (min-width: 700px) { .sheet-backdrop { align-items: center; } .sheet { border-radius: 18px; } }
 .sheet-grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 4px; }
@@ -434,7 +436,7 @@ input, textarea { font: inherit; color: inherit; }
 .data-table .text-input { font-size: 14px; padding: 6px 8px; background: var(--panel); min-height: 0; }
 .data-title { display: flex; gap: 4px; align-items: center; }
 .data-title .text-input { flex: 1; min-width: 0; font-weight: 700; }
-.data-scroll { overflow-x: auto; }
+.data-scroll { overflow-x: auto; flex-shrink: 0; }
 .data-grid { border-collapse: separate; border-spacing: 3px; }
 .data-grid th, .data-grid td { padding: 0; }
 .data-grid .text-input { width: 96px; }
