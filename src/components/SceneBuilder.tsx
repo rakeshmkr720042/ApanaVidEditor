@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MediaSource } from '../types'
 import type { Editor } from '../model/useEditor'
-import { defaultSceneOptions, placeScenes, planOf, sceneLengths, transitionLengths, type BuiltScene, type Scene, type SceneOptions } from '../model/scenes'
+import { defaultSceneOptions, placeScenes, planOf, readingTime, sceneLengths, transitionLengths, type BuiltScene, type Scene, type SceneOptions } from '../model/scenes'
 import { filesToScenes } from '../lib/sceneImport'
-import { CARD_THEMES, drawTextCard, scriptToScenes, themeOf } from '../lib/scriptScenes'
+import { CARD_THEMES, drawTextCard, parseScript, scriptToScenes, themeOf } from '../lib/scriptScenes'
 import { MAP_THEMES, drawMapPreview, drawMindStill, mindToScenes, node, parseOutline, renderMindVideo, tidy, toOutline, type MapSettings, type MindNode } from '../lib/mindmap'
 import { MindTree } from './MindTree'
 import { QuizEditor } from './QuizEditor'
@@ -16,7 +16,7 @@ import {
   DATA_THEMES, dataPlan, dataToScenes, dataToText, defaultDataSettings, docLang, drawDataPreview, drawDataStill, parseData, renderDataVideo, row as dataRow,
   table as dataTable, tidyDoc, type ChartKind, type DataDoc, type DataSettings,
 } from '../lib/datachart'
-import { CANT_OPEN, articleToScenes, drawArticlePic, linkOf, readArticle, type ArticleLength } from '../lib/article'
+import { CANT_OPEN, articleParts, articleToScenes, drawArticlePic, linkOf, readArticle, type ArticleLength } from '../lib/article'
 import { clipDuration } from '../model/timeline'
 import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
@@ -25,13 +25,15 @@ import { fmtTime } from '../lib/format'
 import { ASR_MODELS, SPOKEN, VOICES, langName, speakLines, transcribeSamples } from '../engine/ai'
 import { WAVE_STYLES, analyse, decodeMono, primeWave } from '../engine/visualizer'
 import { audioToScenes, bitmapOf, drawAudioCard, findGaps, type AudioLook } from '../lib/audioScenes'
-import { picsFromFiles, type Leftover, type Pic } from '../lib/rawMedia'
+import { fillInOrder, picsFromFiles, type Leftover, type Pic } from '../lib/rawMedia'
+import { auxFor, dressScenes, isOwn, livePlan, type AuxKind, type Part } from '../lib/material'
+import { AuxBoxes, CoverageMeter, Step, Thumb } from './Material'
 import { movingClip } from '../lib/moving'
 import type { WaveStyle } from '../types'
 import { encodeWav } from '../engine/music'
 import { Chips, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
-import { articleKeyPoints, keyPoints, localAI, makeQuiz } from '../lib/localai'
+import { articleKeyPoints, chapterPoints, keyPoints, localAI, makeQuiz } from '../lib/localai'
 
 // remembered while the app is open, so the next deck starts with the same choices
 let memo: SceneOptions = defaultSceneOptions()
@@ -40,7 +42,9 @@ let draft = '' // pasted script, kept if the sheet is closed before making scene
 let mapDraft = { tab: 'outline' as 'outline' | 'tree', outline: '', tree: node('', [node('')]), overview: true }
 let mapMemo: MapSettings | null = null
 // the audio being turned into a video, and how
-let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as AudioLook, pics: [] as Pic[], leftover: 'card' as Leftover, cover: null as Blob | null, target: 12, listen: true, lang: 'auto', model: ASR_MODELS[0].id }
+let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as AudioLook, cover: null as Blob | null, target: 12, listen: true, lang: 'auto', model: ASR_MODELS[0].id }
+// extra material beside the main file: pictures for the scenes, and music under the video
+let matDraft = { pics: [] as Pic[], music: null as MediaSource | null, leftover: 'card' as Leftover }
 // the quiz being written, and how it looks
 let quizDraft = { tab: 'text' as 'text' | 'list', text: '', deck: { title: '', items: [item('', ['', '', '', ''])] } as QuizDeck, picked: 0 }
 let quizMemo: QuizSettings = defaultQuizSettings()
@@ -56,12 +60,6 @@ const TRANSITIONS = [
   { value: 'none', label: 'None' }, { value: 'fade', label: 'Fade' }, { value: 'slideleft', label: 'Slide' },
   { value: 'zoomin', label: 'Zoom' }, { value: 'mix', label: 'Mix' },
 ]
-
-function Thumb({ blob, moving }: { blob: Blob; moving?: Scene['media'] }) {
-  const url = useMemo(() => URL.createObjectURL(blob), [blob])
-  useEffect(() => () => URL.revokeObjectURL(url), [url])
-  return <>{<img src={url} alt="" />}{moving && <em className="thumb-badge">{moving.kind === 'gif' ? 'GIF' : `▶ ${fmtTime(moving.length)}`}</em>}</>
-}
 
 /** Accepted as raw material: slides, PDFs, photos, GIFs and video clips. */
 const RAW_ACCEPT = 'image/*,video/*,application/pdf,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx'
@@ -172,6 +170,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const [listening, setListening] = useState(start === 'audio')
   const [ad, setAd] = useState(audioDraft)
   const setAudio = (patch: Partial<typeof audioDraft>) => setAd((v) => (audioDraft = { ...v, ...patch }))
+  const [mat, setMatState] = useState(matDraft)
+  const setMat = (patch: Partial<typeof matDraft>) => setMatState((v) => (matDraft = { ...v, ...patch }))
   const [rec, setRec] = useState<{ mr: MediaRecorder; t0: number; now: number } | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [quizzing, setQuizzing] = useState(start === 'quiz')
@@ -190,6 +190,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const csvInput = useRef<HTMLInputElement>(null)
   const audioInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
+  const textInput = useRef<HTMLInputElement>(null)
+  const textFor = useRef<(text: string) => void>(() => {})
   const coverInput = useRef<HTMLInputElement>(null)
   const swapInput = useRef<HTMLInputElement>(null)
   const swapFor = useRef<string | null>(null)
@@ -275,20 +277,33 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const addScript = async () => {
     setError(null)
     try {
-      const got = await textScenes(script)
+      const made = await dress(await textScenes(script))
+      const got = made.scenes
       setScenes((s) => [...s, ...got])
       setPasting(false)
       setScript(draft = '')
-      // the card already shows the words, so no captions; a voice reads them in the text's language
+      // the card already shows the words, so no captions (except on the user's pictures); a voice reads them in the text's language
       const lang = hasDeva(got.map((s) => s.text).join(' ')) ? 'hi' : 'en'
-      if (!scenes.length) set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: false })
+      if (!scenes.length) set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: made.dressed > 0 })
     } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
+  }
+
+  /** Puts the user's pictures on the card scenes just made, and says how it went. */
+  const dress = async (got: Scene[]) => {
+    if (!matDraft.pics.length) return { scenes: got, dressed: 0 }
+    setBusy({ label: localAI() ? `${t('Matching pictures to scenes…')} (${localAI()?.model})` : t('Matching pictures to scenes…'), p: -1 })
+    const made = await dressScenes(got, matDraft.pics, matDraft.leftover)
+    const cards = got.filter((s) => s.card).length
+    const parts = [`${made.dressed}/${cards} ${t('text scenes show your pictures')}`]
+    if (made.matched) parts.push(`${made.matched} ${t(made.byAI ? 'matched by Local AI to what is said' : 'matched to what is said')}`)
+    setNote(`${parts.join(' · ')}. ${t('Tap a picture to change it.')}`)
+    return made
   }
 
   const setTheme = async (theme: string) => {
     set({ theme })
     if (scenes.some((s) => s.audio)) { await redrawAudio(theme, o.wave); return }
-    const cards = scenes.filter((s) => s.card || s.art)
+    const cards = scenes.filter((s) => (s.card && !s.own) || s.art)
     if (!cards.length) return
     const { w, h } = frame()
     setBusy({ label: t('Making scenes…'), p: 0 })
@@ -387,7 +402,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       const { w, h } = frame()
       const made = await audioToScenes({
         duration: src.duration, gaps, cues, target: ad.target, title: ad.title.trim() || src.name, look: ad.look,
-        pics: ad.pics, leftover: ad.leftover, cover: ad.cover, theme: themeOf(o.theme), wave: o.wave, W: w, H: h,
+        pics: mat.pics, leftover: mat.leftover, cover: ad.cover, theme: themeOf(o.theme), wave: o.wave, W: w, H: h, points: localAI() ? chapterPoints : undefined,
         progress: (p) => setBusy({ label: ad.look === 'photos' && localAI() ? `${t('Matching pictures to chapters…')} (${localAI()?.model})` : t('Making scenes…'), p }),
       })
       const got = made.scenes
@@ -399,9 +414,9 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       const look = shown ? 'photos' : got[0]?.audio?.look ?? 'card'
       const [waveColor, waveColor2] = waveColors(look, o.theme)
       // slides are kept whole; photos fill the frame
-      const fill = shown > 0 && !ad.pics.some((p) => p.slide)
+      const fill = shown > 0 && !mat.pics.some((p) => p.slide)
       set({ voice: 'track', captions: cues.length > 0, transition: 'fade', transitionDuration: 0.5, kenBurns: look !== 'card', fill, waveColor, waveColor2 })
-      if (ad.look === 'photos' && ad.pics.length) {
+      if (ad.look === 'photos' && mat.pics.length) {
         const parts = [`${shown}/${got.length} ${t('chapters show your pictures')}`]
         if (made.matched) parts.push(`${made.matched} ${t(made.byAI ? 'matched by Local AI to what is said' : 'matched to what is said')}`)
         if (got.length - shown) parts.push(`${got.length - shown} ${t('got a title card')}`)
@@ -411,22 +426,41 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     } catch (e) { setError((e as Error).message) } finally { setBusy(null) }
   }
 
-  /** Adds slides, photos, GIFs or clips to the pictures audio chapters can use. */
+  /** Adds slides, photos, GIFs or clips to the pictures the scenes can use. */
   const addPics = async (files: File[]) => {
     if (!files.length) return []
     setError(null)
     setBusy({ label: t('Reading files…'), p: 0 })
     try {
       const got = await picsFromFiles(files, (label, p) => setBusy({ label, p }))
-      setAudio({ pics: [...audioDraft.pics, ...got], look: 'photos' })
+      setMat({ pics: [...matDraft.pics, ...got] })
+      if (audioDraft.look === 'card') setAudio({ look: 'photos' })
       return got
     } catch (e) { setError(t((e as Error).message)); return [] } finally { setBusy(null) }
+  }
+
+  /** A file dropped in one of the extra material boxes. */
+  const addMaterial = async (kind: AuxKind, files: File[]) => {
+    if (kind !== 'music') { await addPics(files); return }
+    setError(null)
+    try {
+      const src = await loadSource(files[0], files[0].name)
+      if (src.kind !== 'audio' && src.kind !== 'video') throw new Error(t('Pick an audio file'))
+      setMat({ music: src })
+    } catch (e) { setError((e as Error).message) }
   }
 
   /** Shows one of the pictures on a chapter instead, or a title card when `pic` is null. */
   const choosePicture = async (id: string, pic: Pic | null) => {
     setSwapping(null)
     const s = scenes.find((x) => x.id === id)
+    if (s?.card && !s.audio) {
+      // a text scene: the picture instead of its card, or the card again
+      if (pic) { update(id, { image: pic.image, media: pic.media, own: pic.id }); if (!o.captions) set({ captions: true }); return }
+      const { w, h } = frame()
+      update(id, { image: await drawTextCard(s.card, themeOf(o.theme), w, h), media: undefined, own: undefined })
+      return
+    }
     if (!s?.audio) return
     if (pic) { update(id, { image: pic.image, media: pic.media, audio: { ...s.audio, look: 'photos', pic: pic.id } }); return }
     const { w, h } = frame()
@@ -525,14 +559,15 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     let missed = 0
     try {
       const { w, h } = frame()
-      const got = await articleToScenes(art.text, { length: art.length, pictures: art.pictures }, themeOf(o.theme), w, h,
-        (p) => setBusy({ label: t('Making scenes…'), p }), (ok) => { if (!ok) missed++ })
+      const made = await dress(await articleToScenes(art.text, { length: art.length, pictures: art.pictures }, themeOf(o.theme), w, h,
+        (p) => setBusy({ label: t('Making scenes…'), p }), (ok) => { if (!ok) missed++ }))
+      const got = made.scenes
       setScenes((s) => [...s, ...got])
       setReading(false)
-      if (missed) setNote(`${missed} ${t('pictures could not be downloaded and were left out.')}`)
+      if (missed) setNote((n) => `${n ? `${n} ` : ''}${missed} ${t('pictures could not be downloaded and were left out.')}`)
       // the cards show the words, so no captions; a voice reads them in the article's language
       const lang = hasDeva(got.map((s) => s.text).join(' ')) ? 'hi' : 'en'
-      if (!scenes.length) set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice === 'track' ? 'none' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: false, transition: 'fade', transitionDuration: 0.5, kenBurns: false, fill: false })
+      if (!scenes.length) set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice === 'track' ? 'none' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: made.dressed > 0, transition: 'fade', transitionDuration: 0.5, kenBurns: false, fill: false })
     } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
   }
 
@@ -725,6 +760,79 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     return sceneLengths(fake, o, o.voice === 'track' ? track : null).reduce((a, b) => a + b, 0)
   }, [scenes, o, track, speaking])
 
+  // ---- how much of the video the user's own material fills, counted per scene
+
+  const meter = useMemo((): { box: 'script' | 'article' | 'audio' | 'made'; parts: Part[]; estimate: boolean; known: boolean; rest: string } | null => {
+    const repeat = mat.leftover === 'repeat' && mat.pics.length > 0
+    const cards = t(repeat ? 'your pictures repeat on them.' : 'the editor makes text cards with their words.')
+    const secs = (text: string, s?: Scene) => (speaking && text.trim() ? text.length / 14 + 0.9 : Math.max(o.seconds, s ? readingTime(s) : 0))
+    const short = (x: string) => (x.length > 40 ? x.slice(0, 40).replace(/\s+\S*$/, '') + '…' : x)
+    if (pasting && script.trim()) {
+      const ps = parseScript(script)
+      const plan = livePlan(ps.map((x) => x.script), mat.pics)
+      const parts = ps.map((x, i) => ({ name: short(x.card.title || x.card.lines[0] || ''), seconds: secs(x.script, { card: x.card } as Scene), covered: plan[i] != null }))
+      return { box: 'script', parts, estimate: true, known: true, rest: cards }
+    }
+    if (reading && art.text.trim() && !(linkOf(art.text) && !art.text.includes('\n'))) {
+      const ps = articleParts(art.text, art)
+      // the user's pictures go on text cards; the article's own pictures count as given material
+      const free = ps.map((x, i) => (x.kind === 'card' ? i : -1)).filter((i) => i >= 0)
+      const plan = livePlan(free.map((i) => ps[i].text), mat.pics)
+      const parts = ps.map((x, i) => ({ name: x.name, seconds: secs(x.text), covered: x.kind === 'picture' || plan[free.indexOf(i)] != null }))
+      return { box: 'article', parts, estimate: true, known: true, rest: cards }
+    }
+    if (listening && ad.src && ad.look !== 'cover') {
+      // chapters are only known after listening; until then, about one every few seconds, pictures spread over them
+      const n = Math.max(1, Math.round(ad.src.duration / ad.target))
+      const plan = fillInOrder(Array(n).fill(null), ad.look === 'photos' ? Math.min(mat.pics.length, n) : 0, 'card')
+      const parts = plan.map((x, i) => ({ name: `${t('Chapter')} ${i + 1}`, seconds: ad.src!.duration / n, covered: x != null }))
+      const rest = repeat ? cards : t(localAI() ? 'the editor makes title cards and Local AI writes their key points.' : 'the editor makes title cards with what is said.')
+      return { box: 'audio', parts, estimate: true, known: false, rest }
+    }
+    const made = scenes.filter((s) => !s.mind && !s.quiz && !s.data)
+    if (!made.some((s) => s.card || s.art || (s.audio && s.audio.look !== 'cover'))) return null
+    const parts = made.map((s) => ({ name: s.name, seconds: s.duration ?? secs(s.text, s), covered: isOwn(s) }))
+    const rest = made.some((s) => s.audio) ? t(localAI() ? 'title cards with key points by Local AI.' : 'title cards with what is said.') : t('text cards with their words.')
+    return { box: 'made', parts, estimate: false, known: true, rest: `${t('the editor made')} ${rest}` }
+  }, [pasting, script, reading, art, listening, ad.src, ad.look, ad.target, mat, scenes, speaking, o.seconds]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const meterFor = (box: 'script' | 'article' | 'audio' | 'made') => meter?.box === box && <CoverageMeter {...meter} />
+
+  /** The boxes for extra material, shared by every mode that can show the user's pictures. */
+  const material = (box: 'script' | 'article' | 'audio', mode: 'text' | 'article' | 'audio') => (
+    <>
+      <Step n={2} title="Extra material" hint="optional: what you don't give, the editor makes" />
+      <AuxBoxes kinds={auxFor(mode)} pics={mat.pics} music={mat.music} busy={!!busy}
+        onAdd={(kind, files) => void addMaterial(kind, files)} onRemove={(id) => setMat({ pics: mat.pics.filter((x) => x.id !== id) })}
+        onRemoveMusic={() => setMat({ music: null })} onClear={() => setMat({ pics: [] })}>
+        {mat.pics.length > 0 && (
+          <>
+            <span className="field-label">{t('Scenes with no picture')}</span>
+            <Chips options={[{ value: 'card', label: 'Editor makes a card' }, { value: 'repeat', label: 'Repeat my pictures' }]}
+              value={mat.leftover} onChange={(leftover) => setMat({ leftover })} />
+          </>
+        )}
+        {meterFor(box)}
+      </AuxBoxes>
+    </>
+  )
+
+  /** The pictures a scene can show instead: its drawn card, one of the user's pictures, or a file from the device. */
+  const swapPool = (s: Scene) => swapping === s.id && (
+    <div className="pic-pool pick">
+      <button className="pic card-choice" disabled={!!busy} onClick={() => void choosePicture(s.id, null)}>{t(s.audio ? 'Title card' : 'Text card')}</button>
+      {mat.pics.map((p) => (
+        <button className={`pic${(s.audio ? s.audio.pic : s.own) === p.id ? ' on' : ''}`} key={p.id} disabled={!!busy} title={p.words || p.name} onClick={() => void choosePicture(s.id, p)}>
+          <Thumb blob={p.image} moving={p.media} />
+        </button>
+      ))}
+      <button className="pic card-choice" disabled={!!busy} onClick={() => swapInput.current?.click()}>{t('From device…')}</button>
+    </div>
+  )
+
+  /** Opens a text file into a box: the main file of the script, mind map and quiz modes. */
+  const openText = (into: (text: string) => void) => { textFor.current = into; textInput.current?.click() }
+
   const create = async () => {
     setError(null)
     try {
@@ -858,8 +966,10 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
         }
       }
       if (o.voice === 'track' && track) { ed.addSource(track); await saveMedia(track) }
+      const music = mat.music
+      if (music) { ed.addSource(music); await saveMedia(music) }
       const { w, h } = frame()
-      ed.replaceProject(placeScenes(ed.project, built, o, o.voice === 'track' ? track : null, w / h))
+      ed.replaceProject(placeScenes(ed.project, built, o, o.voice === 'track' ? track : null, w / h, music))
       onDone(`${built.length} ${t('scenes added to the timeline. Everything can be edited there.')}`)
     } catch (e) {
       setError((e as Error).message)
@@ -897,10 +1007,13 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
 
         {pasting && (
           <div className="script-box">
+            <Step n={1} title="Script" hint="paste it, or open a text file" />
+            <div className="row"><button className="btn small" disabled={!!busy} onClick={() => openText((text) => setScript(draft = text))}>{t('Open file')} (.txt, .md)</button></div>
             <textarea className="text-input" rows={9} value={script} placeholder={SCRIPT_HINT} autoFocus
               onChange={(e) => setScript(draft = e.target.value)} />
             <p className="muted small">{t('Tip: a short line on its own is a heading, lines starting with - are points, a blank line starts a new scene.')}</p>
             {aiTools('script', script)}
+            {material('script', 'text')}
             <button className="btn primary" disabled={!!busy || !script.trim()} onClick={addScript}>{t('Make scenes')}</button>
           </div>
         )}
@@ -912,7 +1025,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
               <>
                 <textarea className="text-input" rows={9} value={md.outline} placeholder={MAP_HINT} autoFocus
                   onChange={(e) => setDraft({ outline: e.target.value })} />
-                <p className="muted small">{t('Tip: the first line is the topic, lines starting with - are branches, indent a line to put it under the one above.')}</p>
+                <p className="muted small">{t('Tip: the first line is the topic, lines starting with - are branches, indent a line to put it under the one above.')}{' '}
+                  <button className="btn small ghost" onClick={() => openText((outline) => setDraft({ outline }))}>{t('Open file')}</button></p>
               </>
             ) : <MindTree map={md.tree} onChange={(tree) => setDraft({ tree })} />}
             {currentMap && <canvas ref={preview} className="mind-preview" />}
@@ -923,47 +1037,28 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
 
         {listening && (
           <div className="script-box audio-box">
+            <Step n={1} title="Audio" hint="a podcast, talk or voice note" />
             <div className="row">
               <button className="btn" disabled={!!busy || !!rec} onClick={() => audioInput.current?.click()}>{t(ad.src ? 'Change audio' : 'Pick audio')}</button>
               <button className={`btn${rec ? ' on rec' : ''}`} disabled={!!busy} onClick={record}>
                 {rec ? `■ ${t('Stop')} ${fmtTime((rec.now - rec.t0) / 1000)}` : `● ${t('Record')}`}
               </button>
             </div>
+            {ad.src && <p className="small">♪ {ad.src.name} · {fmtTime(ad.src.duration)}</p>}
+            {material('audio', 'audio')}
             {ad.src && (
               <>
-                <p className="small">♪ {ad.src.name} · {fmtTime(ad.src.duration)}</p>
+                <Step n={3} title="Settings" />
                 <label className="field-label" htmlFor="audio-title">{t('Title')}</label>
                 <input id="audio-title" className="text-input" value={ad.title} onChange={(e) => setAudio({ title: e.target.value })} />
                 <span className="field-label">{t('Picture')}</span>
                 <Chips options={[{ value: 'card', label: 'Title card' }, { value: 'photos', label: 'My pictures' }, { value: 'cover', label: 'Cover image' }]}
                   value={ad.look} onChange={(look) => {
                     setAudio({ look })
-                    if (look === 'photos' && !ad.pics.length) photoInput.current?.click()
+                    if (look === 'photos' && !mat.pics.length) photoInput.current?.click()
                     if (look === 'cover' && !ad.cover) coverInput.current?.click()
                   }} />
-                {ad.look === 'photos' && (
-                  <>
-                    <p className="muted small">{t('Give slides (PDF, PowerPoint), photos, GIFs or video clips. Each chapter gets the one that matches what is said, otherwise the next in order.')}</p>
-                    {ad.pics.length > 0 && (
-                      <div className="pic-pool">
-                        {ad.pics.map((p) => (
-                          <div className="pic" key={p.id} title={p.words || p.name}>
-                            <Thumb blob={p.image} moving={p.media} />
-                            <button className="pic-x" disabled={!!busy} aria-label={t('Remove')} onClick={() => setAudio({ pics: ad.pics.filter((x) => x.id !== p.id) })}>✕</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="row">
-                      <button className="btn small" disabled={!!busy} onClick={() => photoInput.current?.click()}>{t(ad.pics.length ? 'Add more' : 'Pick pictures')}</button>
-                      {ad.pics.length > 0 && <span className="small muted">{ad.pics.length} {t('pictures')}</span>}
-                      {ad.pics.length > 0 && <button className="btn small ghost" disabled={!!busy} onClick={() => setAudio({ pics: [] })}>{t('Clear')}</button>}
-                    </div>
-                    <span className="field-label">{t('Chapters with no picture')}</span>
-                    <Chips options={[{ value: 'card', label: 'Make a title card' }, { value: 'repeat', label: 'Repeat my pictures' }]}
-                      value={ad.leftover} onChange={(leftover) => setAudio({ leftover })} />
-                  </>
-                )}
+                {ad.look === 'photos' && !mat.pics.length && <p className="muted small">{t('Add slides, photos, GIFs or clips below. Each chapter gets the one that matches what is said, otherwise the next in order.')}</p>}
                 {ad.look === 'cover' && (
                   <p className="muted small">{t(ad.cover ? 'The cover sits on a blurred copy of itself.' : 'Pick a cover image.')}{' '}
                     <button className="btn small ghost" onClick={() => coverInput.current?.click()}>{t(ad.cover ? 'Change' : 'Pick')}</button></p>
@@ -983,9 +1078,9 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                   </div>
                 )}
                 {ad.listen && <p className="muted small">{t('Speech is turned into text on your device; the model downloads once.')}</p>}
-                <button className="btn primary" disabled={!!busy || !!rec} onClick={addAudio}>{t('Make scenes')}</button>
               </>
             )}
+            {ad.src && <button className="btn primary" disabled={!!busy || !!rec} onClick={addAudio}>{t('Make scenes')}</button>}
           </div>
         )}
 
@@ -996,7 +1091,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
               <>
                 <textarea className="text-input" rows={10} value={qd.text} placeholder={QUIZ_HINT} autoFocus
                   onChange={(e) => writeQuiz(e.target.value)} />
-                <p className="muted small">{t('Tip: start each question with Q:, put options on lines like A) B) C) and mark the right one with *, or add a line "Answer: B". For flashcards write Q: and A: lines, or front | back on one line.')}</p>
+                <p className="muted small">{t('Tip: start each question with Q:, put options on lines like A) B) C) and mark the right one with *, or add a line "Answer: B". For flashcards write Q: and A: lines, or front | back on one line.')}{' '}
+                  <button className="btn small ghost" onClick={() => openText(writeQuiz)}>{t('Open file')}</button></p>
                 {ai && <p className="muted small">{t('Or paste notes or a chapter and let Local AI write the questions.')}</p>}
                 {aiTools('quiz', qd.text)}
               </>
@@ -1052,6 +1148,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
 
         {reading && (
           <div className="script-box article-box">
+            <Step n={1} title="Article" hint="a link, or the text pasted" />
             <form className="row" noValidate onSubmit={(e) => { e.preventDefault(); void getArticle() }}>
               <input className="text-input grow" type="url" inputMode="url" value={art.url} placeholder="https://…" aria-label={t('Article link')} autoFocus
                 onChange={(e) => setArticle({ url: e.target.value })} />
@@ -1064,6 +1161,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
             {aiTools('article', art.text)}
             <Chips options={[{ value: 'short', label: 'Key points' }, { value: 'full', label: 'Full article' }]} value={art.length} onChange={(length) => setArticle({ length })} />
             <Toggle label="Pictures from the article" value={art.pictures} onChange={(pictures) => setArticle({ pictures })} />
+            {material('article', 'article')}
             <button className="btn primary" disabled={!!busy || !art.text.trim()} onClick={addArticle}>{t('Make scenes')}</button>
           </div>
         )}
@@ -1096,6 +1194,16 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           </>
         )}
 
+        {!pasting && !listening && !reading && (mapping || quizzing || charting || start === 'files' || scenes.length > 0) && !scenes.some((s) => s.audio) && (
+          <>
+            <span className="field-label">{t('Background music (optional)')}</span>
+            <AuxBoxes kinds={['music']} pics={[]} music={mat.music} busy={!!busy} onAdd={(kind, files) => void addMaterial(kind, files)}
+              onRemove={() => {}} onRemoveMusic={() => setMat({ music: null })} onClear={() => {}} />
+          </>
+        )}
+
+        {meterFor('made')}
+
         {scenes.length > 0 && (
           <div className="scene-list">
             {scenes.map((s, i) => (
@@ -1103,7 +1211,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                 <div className="scene-thumb">
                   <Thumb blob={s.image} moving={s.media} />
                   <span>{i + 1}</span>
-                  {s.audio && <button className="scene-swap" disabled={!!busy} onClick={() => { swapFor.current = s.id; if (ad.pics.length) setSwapping(swapping === s.id ? null : s.id); else swapInput.current?.click() }}>{t('Change picture')}</button>}
+                  {(s.audio || s.card) && <button className="scene-swap" disabled={!!busy} onClick={() => { swapFor.current = s.id; if (mat.pics.length) setSwapping(swapping === s.id ? null : s.id); else swapInput.current?.click() }}>{t(s.card && !s.own ? 'Use my picture' : 'Change picture')}</button>}
                 </div>
                 <div className="scene-main">
                   <textarea className="text-input" rows={3} value={s.text} placeholder={t(speaking ? 'What the voice says on this scene' : 'Caption (optional)')}
@@ -1115,17 +1223,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                   {s.quiz || s.data ? null : s.audio ? (
                     <div className="scene-tools">
                       <span className="small muted">{fmtTime(s.audio.start)} – {fmtTime(s.audio.end)}</span>
-                      {swapping === s.id && (
-                        <div className="pic-pool pick">
-                          <button className="pic card-choice" disabled={!!busy} onClick={() => void choosePicture(s.id, null)}>{t('Title card')}</button>
-                          {ad.pics.map((p) => (
-                            <button className={`pic${s.audio!.pic === p.id ? ' on' : ''}`} key={p.id} disabled={!!busy} title={p.words || p.name} onClick={() => void choosePicture(s.id, p)}>
-                              <Thumb blob={p.image} moving={p.media} />
-                            </button>
-                          ))}
-                          <button className="pic card-choice" disabled={!!busy} onClick={() => swapInput.current?.click()}>{t('From device…')}</button>
-                        </div>
-                      )}
+                      {swapPool(s)}
                     </div>
                   ) : (
                   <div className="scene-tools">
@@ -1138,6 +1236,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                     <button className="btn small ghost" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">↑</button>
                     <button className="btn small ghost" disabled={i === scenes.length - 1} onClick={() => move(i, 1)} aria-label="Move down">↓</button>
                     <button className="btn small ghost" onClick={() => setScenes((l) => l.filter((x) => x.id !== s.id))} aria-label="Remove">✕</button>
+                    {swapPool(s)}
                   </div>
                   )}
                 </div>
@@ -1212,6 +1311,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           onChange={(e) => { const f = e.target.files?.[0]; if (f) setAudio({ cover: f, look: 'cover' }); e.target.value = '' }} />
         <input ref={csvInput} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((text) => setDataDraft({ tab: 'text', text })); e.target.value = '' }} />
+        <input ref={textInput} type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" hidden
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((text) => textFor.current(text)); e.target.value = '' }} />
         <input ref={swapInput} type="file" accept={RAW_ACCEPT} hidden onChange={(e) => { if (e.target.files) void swapPicture([...e.target.files]); e.target.value = '' }} />
       </div>
     </div>

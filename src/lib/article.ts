@@ -512,12 +512,11 @@ export async function drawArticlePic(pic: ArticlePic, theme: CardTheme, W: numbe
   return blobOf(c)
 }
 
-/** Article Markdown → scenes: the cover, text cards for each section, and its pictures in place. */
-export async function articleToScenes(raw: string, o: { length: ArticleLength; pictures: boolean }, theme: CardTheme, W: number, H: number,
-  progress: (p: number) => void, onPicture: (ok: boolean) => void = () => {}): Promise<Scene[]> {
+type Job = { pic?: ArticlePic & { src: string | null }; card?: ReturnType<typeof parseScript>[number] }
+
+/** The scenes an article will make, in order, before anything is drawn or downloaded. */
+function articleJobs(raw: string, o: { length: ArticleLength; pictures: boolean }): Job[] {
   const plan = planArticle(raw, o.length)
-  const scenes: Scene[] = []
-  type Job = { pic?: ArticlePic & { src: string | null }; card?: ReturnType<typeof parseScript>[number] }
   const jobs: Job[] = []
   if (plan.title) jobs.push({ pic: { kind: 'cover', title: plan.title, sub: plan.sub, image: null, src: o.pictures ? plan.cover : null } })
   for (const sec of plan.sections) {
@@ -538,6 +537,21 @@ export async function articleToScenes(raw: string, o: { length: ArticleLength; p
       if (o.pictures) for (const im of p.images) jobs.push({ pic: { kind: 'image', title: im.caption, sub: '', image: null, src: im.src } })
     })
   }
+  return jobs
+}
+
+/** What each scene of an article will be, for the coverage meter: a text card (which can show the user's picture), a picture from the article, or the cover. */
+export function articleParts(raw: string, o: { length: ArticleLength; pictures: boolean }): { name: string; text: string; kind: 'card' | 'picture' | 'cover' }[] {
+  return articleJobs(raw, o).map((j) => (j.card
+    ? { name: nameOf(j.card.card.title || j.card.card.lines[0] || ''), text: j.card.script, kind: 'card' }
+    : { name: nameOf(j.pic!.title) || 'Picture', text: j.pic!.title, kind: j.pic!.kind === 'image' ? 'picture' : 'cover' }))
+}
+
+/** Article Markdown → scenes: the cover, text cards for each section, and its pictures in place. */
+export async function articleToScenes(raw: string, o: { length: ArticleLength; pictures: boolean }, theme: CardTheme, W: number, H: number,
+  progress: (p: number) => void, onPicture: (ok: boolean) => void = () => {}): Promise<Scene[]> {
+  const jobs = articleJobs(raw, o)
+  const scenes: Scene[] = []
   if (!jobs.some((j) => j.card || j.pic?.kind === 'cover')) throw new Error('No article text found')
 
   for (let i = 0; i < jobs.length; i++) {

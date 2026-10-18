@@ -453,3 +453,29 @@ input, textarea { font: inherit; color: inherit; }
 .ai-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .progress.waiting div { width: 30%; animation: progress-wait 1.2s ease-in-out infinite alternate; }
 @keyframes progress-wait { from { margin-left: 0; } to { margin-left: 70%; } }
+
+/* scene builder: main file, extra material boxes, coverage meter */
+.mat-step { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; font-size: 14px; font-weight: 600; flex-wrap: wrap; }
+.mat-step b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; flex: none; }
+.mat-step em { font-style: normal; font-weight: 400; font-size: 12px; }
+.aux { display: grid; gap: 8px; }
+.aux-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.aux-box { position: relative; display: grid; justify-items: center; gap: 2px; padding: 10px 4px 8px; border-radius: 10px; border: 1px dashed var(--line); background: var(--panel-2); font-size: 12px; }
+.aux-box.has { border-style: solid; border-color: #2fbf71; }
+.aux-icon { font-size: 20px; line-height: 1; }
+.aux-label { text-align: center; line-height: 1.2; }
+.aux-box em { position: absolute; top: 4px; right: 6px; font-style: normal; font-size: 11px; color: var(--muted); }
+.aux-box.has em { color: #2fbf71; font-weight: 700; }
+.meter { display: grid; gap: 6px; padding: 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); margin-top: 4px; }
+.meter.full { border-color: #2fbf71; }
+.meter-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.meter-pct { font-size: 20px; font-weight: 700; color: #ffcc33; }
+.meter.full .meter-pct { color: #2fbf71; }
+.meter-bar { display: flex; gap: 2px; height: 10px; }
+.meter-bar i { flex: 1; min-width: 2px; border-radius: 2px; background: var(--panel-3); }
+.meter-bar i.on { background: #2fbf71; }
+.meter-bar i.long { background: #6b4a1a; }
+.meter-empty { display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; }
+.meter-empty span { padding: 2px 6px; border-radius: 6px; background: var(--panel-3); }
+.meter-empty span.long { background: #4a3413; color: #ffd27a; }
+.meter p { margin: 0; }

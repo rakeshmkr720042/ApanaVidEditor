@@ -28,6 +28,7 @@ export interface Scene {
   data?: DataScene // a step of a chart made from a table: becomes an animated clip timed to its voice
   art?: ArticlePic // an article's cover or one of its pictures: kept so it can be redrawn in another style
   media?: MovingMedia // a GIF or video clip: `image` is its first frame; it becomes a moving clip when placed
+  own?: string // a card scene showing one of the user's own pictures instead (its id); `card` stays so it can be drawn again
 }
 
 /** A GIF or a video clip the user gave. It is shown moving (looped to fit its scene), without its own sound under a voice. */
@@ -141,7 +142,7 @@ export function transitionLengths(lens: number[], o: SceneOptions): number[] {
  * Appends scenes to the end of the timeline: one photo clip per scene, plus its voice and
  * captions placed under it. Returns the new project (the caller commits it as one undo step).
  */
-export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, track: MediaSource | null, ratio = 16 / 9): Project {
+export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, track: MediaSource | null, ratio = 16 / 9, music: MediaSource | null = null): Project {
   if (!built.length) return p
   const lens = sceneLengths(built, o, track)
   const first = p.clips.length
@@ -173,6 +174,8 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
   const narrow = ratio < 1 // tall frames need smaller captions with shorter lines
   const lineLen = narrow ? 26 : 42
   const devanagari = (s: string) => /[ऀ-ॿ]/.test(s)
+  // with the user's pictures among text cards, the pictures get captions and the cards (which show their words) don't
+  const mixed = built.some((b) => b.scene.own)
   built.forEach((b, i) => {
     const it = items[first + i]
     const start = it.start + it.transIn
@@ -203,7 +206,7 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
         volume: 0.5, fadeIn: 0, fadeOut: 0, label: b.sfx.name.replace(/\.[^.]+$/, ''), kind: 'sound',
       })
     }
-    if (o.captions && b.scene.text.trim()) {
+    if (o.captions && b.scene.text.trim() && !(mixed && b.scene.card && !b.scene.own)) {
       const style = look ? { ...look.style } : subtitleStyle()
       if (!look && narrow) style.size = 0.03
       if (devanagari(b.scene.text)) style.font = 'Noto Sans Devanagari'
@@ -254,6 +257,18 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
     if (wave) {
       const w: WaveLayer = { ...newWave(track.id, wave), start: trackStart, end, color: o.waveColor, color2: o.waveColor2 }
       layers.push(w)
+    }
+  }
+  if (music) {
+    // background music under the new scenes, quiet under a voice, played again when it is shorter
+    const from = items[first].start
+    const voiced = (o.voice !== 'none' && built.some((b) => b.voice)) || !!withTrack
+    for (let at = from, k = 0; at < total - 0.5 && music.duration > 0.5; at += music.duration, k++) {
+      const end = Math.min(total, at + music.duration)
+      layers.push({
+        id: uid(), type: 'audio', sourceId: music.id, in: 0, start: at, end, volume: voiced ? 0.15 : 0.6,
+        fadeIn: k === 0 ? 1 : 0, fadeOut: end >= total - 0.01 ? Math.min(2, (end - at) / 3) : 0, label: music.name.replace(/\.[^.]+$/, ''), kind: 'music',
+      })
     }
   }
   return { ...p, clips, layers }
