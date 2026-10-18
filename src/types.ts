@@ -78,6 +78,12 @@ interface LayerBase {
   track?: string // id of the Track row it sits on (given to every layer by withTracks)
 }
 
+/** A saved pose of a layer at a moment, counted from the layer's start. Between keyframes the layer glides. */
+export interface BoxKey { t: number; box: Box }
+
+/** Layers with a box can move, grow, turn and fade over time with keyframes. */
+interface Keyed { keys?: BoxKey[] }
+
 export type TextAnim = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'pop' | 'typewriter' | 'zoom' | 'bounce'
 
 export interface TextStyle {
@@ -108,7 +114,7 @@ export interface CaptionFrame {
   valign: 'top' | 'middle' | 'bottom'
 }
 
-export interface TextLayer extends LayerBase {
+export interface TextLayer extends LayerBase, Keyed {
   type: 'text'
   text: string
   subtitle: boolean
@@ -119,7 +125,7 @@ export interface TextLayer extends LayerBase {
   frame?: CaptionFrame | null // when set, box position/scale/rotation are ignored
 }
 
-export interface StickerLayer extends LayerBase {
+export interface StickerLayer extends LayerBase, Keyed {
   type: 'sticker'
   emoji: string
   box: Box
@@ -127,7 +133,10 @@ export interface StickerLayer extends LayerBase {
   animOut: TextAnim
 }
 
-export interface MediaLayer extends LayerBase {
+/** How an overlay mixes with what is under it (canvas composite operations). */
+export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'add' | 'difference' | 'color-dodge' | 'soft-light'
+
+export interface MediaLayer extends LayerBase, Keyed {
   type: 'media' // picture-in-picture video or image overlay
   sourceId: string
   in: number
@@ -141,6 +150,11 @@ export interface MediaLayer extends LayerBase {
   filterAmount: number
   crop?: Crop | null // part of the source to show (screen recordings of a custom area)
   speed?: number // playback speed, missing = 1
+  flipH?: boolean
+  flipV?: boolean
+  blend?: BlendMode // missing = normal
+  animIn?: TextAnim // missing = none
+  animOut?: TextAnim
 }
 
 export interface BlurLayer extends LayerBase {
@@ -166,7 +180,7 @@ export interface AudioLayer extends LayerBase {
 export type WaveStyle = 'bars' | 'line' | 'circle'
 
 /** An animated picture of a sound (audio bars, a spectrum line, or a ring), moving with that sound. */
-export interface WaveLayer extends LayerBase {
+export interface WaveLayer extends LayerBase, Keyed {
   type: 'wave'
   sourceId: string // the audio or video whose sound it follows
   in: number // source time at the layer's start

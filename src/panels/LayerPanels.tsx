@@ -110,11 +110,11 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
   )
 }
 
-function AnimPicker({ inA, outA, onChange }: { inA: TextAnim; outA: TextAnim; onChange: (p: { animIn?: TextAnim; animOut?: TextAnim }) => void }) {
+export function AnimPicker({ inA, outA, onChange, noType }: { inA: TextAnim; outA: TextAnim; onChange: (p: { animIn?: TextAnim; animOut?: TextAnim }) => void; noType?: boolean }) {
   return (
     <>
       <span className="field-label">{t('In')}</span>
-      <Chips options={animOptions} value={inA} onChange={(animIn) => onChange({ animIn })} wrap />
+      <Chips options={noType ? animOptions.filter((a) => a.value !== 'typewriter') : animOptions} value={inA} onChange={(animIn) => onChange({ animIn })} wrap />
       <span className="field-label">{t('Out')}</span>
       <Chips options={animOptions.filter((a) => a.value !== 'typewriter')} value={outA} onChange={(animOut) => onChange({ animOut })} wrap />
     </>
@@ -173,6 +173,10 @@ export function OverlayPanel({ ed, layer, onClose, chroma }: P & { layer: MediaL
       {isVideo && <Slider label="Volume" min={0} max={2} value={layer.volume} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ volume: v })} />}
       <span className="field-label">{t('Shape')}</span>
       <Chips options={[{ value: 'none', label: 'Rectangle' }, { value: 'rounded', label: 'Rounded' }, { value: 'circle', label: 'Circle' }]} value={layer.mask} onChange={(mask) => set({ mask })} />
+      <div className="row">
+        <button className={`btn small${layer.flipH ? ' primary' : ''}`} onClick={() => set({ flipH: !layer.flipH })}>⇋ {t('Flip')}</button>
+        <button className={`btn small${layer.flipV ? ' primary' : ''}`} onClick={() => set({ flipV: !layer.flipV })}>⇵ {t('Flip up-down')}</button>
+      </div>
       <Slider label="Border" min={0} max={3} value={layer.border} format={(v) => v.toFixed(1)} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ border: v })} />
       <div className="row">
         <button className="btn small" onClick={() => set({ box: { ...layer.box, x: 0.5, y: 0.5, scale: 2, rotation: 0 } })}>{t('Full screen')}</button>

@@ -1,9 +1,10 @@
-import type { BlurLayer, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
+import type { BlendMode, BlurLayer, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
 import { activeAt, type LaidClip } from '../model/timeline'
+import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
-import { drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
+import { animState, drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
 import { drawWave, waveData, waveReady, waveSize } from './visualizer'
 import { drawUserWatermark, watermarkCenter, watermarkSize, watermarkVisible } from './watermark'
 
@@ -22,6 +23,12 @@ export interface RenderInput {
 
 type Canvas = HTMLCanvasElement | OffscreenCanvas
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+
+/** Blend modes as canvas composite operations. */
+export const BLEND_OPS: Record<BlendMode, GlobalCompositeOperation> = {
+  normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay', darken: 'darken', lighten: 'lighten',
+  add: 'lighter', difference: 'difference', 'color-dodge': 'color-dodge', 'soft-light': 'soft-light',
+}
 
 export const clipKey = (c: { id: string }) => `c:${c.id}`
 export const layerKey = (l: { id: string }) => `l:${l.id}`
@@ -119,8 +126,9 @@ export class Renderer {
       }
     }
 
-    for (const l of inp.project.layers) {
-      if (l.type === 'audio' || inp.t < l.start || inp.t >= l.end) continue
+    for (const l0 of inp.project.layers) {
+      if (l0.type === 'audio' || inp.t < l0.start || inp.t >= l0.end) continue
+      const l = atTime(l0, inp.t)
       if (l.type === 'text') {
         if (!fontLoaded(l.style.font)) ensureFont(l.style.font).then(() => this.onNeedsRedraw?.())
         drawText(ctx, l, inp.t, W, H)
@@ -304,17 +312,27 @@ export class Renderer {
         sx = 0; sy = 0; sw = gw; sh = gh
       }
     }
+    const a = animState({ start: l.start, end: l.end, animIn: l.animIn ?? 'none', animOut: l.animOut ?? 'none' }, inp.t)
+    if (a.alpha <= 0.001 || a.scale <= 0.001) return
     ctx.save()
-    ctx.globalAlpha = l.box.opacity
-    ctx.translate(l.box.x * W, l.box.y * H)
+    ctx.globalAlpha = l.box.opacity * a.alpha
+    ctx.globalCompositeOperation = BLEND_OPS[l.blend ?? 'normal']
+    ctx.translate(l.box.x * W + a.dx * H, l.box.y * H + a.dy * H)
     ctx.rotate((l.box.rotation * Math.PI) / 180)
+    if (a.scale !== 1) ctx.scale(a.scale, a.scale)
     if (l.mask !== 'none') {
       ctx.beginPath()
       if (l.mask === 'circle') ctx.arc(0, 0, w / 2, 0, Math.PI * 2)
       else ctx.roundRect(-w / 2, -h / 2, w, h, Math.min(w, h) * 0.12)
       ctx.clip()
     }
-    ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh)
+    if (l.flipH || l.flipV) {
+      ctx.save()
+      ctx.scale(l.flipH ? -1 : 1, l.flipV ? -1 : 1)
+      ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh)
+      ctx.restore()
+    } else ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh)
+    ctx.globalCompositeOperation = 'source-over'
     if (l.border > 0) {
       ctx.lineWidth = l.border * Math.min(W, H) * 0.01
       ctx.strokeStyle = '#fff'

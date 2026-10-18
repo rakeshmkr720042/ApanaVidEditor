@@ -9,6 +9,10 @@ import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
 import { outputSize } from '../engine/renderer'
 import { insertAt, newTrack, overlaps, trackKind, withTracks } from './tracks'
+import { atTime, hasBox, keyIndexAt, keyedPatch, splitKeys, withKey } from './keyframes'
+
+/** Where to move a layer among the rows: in front of or behind the layers it overlaps, one step or all the way. */
+export type Arrange = 'front' | 'forward' | 'backward' | 'back'
 
 /** `all` on a subtitle selects every subtitle together (style, animation and delete apply to all of them). */
 export type Selection = { type: 'clip'; id: string } | { type: 'layer'; id: string; all?: boolean } | null
@@ -63,6 +67,9 @@ export function useEditor(initial: Project) {
   const [track, setTrack] = useState<string | null>(null)
 
   const layout = useMemo(() => layoutClips(project.clips), [project.clips])
+  /** The playhead, kept up to date by the editor: box changes on keyframed layers become keyframes here. */
+  const now = useRef(0)
+  const setNow = useCallback((t: number) => { now.current = t }, [])
 
   // `live` edits (slider drags) are grouped into one undo step between begin() and end()
   const liveMode = useRef(false)
@@ -87,13 +94,13 @@ export function useEditor(initial: Project) {
 
   const updateLayer = useCallback(<L extends Layer>(id: string, patch: Partial<L> | ((l: L) => Partial<L>)) => {
     const p = ref.current
-    commit({ ...p, layers: p.layers.map((l) => (l.id === id ? ({ ...l, ...(typeof patch === 'function' ? patch(l as L) : patch) } as Layer) : l)) })
+    commit({ ...p, layers: p.layers.map((l) => (l.id === id ? ({ ...l, ...keyedPatch(l, typeof patch === 'function' ? patch(l as L) : patch, now.current) } as Layer) : l)) })
   }, [commit])
 
   /** Patches every layer that matches, as one edit (e.g. the frame of all subtitles). */
   const updateLayers = useCallback((match: (l: Layer) => boolean, patch: (l: Layer) => Partial<Layer>) => {
     const p = ref.current
-    commit({ ...p, layers: p.layers.map((l) => (match(l) ? ({ ...l, ...patch(l) } as Layer) : l)) })
+    commit({ ...p, layers: p.layers.map((l) => (match(l) ? ({ ...l, ...keyedPatch(l, patch(l), now.current) } as Layer) : l)) })
   }, [commit])
 
   const setSettings = useCallback((patch: Partial<ProjectSettings>) => {
@@ -263,6 +270,70 @@ export function useEditor(initial: Project) {
     if (patch.locked) setSel((s) => (s?.type === 'clip' ? null : s))
   }, [h])
 
+  /** Drags a row to another place among rows of its kind (visual rows stay above audio rows). */
+  const reorderTrack = useCallback((id: string, to: number) => {
+    const p = ref.current
+    const tracks = [...(p.tracks ?? [])]
+    const from = tracks.findIndex((t) => t.id === id)
+    if (from < 0) return
+    const [tr] = tracks.splice(from, 1)
+    const same = tracks.map((t, i) => (t.kind === tr.kind ? i : -1)).filter((i) => i >= 0)
+    const lo = same.length ? same[0] : tr.kind === 'audio' ? tracks.length : 0
+    const hi = same.length ? same[same.length - 1] + 1 : lo
+    const at = Math.max(lo, Math.min(hi, to))
+    if (at === from) return
+    tracks.splice(at, 0, tr)
+    h.set({ ...p, tracks })
+  }, [h])
+
+  /**
+   * Puts a layer in front of (or behind) the layers it overlaps in time, on a row of its own just above (below)
+   * the nearest such row, or the furthest one for front / back. Returns false when it already is.
+   */
+  const arrange = useCallback((id: string, how: Arrange): boolean => {
+    const p = ref.current
+    const l = p.layers.find((x) => x.id === id)
+    if (!l || l.type === 'audio') return false
+    const tracks = [...(p.tracks ?? [])]
+    const rows = tracks.filter((t) => t.kind === 'visual')
+    const i = rows.findIndex((t) => t.id === l.track)
+    if (i < 0) return false
+    const busy = (r: number) => p.layers.some((x) => x.id !== id && x.track === rows[r].id && overlaps(x, l))
+    const up = how === 'front' || how === 'forward'
+    const hits = rows.map((_, r) => r).filter((r) => (up ? r < i : r > i) && busy(r))
+    if (!hits.length) return false
+    const near = up ? hits[hits.length - 1] : hits[0]
+    const far = up ? hits[0] : hits[hits.length - 1]
+    const target = how === 'front' || how === 'back' ? far : near
+    const tr = newTrack('visual')
+    tracks.splice(tracks.indexOf(rows[target]) + (up ? 0 : 1), 0, tr)
+    h.set({ ...p, tracks, layers: p.layers.map((x) => (x.id === id ? ({ ...x, track: tr.id } as Layer) : x)) })
+    return true
+  }, [h])
+
+  /** Saves the layer's current pose as a keyframe at time t (the first one also marks where it starts). */
+  const addKey = useCallback((id: string, t: number) => {
+    const p = ref.current
+    const l = p.layers.find((x) => x.id === id)
+    if (!l || !hasBox(l)) return
+    const box = atTime(l, t).box
+    let keys = withKey(l, t, box)
+    // the first keyframe away from the start also pins the start, so the layer moves from there
+    if (!l.keys?.length && t - l.start > 0.1) keys = withKey({ ...l, keys }, l.start, l.box)
+    h.set({ ...p, layers: p.layers.map((x) => (x.id === id ? ({ ...x, keys } as Layer) : x)) })
+  }, [h])
+
+  /** Removes the keyframe at time t, or all of them (the layer keeps the pose it has at t). */
+  const removeKey = useCallback((id: string, t: number, all = false) => {
+    const p = ref.current
+    const l = p.layers.find((x) => x.id === id)
+    if (!l || !hasBox(l) || !l.keys?.length) return
+    const i = keyIndexAt(l, t)
+    const keys = all ? [] : l.keys.filter((_, j) => j !== i)
+    const box = keys.length ? l.box : atTime(l, t).box
+    h.set({ ...p, layers: p.layers.map((x) => (x.id === id ? ({ ...x, box, keys: keys.length ? keys : undefined } as Layer) : x)) })
+  }, [h])
+
   /** After a drag: a layer that now overlaps another on its row moves to a new row just below it. */
   const settleLayer = useCallback((id: string) => {
     let p = ref.current
@@ -378,7 +449,10 @@ export function useEditor(initial: Project) {
       if (!l || t <= l.start + 0.1 || t >= l.end - 0.1) return
       const right = { ...l, id: uid(), start: t } as Layer
       if (right.type === 'media' || right.type === 'audio' || right.type === 'wave') right.in = (l as MediaLayer).in + (t - l.start) * layerSpeed(l)
-      h.set({ ...p, layers: p.layers.flatMap((x) => (x.id === l.id ? [{ ...l, end: t } as Layer, right] : [x])) })
+      const keys = splitKeys(l, t)
+      const left = { ...l, end: t, ...(keys.left ? { keys: keys.left } : {}) } as Layer
+      if (keys.right) (right as { keys?: unknown }).keys = keys.right
+      h.set({ ...p, layers: p.layers.flatMap((x) => (x.id === l.id ? [left, right] : [x])) })
       setSel({ type: 'layer', id: right.id })
       return
     }
@@ -425,7 +499,8 @@ export function useEditor(initial: Project) {
     begin, end, live: h.live,
     addSource, place, replaceMedia, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
-    track, setTrack, addTrack, updateTrack, moveTrack, removeTrack, setMain, settleLayer,
+    track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
+    setNow, addKey, removeKey,
     remove, duplicate, split, moveClip, replaceProject,
   }
 }

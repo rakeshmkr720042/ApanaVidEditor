@@ -4,6 +4,7 @@ import type { Editor } from '../model/useEditor'
 import type { Layer, TextLayer, VisualLayer } from '../types'
 import { defaultFrame } from '../engine/text'
 import { isLocked, playable } from '../model/tracks'
+import { atTime } from '../model/keyframes'
 import { t as tr } from '../lib/i18n'
 
 type Rect = { x: number; y: number; w: number; h: number }
@@ -63,7 +64,9 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   const scale = box.w / W
   const visible = (l: { start: number; end: number }) => t >= l.start && t < l.end
   // in drawing order (top track row last); hidden and locked rows can't be picked
-  const layers = playable(ed.project).layers.filter((l): l is VisualLayer => l.type !== 'audio' && visible(l) && !isLocked(ed.project, l))
+  // keyframed layers are shown (and handled) where they are at the playhead
+  const layers = playable(ed.project).layers
+    .filter((l): l is VisualLayer => l.type !== 'audio' && visible(l) && !isLocked(ed.project, l)).map((l) => atTime(l, t))
   const selected = ed.sel?.type === 'layer' ? layers.find((l) => l.id === ed.sel!.id) : undefined
   const rect = selected && player ? player.renderer.layerRect(selected, ed.sources) : null
   const wmRect = wmEdit && player ? player.renderer.watermarkRect(ed.project, ed.sources, t) : null
@@ -187,8 +190,9 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
       ed.setWatermark({ position: 'custom', motion: 'static', x: (g.cx + p.x - g.x0) / W, y: (g.cy + p.y - g.y0) / H })
       return
     }
-    const l = ed.project.layers.find((x) => x.id === g.id)
-    if (!l || l.type === 'audio') return
+    const l0 = ed.project.layers.find((x) => x.id === g.id)
+    if (!l0 || l0.type === 'audio') return
+    const l = atTime(l0, t)
     const lr = rectOf(l)
     const setRect = (r: Rect) => {
       if (l.type === 'blur') ed.updateLayer(l.id, { rect: r })

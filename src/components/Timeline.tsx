@@ -4,6 +4,7 @@ import { MIN_CLIP } from '../types'
 import type { Editor } from '../model/useEditor'
 import { clipDuration, IMAGE_DURATION, layerSpeed } from '../model/timeline'
 import { trackKind, trackName } from '../model/tracks'
+import { keysOf } from '../model/keyframes'
 import { fmtTime } from '../lib/format'
 import { t as tl } from '../lib/i18n'
 import { Icon } from './Icon'
@@ -60,6 +61,30 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
   const mainLocked = !!project.main?.locked
   const [menu, setMenu] = useState<string | null>(null) // track whose settings sheet is open
   const [addMenu, setAddMenu] = useState(false)
+  // a row header being dragged up or down to change which row is in front
+  const rowDrag = useRef<{ id: string; y0: number; from: number; moved: boolean } | null>(null)
+  const [rowTo, setRowTo] = useState<{ id: string; to: number } | null>(null)
+  const rowDown = (id: string, i: number) => (e: React.PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    rowDrag.current = { id, y0: e.clientY, from: i, moved: false }
+  }
+  const rowMove = (e: React.PointerEvent) => {
+    const d = rowDrag.current
+    if (!d) return
+    const dy = e.clientY - d.y0
+    if (!d.moved && Math.abs(dy) < 6) return
+    d.moved = true
+    const kind = tracks[d.from].kind
+    const same = tracks.map((tr, i) => (tr.kind === kind ? i : -1)).filter((i) => i >= 0)
+    const to = Math.max(same[0], Math.min(same[same.length - 1], d.from + Math.round(dy / LANE)))
+    setRowTo({ id: d.id, to })
+  }
+  const rowUp = () => {
+    const d = rowDrag.current
+    rowDrag.current = null
+    if (d?.moved && rowTo) ed.reorderTrack(d.id, rowTo.to)
+    setRowTo(null)
+  }
 
   /** Magnetic snap: edges of clips, other layers and the playhead pull a dragged edge in when within SNAP_PX. */
   const snapEdges = (skipId: string) => {
@@ -271,12 +296,15 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
             </button>
           </div>
           <div className="tl-head-rows">
-            {tracks.map((tr) => {
+            {tracks.map((tr, i) => {
               const visual = tr.kind === 'visual'
               const off = visual ? tr.hidden : tr.muted
+              const dragging = rowTo?.id === tr.id
               return (
-                <div key={tr.id} className={`tl-head${ed.track === tr.id ? ' on' : ''}${tr.locked ? ' locked' : ''}`} style={{ height: LANE }}>
-                  <button className="tl-head-name" onClick={() => ed.setTrack(ed.track === tr.id ? null : tr.id)} title={tl('New items go to the picked track')}>
+                <div key={tr.id} className={`tl-head${ed.track === tr.id ? ' on' : ''}${tr.locked ? ' locked' : ''}${dragging ? ' dragging' : ''}`}
+                  style={{ height: LANE, ...(dragging ? { transform: `translateY(${(rowTo.to - i) * LANE}px)` } : {}) }}>
+                  <button className="tl-head-name" onPointerDown={rowDown(tr.id, i)} onPointerMove={rowMove} onPointerUp={rowUp} onPointerCancel={rowUp}
+                    onClick={() => { if (!rowTo) ed.setTrack(ed.track === tr.id ? null : tr.id) }} title={tl('Tap: new items go here. Drag up or down: change which row is in front')}>
                     {trackName(tracks, tr, tl)}
                   </button>
                   <button className={off ? 'off' : ''} onClick={() => ed.updateTrack(tr.id, visual ? { hidden: !tr.hidden } : { muted: !tr.muted })}
@@ -401,6 +429,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                 >
                   {src?.thumbs[0] && <img className="tl-wave" src={src.thumbs[0]} alt="" draggable={false} style={{ width: (src.duration * pps) / layerSpeed(l), left: -((l as { in: number }).in * pps) / layerSpeed(l) }} />}
                   <span>{l.type === 'media' && sources[l.sourceId] ? `▣ ${sources[l.sourceId].name}` : layerLabel(l)}{layerSpeed(l) !== 1 && ` · ${layerSpeed(l)}x`}</span>
+                  {keysOf(l).map((k, j) => <i key={j} className="tl-key" style={{ left: k.t * pps }} />)}
                   {selected && (['in', 'out'] as const).map((side) => (
                     <div
                       key={side}
