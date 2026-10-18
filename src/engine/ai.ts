@@ -2,6 +2,7 @@ import type { MediaSource, Project } from '../types'
 import type { Cue } from '../lib/srt'
 import type { AiRequest, AiResponse } from './ai.worker'
 import { mixAudio, stretch } from './audiomix'
+import { localAI, translateLine } from '../lib/localai'
 
 // ---------------------------------------------------------------- languages
 
@@ -156,6 +157,15 @@ export async function translateCues(cues: Cue[], from: string, to: string, onPro
   const unique = [...new Set(cues.map((c) => c.text))]
   const done = new Map<string, string>()
   let next = 0, finished = 0
+  // the user's own model on their computer, when it is set up for translation; it answers one line at a time
+  const local = localAI()?.translate ? localAI() : null
+  if (local) {
+    for (const text of unique) {
+      done.set(text, await translateLine(text, from === 'auto' ? 'auto' : langName(from), langName(to)))
+      onProgress(++finished / unique.length)
+    }
+    return cues.map((c) => ({ ...c, text: done.get(c.text) ?? c.text }))
+  }
   const workerFn = async () => {
     while (next < unique.length) {
       const text = unique[next++]

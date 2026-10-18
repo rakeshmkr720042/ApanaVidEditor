@@ -9,6 +9,7 @@ import { ensureFont, subtitleStyle } from '../engine/text'
 import { encodeWav } from '../engine/music'
 import { loadSource, sharedAudioContext } from '../lib/media'
 import { saveMedia } from '../lib/db'
+import { getLocalAI, localAI, setLocalAI } from '../lib/localai'
 import {
   ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, langName, sampleVoice, setEmail, transcribe, translateCues,
   type Progress,
@@ -44,6 +45,7 @@ export function AIPanel({ ed, onClose }: P) {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [email, setEmailState] = useState(getEmail())
+  const [local, setLocal] = useState(() => (localAI() ? getLocalAI() : null))
   const playing = useRef<AudioBufferSourceNode | null>(null)
   useEffect(() => () => playing.current?.stop(), [])
   useEffect(() => { memo.tab = tab }, [tab])
@@ -153,7 +155,8 @@ export function AIPanel({ ed, onClose }: P) {
 
       {tab === 'translate' && (
         <>
-          <p className="muted small">{t('Translates your subtitles and keeps their timing. Needs internet.')}</p>
+          <p className="muted small">{t(local?.translate ? 'Translates your subtitles with Local AI on your computer and keeps their timing.' : 'Translates your subtitles and keeps their timing. Needs internet.')}</p>
+          {local && <Toggle label={`${t('Use Local AI')} (${local.model})`} value={local.translate} onChange={(translate) => setLocal(setLocalAI({ translate }))} />}
           {!cues.length && <p className="small warn">{t('Add subtitles first: use Auto captions or import an .srt file.')}</p>}
           <span className="field-label">{t('From')}</span>
           <LangSelect value={memo.subLang} auto onChange={(subLang) => set({ subLang })} />
@@ -163,9 +166,13 @@ export function AIPanel({ ed, onClose }: P) {
             <button className="btn primary" disabled={!!busy || !cues.length} onClick={() => translate(true)}>{t('Translate subtitles')}</button>
             <button className="btn" disabled={!!busy || !cues.length} onClick={() => translate(false)}>{t('Only download .srt')}</button>
           </div>
-          <span className="field-label">{t('Email (optional, raises the free limit to 50,000 characters a day)')}</span>
-          <input className="text-input" type="email" value={email} placeholder="you@example.com"
-            onChange={(e) => { setEmailState(e.target.value); setEmail(e.target.value.trim()) }} />
+          {!local?.translate && (
+            <>
+              <span className="field-label">{t('Email (optional, raises the free limit to 50,000 characters a day)')}</span>
+              <input className="text-input" type="email" value={email} placeholder="you@example.com"
+                onChange={(e) => { setEmailState(e.target.value); setEmail(e.target.value.trim()) }} />
+            </>
+          )}
         </>
       )}
 

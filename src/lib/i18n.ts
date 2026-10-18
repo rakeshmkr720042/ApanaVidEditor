@@ -143,6 +143,19 @@ const hi: Record<string, string> = {
   'chart': 'चार्ट', 'charts': 'चार्ट', 'rows': 'पंक्तियां', 'Open CSV': 'CSV खोलें', 'Animating the chart…': 'चार्ट एनिमेट हो रहा है…', 'No data found': 'कोई डेटा नहीं मिला',
   'Paste a table from a spreadsheet, CSV, or lines like "Delhi: 42". It becomes a chart whose bars, points or rows come in one by one with the voice.': 'स्प्रेडशीट या CSV से टेबल पेस्ट करें, या "दिल्ली: 42" जैसी लाइनें लिखें। इससे चार्ट बनेगा जिसके बार, पॉइंट या पंक्तियां आवाज़ के साथ एक-एक करके आएंगी।',
   'Tip: copy cells from Excel or Google Sheets and paste them here, or write one row per line like "Delhi: 42" or "City | 2011 | 2024". A blank line starts a new chart; "# Title" names it.': 'सुझाव: Excel या Google Sheets से सेल कॉपी करके यहां पेस्ट करें, या हर लाइन में एक पंक्ति लिखें, जैसे "दिल्ली: 42" या "शहर | 2011 | 2024"। खाली लाइन से नया चार्ट शुरू होता है; "# टाइटल" उसका नाम है।',
+  'Local AI': 'लोकल AI', 'Use Local AI': 'लोकल AI इस्तेमाल करें', 'Local AI server URL': 'लोकल AI सर्वर URL', 'Model': 'मॉडल',
+  'Test connection': 'कनेक्शन जांचें', 'Connecting…': 'जुड़ रहे हैं…', 'Connected.': 'जुड़ गया।', 'model': 'मॉडल', 'models': 'मॉडल',
+  'Use this computer': 'इसी कंप्यूटर वाला', 'How to set it up': 'कैसे सेट करें', 'Translate subtitles with Local AI': 'सबटाइटल का अनुवाद लोकल AI से करें',
+  'Use an AI model running on your own computer with Ollama (for example Gemma). It can shorten text into key points, write quiz questions, and translate subtitles. Nothing is sent to the internet.': 'अपने कंप्यूटर पर Ollama में चल रहा AI मॉडल (जैसे Gemma) इस्तेमाल करें। यह टेक्स्ट को मुख्य बातों में छोटा कर सकता है, क्विज़ के सवाल लिख सकता है और सबटाइटल का अनुवाद कर सकता है। कुछ भी इंटरनेट पर नहीं जाता।',
+  'Summarize to key points': 'मुख्य बातों में छोटा करें', 'Make quiz from this text': 'इस टेक्स्ट से क्विज़ बनाएं', 'Write questions from this text': 'इस टेक्स्ट से सवाल लिखें',
+  'Local AI is writing…': 'लोकल AI लिख रहा है…', 'Or paste notes or a chapter and let Local AI write the questions.': 'या नोट्स या कोई चैप्टर पेस्ट करें, लोकल AI सवाल लिख देगा।',
+  'Local AI shortened the text into key points. Check it, then make scenes.': 'लोकल AI ने टेक्स्ट को मुख्य बातों में छोटा कर दिया। जांच लें, फिर सीन बनाएं।',
+  'questions written by Local AI. Check the answers before making the video.': 'सवाल लोकल AI ने लिखे। वीडियो बनाने से पहले जवाब जांच लें।',
+  'Translates your subtitles with Local AI on your computer and keeps their timing.': 'आपके कंप्यूटर के लोकल AI से सबटाइटल का अनुवाद करता है, समय वही रहता है।',
+  '1. Install Ollama on your computer and download a model, for example:': '1. कंप्यूटर पर Ollama इंस्टॉल करें और कोई मॉडल डाउनलोड करें, जैसे:',
+  '2. On the same computer keep the address http://localhost:11434 and tap Test connection.': '2. उसी कंप्यूटर पर पता http://localhost:11434 रखें और "कनेक्शन जांचें" दबाएं।',
+  '3. In the browser, allow this site once in PowerShell, then quit and restart Ollama:': '3. ब्राउज़र में: PowerShell में एक बार यह साइट allow करें, फिर Ollama बंद करके दोबारा चालू करें:',
+  "From a phone: on the laptop run the line below and restart Ollama, allow it in Windows Firewall, then type the laptop's Wi-Fi address here, like http://192.168.1.5:11434 (ipconfig shows it as IPv4). Both must be on the same Wi-Fi. Use the Android app for this; the web page can only reach localhost.": 'फ़ोन से: लैपटॉप पर नीचे वाली लाइन चलाएं और Ollama दोबारा चालू करें, Windows Firewall में allow करें, फिर यहां लैपटॉप का Wi-Fi पता लिखें, जैसे http://192.168.1.5:11434 (ipconfig में IPv4)। दोनों एक ही Wi-Fi पर हों। इसके लिए Android ऐप इस्तेमाल करें; वेब पेज सिर्फ़ localhost तक पहुंच सकता है।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

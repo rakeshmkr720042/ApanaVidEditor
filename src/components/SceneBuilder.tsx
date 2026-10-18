@@ -29,6 +29,7 @@ import type { WaveStyle } from '../types'
 import { encodeWav } from '../engine/music'
 import { Chips, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
+import { articleKeyPoints, keyPoints, localAI, makeQuiz } from '../lib/localai'
 
 // remembered while the app is open, so the next deck starts with the same choices
 let memo: SceneOptions = defaultSceneOptions()
@@ -194,6 +195,48 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const set = (patch: Partial<SceneOptions>) => setO((v) => (memo = { ...v, ...patch }))
 
   useEffect(() => { if (start === 'files') fileInput.current?.click() }, [start])
+
+  // ---- Local AI (the user's own Ollama model): shorten text, write quiz questions
+  const ai = localAI()
+  const [aiUndo, setAiUndo] = useState<{ box: 'script' | 'article' | 'quiz'; text: string } | null>(null)
+  const askAI = async (fn: () => Promise<void>) => {
+    setError(null); setNote(null)
+    setBusy({ label: `${t('Local AI is writing…')} (${ai?.model})`, p: -1 })
+    try { await fn() } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
+  }
+  const withoutPictures = (s: string) => s.split('\n').filter((l) => !/^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(l)).join('\n')
+  const aiKeyPoints = (box: 'script' | 'article') => askAI(async () => {
+    const before = box === 'script' ? script : art.text
+    const out = box === 'script' ? await keyPoints(before) : await articleKeyPoints(before)
+    if (box === 'script') setScript(draft = out)
+    else setArticle({ text: out, length: 'full' }) // already short; don't cut it again
+    setAiUndo({ box, text: before })
+    setNote(t('Local AI shortened the text into key points. Check it, then make scenes.'))
+  })
+  const aiQuiz = (from: string, box: 'script' | 'article' | 'quiz') => askAI(async () => {
+    const mode = box === 'quiz' || quizModeSet ? qs.mode : 'quiz'
+    const out = await makeQuiz(withoutPictures(from), mode)
+    if (box === 'quiz') setAiUndo({ box, text: qd.text })
+    setQuizDraft({ tab: 'text' })
+    writeQuiz(out)
+    setQuizzing(true)
+    setNote(`${parseQuiz(out).items.length} ${t('questions written by Local AI. Check the answers before making the video.')}`)
+  })
+  const undoAI = () => {
+    if (!aiUndo) return
+    if (aiUndo.box === 'script') setScript(draft = aiUndo.text)
+    else if (aiUndo.box === 'article') setArticle({ text: aiUndo.text })
+    else writeQuiz(aiUndo.text)
+    setAiUndo(null); setNote(null)
+  }
+  const aiTools = (box: 'script' | 'article' | 'quiz', text: string) => ai && (
+    <div className="ai-tools">
+      <span className="small muted">✦ {t('Local AI')}:</span>
+      {box !== 'quiz' && <button className="btn small" disabled={!!busy || !text.trim()} onClick={() => aiKeyPoints(box)}>{t('Summarize to key points')}</button>}
+      <button className="btn small" disabled={!!busy || !text.trim()} onClick={() => aiQuiz(text, box)}>{t(box === 'quiz' ? 'Write questions from this text' : 'Make quiz from this text')}</button>
+      {aiUndo?.box === box && <button className="btn small ghost" disabled={!!busy} onClick={undoAI}>{t('Undo')}</button>}
+    </div>
+  )
   useEffect(() => {
     if (!rec) return
     const id = setInterval(() => setRec((r) => (r ? { ...r, now: Date.now() } : r)), 250)
@@ -798,6 +841,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
             <textarea className="text-input" rows={9} value={script} placeholder={SCRIPT_HINT} autoFocus
               onChange={(e) => setScript(draft = e.target.value)} />
             <p className="muted small">{t('Tip: a short line on its own is a heading, lines starting with - are points, a blank line starts a new scene.')}</p>
+            {aiTools('script', script)}
             <button className="btn primary" disabled={!!busy || !script.trim()} onClick={addScript}>{t('Make scenes')}</button>
           </div>
         )}
@@ -875,6 +919,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                 <textarea className="text-input" rows={10} value={qd.text} placeholder={QUIZ_HINT} autoFocus
                   onChange={(e) => writeQuiz(e.target.value)} />
                 <p className="muted small">{t('Tip: start each question with Q:, put options on lines like A) B) C) and mark the right one with *, or add a line "Answer: B". For flashcards write Q: and A: lines, or front | back on one line.')}</p>
+                {ai && <p className="muted small">{t('Or paste notes or a chapter and let Local AI write the questions.')}</p>}
+                {aiTools('quiz', qd.text)}
               </>
             ) : <QuizEditor deck={qd.deck} mode={qs.mode} onChange={(deck) => setQuizDraft({ deck })} onPick={(picked) => setQuizDraft({ picked })} />}
             {currentDeck.items.length > 0 && (
@@ -937,6 +983,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
             <textarea className="text-input" rows={10} value={art.text} placeholder={ARTICLE_HINT}
               onChange={(e) => setArticle({ text: e.target.value })} />
             <p className="muted small">{t('Check the text and remove anything you don\'t want. If a site doesn\'t open, copy the article in your browser and paste it here. Lines like ![caption](link) are pictures.')}</p>
+            {aiTools('article', art.text)}
             <Chips options={[{ value: 'short', label: 'Key points' }, { value: 'full', label: 'Full article' }]} value={art.length} onChange={(length) => setArticle({ length })} />
             <Toggle label="Pictures from the article" value={art.pictures} onChange={(pictures) => setArticle({ pictures })} />
             <button className="btn primary" disabled={!!busy || !art.text.trim()} onClick={addArticle}>{t('Make scenes')}</button>
@@ -1057,8 +1104,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
 
         {busy && (
           <div className="ai-status">
-            <span className="small">{busy.label} {Math.round(busy.p * 100)}%</span>
-            <div className="progress"><div style={{ width: `${Math.round(busy.p * 100)}%` }} /></div>
+            <span className="small">{busy.label}{busy.p >= 0 && ` ${Math.round(busy.p * 100)}%`}</span>
+            <div className={`progress${busy.p < 0 ? ' waiting' : ''}`}><div style={{ width: busy.p < 0 ? undefined : `${Math.round(busy.p * 100)}%` }} /></div>
           </div>
         )}
         {note && <p className="small warn">{note}</p>}

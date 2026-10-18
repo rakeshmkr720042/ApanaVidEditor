@@ -22,8 +22,9 @@ const csp = [
   "img-src 'self' data: blob:",
   "media-src 'self' data: blob: mediastream:",
   "font-src 'self' data: blob:",
-  // model downloads (Hugging Face, jsDelivr) and the MyMemory translation API
-  "connect-src 'self' data: blob: https:",
+  // model downloads (Hugging Face, jsDelivr), the MyMemory translation API, and Local AI
+  // (the user's own Ollama server, usually http://localhost:11434)
+  "connect-src 'self' data: blob: https: http:",
   "object-src 'none'",
   "base-uri 'self'",
 ].join('; ')

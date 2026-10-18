@@ -7,6 +7,8 @@ import { isCoreCached, prefetchCore } from '../lib/ffmpeg'
 import { prefetchFonts } from '../engine/text'
 import { getLang, setLang, t } from '../lib/i18n'
 import { Icon } from './Icon'
+import { LocalAISheet } from './LocalAISheet'
+import { localAI } from '../lib/localai'
 
 export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang: () => void }) {
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null)
@@ -15,6 +17,8 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  const [aiSheet, setAiSheet] = useState(false)
+  const [aiOn, setAiOn] = useState(() => !!localAI())
 
   const openFile = async (f: File) => {
     setError(null); setOpening(true)
@@ -46,6 +50,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
       <header className="top">
         <div className="brand"><span className="logo"><Icon name="play" size={16} /></span> ApanaVidEditor</div>
         <div className="top-actions">
+          <button className="btn ghost small" onClick={() => setAiSheet(true)}>{aiOn ? '✓ ' : ''}{t('Local AI')}</button>
           <button className="btn ghost small" onClick={() => { setLang(getLang() === 'hi' ? 'en' : 'hi'); onLang() }}>{getLang() === 'hi' ? 'English' : 'हिंदी'}</button>
         </div>
       </header>
@@ -80,6 +85,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           ))}
         </div>
       </main>
+      {aiSheet && <LocalAISheet onClose={() => { setAiSheet(false); setAiOn(!!localAI()) }} />}
     </div>
   )
 }
