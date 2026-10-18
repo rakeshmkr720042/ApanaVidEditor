@@ -220,6 +220,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       else if (e.key === ' ') { e.preventDefault(); togglePlay() }
       else if (e.key === 's' && !mod) ed.split(time)
       else if (e.key === 'Delete' || e.key === 'Backspace') ed.remove()
+      else if (e.key === 'Home') { e.preventDefault(); player?.seek(0) }
+      else if (e.key === 'End') { e.preventDefault(); seek(ed.layout.total) }
       else if (e.key === 'ArrowLeft') seek(time - (e.shiftKey ? 1 : 1 / 30))
       else if (e.key === 'ArrowRight') seek(time + (e.shiftKey ? 1 : 1 / 30))
     }
@@ -398,9 +400,13 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
       <div className="transport">
         <span className="time">{fmtTime(time)} <span className="muted">/ {fmtTime(ed.layout.total)}</span></span>
-        <button className="icon-btn play" disabled={empty} onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
-          <Icon name={playing ? 'pause' : 'play'} />
-        </button>
+        <span className="play-group">
+          <button className="icon-btn" disabled={empty} onClick={() => player?.seek(0)} aria-label="Go to start" title={t('Go to start')}><Icon name="toStart" /></button>
+          <button className="icon-btn play" disabled={empty} onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
+            <Icon name={playing ? 'pause' : 'play'} />
+          </button>
+          <button className="icon-btn" disabled={empty} onClick={() => seek(ed.layout.total)} aria-label="Go to end" title={t('Go to end')}><Icon name="toEnd" /></button>
+        </span>
         <span className="zoom">
           <button className={`icon-btn snap${snap ? ' on' : ''}`} onClick={toggleSnap} aria-label="Snap" aria-pressed={snap} title={t('Magnetic snap')}><Icon name="magnet" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.max(4, z / 1.5))} aria-label="Zoom out"><Icon name="minus" /></button>
