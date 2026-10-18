@@ -227,7 +227,10 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
       const k = d / g.d0
       let rot = g.r0 + ((Math.atan2(p.y - g.cy, p.x - g.cx) - g.a0) * 180) / Math.PI
       for (const snap of [-180, -90, 0, 90, 180]) if (Math.abs(rot - snap) < 4) rot = snap
-      ed.updateLayer(l.id, { box: { ...l.box, scale: Math.max(0.1, Math.min(8, g.s0 * k)), rotation: rot } })
+      const scale = Math.max(0.1, Math.min(8, g.s0 * k))
+      // subtitles resize together, like they move together
+      if (l.type === 'text' && l.subtitle) ed.updateLayers((x) => x.type === 'text' && x.subtitle, (x) => ({ box: { ...(x as TextLayer).box, scale, rotation: rot } }))
+      else ed.updateLayer(l.id, { box: { ...l.box, scale, rotation: rot } })
     }
   }
 

@@ -327,11 +327,12 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
             {project.layers.map((l) => {
               const lane = lanes.get(l.id) ?? 0
               const selected = sel?.type === 'layer' && sel.id === l.id
+              const group = !selected && sel?.type === 'layer' && sel.all && l.type === 'text' && l.subtitle
               const src = (l.type === 'audio') ? sources[l.sourceId] : null
               return (
                 <div
                   key={l.id}
-                  className={`tl-layer${selected ? ' selected' : ''}`}
+                  className={`tl-layer${selected ? ' selected' : ''}${group ? ' group' : ''}`}
                   style={{ left: l.start * pps, width: Math.max(4, (l.end - l.start) * pps), top: lane * 30, background: LAYER_COLORS[l.type] }}
                   onClick={(e) => { e.stopPropagation(); ed.setSel({ type: 'layer', id: l.id }) }}
                   onPointerDown={(e) => {
@@ -341,7 +342,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                   }}
                 >
                   {src?.thumbs[0] && <img className="tl-wave" src={src.thumbs[0]} alt="" draggable={false} style={{ width: (src.duration * pps), left: -(l as { in: number }).in * pps }} />}
-                  <span>{layerLabel(l)}</span>
+                  <span>{l.type === 'media' && sources[l.sourceId] ? `▣ ${sources[l.sourceId].name}` : layerLabel(l)}</span>
                   {selected && (['in', 'out'] as const).map((side) => (
                     <div
                       key={side}

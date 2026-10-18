@@ -7,8 +7,12 @@ import { clipSegments, defaultAdjust, layoutClips, newClip, sourceAt } from './t
 import { applySlideshow, type SlideshowOptions } from './slideshow'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
+import { outputSize } from '../engine/renderer'
 
-export type Selection = { type: 'clip'; id: string } | { type: 'layer'; id: string } | null
+/** `all` on a subtitle selects every subtitle together (style, animation and delete apply to all of them). */
+export type Selection = { type: 'clip'; id: string } | { type: 'layer'; id: string; all?: boolean } | null
+
+export const isSub = (l: Layer): l is TextLayer => l.type === 'text' && l.subtitle
 
 export const emptyProject = (): Project => ({ clips: [], layers: [], settings: { aspect: 'original', background: 'black', fps: 30 } })
 
@@ -25,6 +29,19 @@ export const newWave = (sourceId: string, style: WaveLayer['style']): WaveLayer 
 })
 
 const centerBox = () => ({ x: 0.5, y: 0.5, scale: 1, rotation: 0, opacity: 1 })
+
+/** Where new media goes: its own track at the playhead, or into the main video at the playhead, start or end. */
+export type Placement = 'track' | 'playhead' | 'start' | 'end'
+
+/** What was added and where, so the editor can select it, jump to it and say so. */
+export interface Placed { sel: Selection; start: number; where: Placement; cut: boolean }
+
+/** Overlay scale that fills the frame edge to edge (fit, no cropping) for a source of aspect `ar`. */
+function fullFrameScale(p: Project, sources: Record<string, MediaSource>, ar: number) {
+  const { w: W, h: H } = outputSize(p, sources, 1000)
+  const base = ar >= 1 ? Math.min(W / ar, H) : Math.min(W, H * ar)
+  return base / (Math.min(W, H) * 0.5)
+}
 
 /** All editing operations on a project, with undo/redo. */
 export function useEditor(initial: Project) {
@@ -81,12 +98,65 @@ export function useEditor(initial: Project) {
     commit({ ...p, watermark: { ...(p.watermark ?? defaultWatermark()), ...patch } })
   }, [commit])
 
-  const appendClips = useCallback((srcs: MediaSource[], at?: number, patch?: Partial<Clip>) => {
+  /**
+   * The one rule for adding photos, videos and recordings: on a new track at the playhead (a full-frame overlay
+   * above the main video), or into the main video at the playhead (splitting the clip there), start or end.
+   * Several files go one after another. An empty project always gets them as its main video.
+   */
+  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop'] }): Placed | null => {
     const p = ref.current
-    const clips = srcs.map((s) => ({ ...newClip(s, uid()), ...patch }))
-    const idx = at ?? p.clips.length
-    h.set({ ...p, clips: [...p.clips.slice(0, idx), ...clips, ...p.clips.slice(idx)] })
-    return clips
+    const visual = srcs.filter((s) => s.kind !== 'audio')
+    if (!visual.length) return null
+    const mode: Placement = p.clips.length ? where : 'end'
+    if (mode === 'track') {
+      const tot = layoutClips(p.clips).total
+      let at = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
+      const layers: MediaLayer[] = []
+      let cut = false
+      const all = { ...sourcesRef.current, ...Object.fromEntries(visual.map((s) => [s.id, s])) }
+      for (const src of visual) {
+        if (at >= tot - 0.1 && layers.length) break
+        const dur = src.kind === 'image' ? 3 : src.duration
+        const end = Math.min(tot, at + dur)
+        if (end < at + dur - 0.05) cut = true
+        const c = patch?.crop ?? null
+        const ar = src.width && src.height ? (src.width * (c?.w ?? 1)) / (src.height * (c?.h ?? 1)) : 16 / 9
+        layers.push({
+          id: uid(), type: 'media', sourceId: src.id, in: 0, start: at, end: Math.max(at + 0.5, end),
+          box: { ...centerBox(), scale: fullFrameScale(p, all, ar) },
+          volume: 1, chroma: { enabled: false, color: '#00ff00', similarity: 0.35, smoothness: 0.08 }, mask: 'none', border: 0,
+          adjust: defaultAdjust(), filter: null, filterAmount: 1, crop: c,
+        })
+        at = end
+      }
+      h.set({ ...p, layers: [...p.layers, ...layers] })
+      const sel: Selection = { type: 'layer', id: layers[0].id }
+      setSel(sel)
+      return { sel, start: layers[0].start, where: mode, cut }
+    }
+    const clips = visual.map((s) => ({ ...newClip(s, uid()), ...(patch?.crop ? { crop: patch.crop } : {}) }))
+    let list = [...p.clips]
+    let idx = mode === 'start' ? 0 : list.length
+    if (mode === 'playhead') {
+      const { items } = layoutClips(list)
+      const it = items.find((x) => t >= x.start && t < x.start + x.dur) ?? items[items.length - 1]
+      const local = t - it.start
+      const c = it.clip
+      const at = c.in + local * c.speed
+      if (local < 0.25 || c.ramp || at - c.in < MIN_CLIP) idx = it.index
+      else if (it.dur - local < 0.25 || c.out - at < MIN_CLIP) idx = it.index + 1
+      else {
+        // split the clip under the playhead and put the new media in between
+        list = list.flatMap((x) => (x.id === c.id ? [{ ...c, out: at, transition: null, fadeOut: 0 }, { ...c, id: uid(), in: at, fadeIn: 0 }] : [x]))
+        idx = it.index + 1
+      }
+    }
+    list.splice(idx, 0, ...clips)
+    h.set({ ...p, clips: list })
+    const start = layoutClips(list).items[idx].start
+    const sel: Selection = { type: 'clip', id: clips[0].id }
+    setSel(sel)
+    return { sel, start, where: mode, cut: false }
   }, [h])
 
   /** Adds photos as slides and lays every photo out as a slideshow, in one undo step. */
@@ -146,6 +216,7 @@ export function useEditor(initial: Project) {
       adjust: defaultAdjust(), filter: null, filterAmount: 1,
     }
     addLayer(l)
+    return l
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addAudio = useCallback((t: number, src: MediaSource, kind: AudioLayer['kind'], label: string) => {
@@ -156,6 +227,7 @@ export function useEditor(initial: Project) {
       volume: kind === 'music' ? 0.6 : 1, fadeIn: kind === 'music' ? 1 : 0, fadeOut: kind === 'music' ? 2 : 0, label, kind,
     }
     addLayer(l)
+    return l
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Adds an animated waveform that moves with an audio layer's sound, over the same time span. */
@@ -168,6 +240,7 @@ export function useEditor(initial: Project) {
     const p = ref.current
     if (!sel) return
     if (sel.type === 'clip') h.set({ ...p, clips: p.clips.filter((c) => c.id !== sel.id) })
+    else if (sel.all) h.set({ ...p, layers: p.layers.filter((l) => !isSub(l)) })
     else h.set({ ...p, layers: p.layers.filter((l) => l.id !== sel.id) })
     setSel(null)
   }, [h, sel])
@@ -244,7 +317,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, appendClips, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
+    addSource, place, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
     remove, duplicate, split, moveClip, replaceProject,
   }

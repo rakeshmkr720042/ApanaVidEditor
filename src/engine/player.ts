@@ -55,6 +55,8 @@ export class Player {
   total = 0
   watermark: string | null = null
   muted = false
+  /** Playback speed of the preview (fast forward / slow motion), 1 = normal. */
+  rate = 1
   readonly renderer: Renderer
   onTick: ((t: number, playing: boolean) => void) | null = null
 
@@ -95,7 +97,7 @@ export class Player {
     this.sync()
     const loop = () => {
       if (!this.playing) return
-      this.t = this.clockT + (performance.now() - this.clockStart) / 1000
+      this.t = this.clockT + ((performance.now() - this.clockStart) / 1000) * this.rate
       if (this.t >= this.total) {
         this.t = this.total
         this.pause()
@@ -125,6 +127,12 @@ export class Player {
     this.sync()
     this.requestRender()
     this.onTick?.(this.t, this.playing)
+  }
+
+  setRate(r: number) {
+    if (this.playing) { this.clockT = this.t; this.clockStart = performance.now() }
+    this.rate = r
+    this.sync()
   }
 
   /** Show a specific source time of a clip (while dragging a trim handle). */
@@ -186,13 +194,13 @@ export class Player {
       if (!el) continue
       active.add(n.key)
       if (this.playing && !n.preload) {
-        el.playbackRate = clampRate(n.rate)
+        el.playbackRate = clampRate(n.rate * this.rate)
         el.volume = Math.max(0, Math.min(1, n.volume))
         el.muted = this.muted || n.volume <= 0
         if (el.paused) {
           el.currentTime = n.time
           el.play().catch(() => {})
-        } else if (Math.abs(el.currentTime - n.time) > 0.3 * Math.max(1, n.rate)) {
+        } else if (Math.abs(el.currentTime - n.time) > 0.3 * Math.max(1, n.rate * this.rate)) {
           el.currentTime = n.time
         }
       } else {

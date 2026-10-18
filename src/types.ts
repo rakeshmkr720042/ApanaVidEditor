@@ -138,6 +138,7 @@ export interface MediaLayer extends LayerBase {
   adjust: Adjust
   filter: string | null
   filterAmount: number
+  crop?: Crop | null // part of the source to show (screen recordings of a custom area)
 }
 
 export interface BlurLayer extends LayerBase {
