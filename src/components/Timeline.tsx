@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Clip, Layer } from '../types'
 import { MIN_CLIP } from '../types'
 import type { Editor } from '../model/useEditor'
@@ -83,6 +83,52 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     if (dragRef.current || pinch.current || Math.abs(el.scrollLeft - lastSet.current) <= 1) return
     lastSet.current = el.scrollLeft
     onScrub(el.scrollLeft / pps)
+  }
+
+  // Mouse wheel scrolls the timeline sideways (desktop has no swipe). Vertical wheel still scrolls stacked layers
+  // when they overflow, unless the pointer is on the ruler or the main track.
+  useEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return
+      const onTrack = (e.target as Element).closest?.('.tl-ruler, .tl-track')
+      if (!onTrack && el.scrollHeight > el.clientHeight + 1) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY * (e.deltaMode === 1 ? 16 : 1)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Mouse drag pans the timeline like a finger swipe does on touch screens.
+  const pan = useRef<{ x0: number; left0: number; moved: boolean } | null>(null)
+  const onPanStart = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || dragRef.current) return
+    const el = scroller.current!
+    pan.current = { x0: e.clientX, left0: el.scrollLeft, moved: false }
+    const move = (ev: PointerEvent) => {
+      const p = pan.current
+      if (!p || dragRef.current) return
+      if (Math.abs(ev.clientX - p.x0) > 4) { p.moved = true; clearTimeout(longPress.current) }
+      if (p.moved) el.scrollLeft = p.left0 - (ev.clientX - p.x0)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      // let the click that ends a pan through only if the mouse did not move
+      if (pan.current?.moved) window.addEventListener('click', (ev) => ev.stopPropagation(), { capture: true, once: true })
+      setTimeout(() => { pan.current = null })
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  /** Tap or click on the ruler jumps the playhead to that time. */
+  const onRulerClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const r = e.currentTarget.getBoundingClientRect()
+    onScrub(Math.max(0, Math.min(total, (e.clientX - r.left) / pps)))
   }
 
   // two-finger pinch to zoom the timeline
@@ -199,11 +245,11 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       onPointerUp={(e) => { onPointerUpWrap(e); onUp() }}
       onPointerCancel={(e) => { onPointerUpWrap(e); onUp() }}
     >
-      <div className="tl-scroll" ref={scroller} onScroll={onScroll} onClick={() => ed.setSel(null)}>
+      <div className="tl-scroll" ref={scroller} onScroll={onScroll} onPointerDown={onPanStart} onClick={() => ed.setSel(null)}>
         <div className="tl-pad" />
         <div className="tl-content" style={{ width }}>
           {snapLine !== null && <div className="tl-snapline" style={{ left: snapLine * pps }} />}
-          <div className="tl-ruler">
+          <div className="tl-ruler" onClick={onRulerClick}>
             {ticks.map((s) => <span key={s} style={{ left: s * pps }}>{fmtTime(s, false)}</span>)}
           </div>
           <div className="tl-track">

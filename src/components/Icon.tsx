@@ -4,6 +4,8 @@ const paths = {
   magnet: 'M3 7v6a9 9 0 0 0 18 0V7h-5v6a4 4 0 0 1-8 0V7zm2 2h1v-2H5zm13 0h1V7h-1z',
   play: 'M8 5v14l11-7z',
   pause: 'M7 5h4v14H7zM13 5h4v14h-4z',
+  toStart: 'M6 6h2v12H6zm3.5 6 8.5 6V6z',
+  toEnd: 'M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z',
   plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z',
   minus: 'M5 11h14v2H5z',
   undo: 'M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A7.95 7.95 0 0 1 12.5 10.5c3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z',
