@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BlurLayer, MediaLayer, StickerLayer, TextAnim, TextLayer, WaveLayer } from '../types'
 import type { Editor } from '../model/useEditor'
-import { subtitleLook } from '../model/useEditor'
+import { isSub, subtitleLook } from '../model/useEditor'
 import { CaptionFrameEditor } from './CaptionFramePanel'
 import { ANIMS, FONTS, STICKERS, TEXT_PRESETS, ensureFont, prefetchFonts } from '../engine/text'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
@@ -30,10 +30,24 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
   const [tab, setTab] = useState(startTab)
   const [, fontsReady] = useState(0)
   useEffect(() => { if (tab === 'font' || tab === 'edit') prefetchFonts().then(() => fontsReady((n) => n + 1)) }, [tab])
-  const set = (patch: Partial<TextLayer>) => ed.updateLayer<TextLayer>(layer.id, patch)
-  const style = (patch: Partial<TextLayer['style']>) => ed.updateLayer<TextLayer>(layer.id, (l) => ({ style: { ...l.style, ...patch } }))
+  // with every caption selected, look and animation changes go to all of them (the words stay per caption)
+  const all = layer.subtitle && ed.sel?.type === 'layer' && !!ed.sel.all
+  const count = all ? ed.project.layers.filter(isSub).length : 1
+  const set = (patch: Partial<TextLayer>) => (all && !('text' in patch) ? ed.updateLayers(isSub, () => patch) : ed.updateLayer<TextLayer>(layer.id, patch))
+  const style = (patch: Partial<TextLayer['style']>) => (all
+    ? ed.updateLayers(isSub, (l) => ({ style: { ...(l as TextLayer).style, ...patch } }))
+    : ed.updateLayer<TextLayer>(layer.id, (l) => ({ style: { ...l.style, ...patch } })))
+  const box = (patch: Partial<TextLayer['box']>) => (all
+    ? ed.updateLayers(isSub, (l) => ({ box: { ...(l as TextLayer).box, ...patch } }))
+    : set({ box: { ...layer.box, ...patch } }))
   return (
     <Panel title="Text" onClose={onClose} tall>
+      {layer.subtitle && (
+        <div className="row caps-all">
+          <span className="muted small">{all ? `${t('Changes go to all')} ${count} ${t('captions')}` : t('Changes go to this caption only')}</span>
+          <button className="btn small" onClick={() => ed.setSel({ type: 'layer', id: layer.id, all: !all })}>{all ? t('Only this caption') : t('Select all captions')}</button>
+        </div>
+      )}
       <Chips options={[{ value: 'edit', label: 'Edit' }, { value: 'font', label: 'Font' }, { value: 'style', label: 'Style' }, { value: 'frame', label: 'Position' }, { value: 'anim', label: 'Animation' }]} value={tab} onChange={setTab} />
       {tab === 'edit' && (
         <>
@@ -72,7 +86,7 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
           <span className="field-label">{t('Background')}</span>
           <ColorRow value={layer.style.background} allowNone onChange={(c) => style({ background: c ? c + (c.length === 7 ? 'cc' : '') : null })} />
           <Slider label="Size" min={0.02} max={0.2} value={layer.style.size} format={(v) => `${Math.round(v * 100)}`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => style({ size: v })} />
-          <Slider label="Opacity" min={0} max={1} value={layer.box.opacity} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ box: { ...layer.box, opacity: v } })} />
+          <Slider label="Opacity" min={0} max={1} value={layer.box.opacity} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => box({ opacity: v })} />
           <Slider label="Spacing" min={-0.05} max={0.3} value={layer.style.letterSpacing} format={(v) => `${Math.round(v * 100)}`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => style({ letterSpacing: v })} />
           <Chips options={[{ value: 'left', label: '⇤ Left' }, { value: 'center', label: '↔ Centre' }, { value: 'right', label: 'Right ⇥' }]} value={layer.style.align} onChange={(align) => style({ align })} />
           <div className="row-toggles">
@@ -213,7 +227,7 @@ export function WavePanel({ ed, layer, onClose }: P & { layer: WaveLayer }) {
   )
 }
 
-export function SubtitlePanel({ ed, t: time, onClose, onSeek }: P & { t: number; onSeek: (t: number) => void }) {
+export function SubtitlePanel({ ed, t: time, onClose, onSeek, onSelectAll }: P & { t: number; onSeek: (t: number) => void; onSelectAll: () => void }) {
   const file = useRef<HTMLInputElement>(null)
   const subs = ed.project.layers.filter((l): l is TextLayer => l.type === 'text' && l.subtitle).sort((a, b) => a.start - b.start)
   const importSrt = async (f: File) => {
@@ -245,6 +259,7 @@ export function SubtitlePanel({ ed, t: time, onClose, onSeek }: P & { t: number;
         <button className="btn small" onClick={() => file.current?.click()}>{t('Import .srt')}</button>
         <button className="btn small" disabled={!subs.length} onClick={exportSrt}>{t('Export .srt')}</button>
         <button className="btn small" disabled={!subs.length} onClick={applyStyleAll}>{t('Same style for all')}</button>
+        <button className="btn small" disabled={!subs.length} onClick={onSelectAll}>{t('Select all captions')}</button>
       </div>
       <input ref={file} type="file" accept=".srt,text/plain" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importSrt(f); e.target.value = '' }} />
       {subs.length > 0 && (

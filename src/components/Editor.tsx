@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
-import { useEditor } from '../model/useEditor'
+import { isSub, useEditor, type Placed, type Placement } from '../model/useEditor'
 import { Player } from '../engine/player'
 import { activeAt } from '../model/timeline'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
@@ -25,6 +25,10 @@ import { PhotoPanel, SlideshowPanel } from '../panels/SlideshowPanel'
 import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
 import { TemplatesPanel } from '../panels/TemplatesPanel'
 import { ScreenRecorder } from './ScreenRecorder'
+import { PlaceSheet } from './PlaceSheet'
+
+const SKIP = 5 // seconds jumped by fast backward / forward
+const RATES = [1, 1.5, 2, 4, 0.5]
 
 interface Loaded { id: string; name: string; project: Project; sources: Record<string, MediaSource> }
 
@@ -68,6 +72,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [exporting, setExporting] = useState(false)
   const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | null>(null)
   const [screenRec, setScreenRec] = useState(false)
+  // new photos/videos/recordings waiting for the user to say where they go
+  const [pending, setPending] = useState<{ srcs: MediaSource[]; crop: Crop | null; what: string } | null>(null)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
@@ -138,6 +144,39 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
   const togglePlay = useCallback(() => { if (!player) return; if (player.playing) player.pause(); else player.play() }, [player])
   const seek = useCallback((tt: number) => { if (player?.playing) player.pause(); player?.seek(tt) }, [player])
+  /** Fast backward / forward: jumps without stopping playback. */
+  const skip = useCallback((d: number) => { if (player) player.seek(player.t + d) }, [player])
+  const [rate, setRate] = useState(1)
+  const nextRate = () => {
+    const r = RATES[(RATES.indexOf(rate) + 1) % RATES.length]
+    setRate(r)
+    player?.setRate(r)
+  }
+
+  /** Jumps to what was just added and says where it went, so nothing lands out of sight. */
+  const announce = (placed: Placed | null, what: string) => {
+    if (!placed) return
+    if (player?.playing) player.pause()
+    player?.seek(placed.start)
+    const at = fmtTime(placed.start)
+    const first = placed.where === 'end' && placed.start === 0
+    const where = first ? t('to the timeline') : placed.where === 'track' ? `${t('on a new track at')} ${at}`
+      : placed.where === 'playhead' ? `${t('to the main video at')} ${at}`
+        : placed.where === 'start' ? t('to the start of the main video') : `${t('to the end of the main video')} (${at})`
+    setToast(`${what} ${t('added')} ${where}${placed.cut ? `. ${t('It stops where the main video ends.')}` : ''}`)
+  }
+
+  const describe = (srcs: MediaSource[]) => {
+    if (srcs.length > 1) return `${srcs.length} ${t('files')}`
+    return srcs[0].kind === 'image' ? t('Photo') : t('Video')
+  }
+
+  /** Photos and videos for the main track: an empty project takes them as is, otherwise ask where. */
+  const addVisual = (srcs: MediaSource[], crop: Crop | null, what: string) => {
+    if (!srcs.length) return
+    if (ed.project.clips.length === 0) announce(ed.place(srcs, 'end', time, { crop }), what)
+    else { player?.pause(); setPending({ srcs, crop, what }) }
+  }
 
   const importFiles = async (files: FileList | File[], target: 'main' | 'overlay' | 'slides') => {
     const list = [...files]
@@ -149,7 +188,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         const src = await loadSource(f, f.name)
         if (src.kind === 'audio' && target === 'main') {
           ed.addSource(src); await saveMedia(src)
-          ed.addAudio(time, src, 'music', f.name.replace(/\.[^.]+$/, ''))
+          const a = ed.addAudio(time, src, 'music', f.name.replace(/\.[^.]+$/, ''))
+          setToast(`${t('Audio')} ${t('added')} ${t('on a new track at')} ${fmtTime(a.start)}`)
           continue
         }
         ed.addSource(src)
@@ -162,18 +202,29 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       }
     }
     if (!added.length) return
-    if (target === 'slides') ed.addSlides(added.filter((s) => s.kind === 'image'), slideOpts.current)
-    else if (target === 'main') ed.appendClips(added)
-    else for (const s of added) ed.addOverlay(time, s)
+    if (target === 'slides') {
+      const photos = added.filter((s) => s.kind === 'image')
+      ed.addSlides(photos, slideOpts.current)
+      setToast(`${photos.length} ${t('photos added to the slideshow in the main video')}`)
+    } else if (target === 'main') addVisual(added, null, describe(added))
+    else for (const s of added) {
+      const l = ed.addOverlay(time, s)
+      announce({ sel: { type: 'layer', id: l.id }, start: l.start, where: 'track', cut: false }, t('Overlay'))
+    }
   }
 
-  /** A finished screen recording goes to the end of the timeline, cropped to the chosen area. */
+  /** A finished screen recording, cropped to the chosen area, goes where the user picks. */
   const addRecording = async (file: File, crop: Crop | null) => {
     const src = await loadSource(file, file.name)
     ed.addSource(src)
     await saveMedia(src)
-    ed.appendClips([src], undefined, crop ? { crop } : undefined)
-    setToast(t('Screen recording added to the timeline'))
+    addVisual([src], crop, t('Screen recording'))
+  }
+
+  const placePending = (where: Placement) => {
+    if (!pending) return
+    setPending(null)
+    announce(ed.place(pending.srcs, where, time, { crop: pending.crop }), pending.what)
   }
 
   // desktop app: File > Open Video / files opened from Explorer
@@ -195,6 +246,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   })
 
   const sel = ed.sel
+  // Delete with every caption selected removes them all, so check first
+  const removeSel = () => {
+    if (sel?.type === 'layer' && sel.all && !confirm(`${t('Delete all captions?')} (${ed.project.layers.filter(isSub).length})`)) return
+    ed.remove()
+  }
   const selClip = sel?.type === 'clip' ? ed.project.clips.find((c) => c.id === sel.id) ?? null : null
   const selLayer = sel?.type === 'layer' ? ed.project.layers.find((l) => l.id === sel.id) ?? null : null
   // clip under the playhead, used when a clip tool is chosen with nothing selected
@@ -219,9 +275,14 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); ed.redo() }
       else if (e.key === ' ') { e.preventDefault(); togglePlay() }
       else if (e.key === 's' && !mod) ed.split(time)
-      else if (e.key === 'Delete' || e.key === 'Backspace') ed.remove()
+      else if (e.key === 'Delete' || e.key === 'Backspace') removeSel()
       else if (e.key === 'Home') { e.preventDefault(); player?.seek(0) }
       else if (e.key === 'End') { e.preventDefault(); seek(ed.layout.total) }
+      // while playing the arrows (and J / L) jump 5 s and keep playing; while paused they step a frame (Shift: 1 s)
+      else if (e.key === 'ArrowLeft' && player?.playing) skip(-SKIP)
+      else if (e.key === 'ArrowRight' && player?.playing) skip(SKIP)
+      else if (e.key === 'j' && !mod) skip(-SKIP)
+      else if (e.key === 'l' && !mod) skip(SKIP)
       else if (e.key === 'ArrowLeft') seek(time - (e.shiftKey ? 1 : 1 / 30))
       else if (e.key === 'ArrowRight') seek(time + (e.shiftKey ? 1 : 1 / 30))
     }
@@ -266,8 +327,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const common: Tool[] = [
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
-      { icon: 'trash', label: 'Delete', on: ed.remove },
+      { icon: 'trash', label: 'Delete', on: removeSel },
     ]
+    const capsAll = selLayer.type === 'text' && selLayer.subtitle
+      ? [{ icon: 'subtitles', label: sel?.type === 'layer' && sel.all ? 'One caption' : 'All captions', on: () => ed.setSel({ type: 'layer', id: selLayer.id, all: !(sel?.type === 'layer' && sel.all) }) } as Tool]
+      : []
     const specific: Tool[] = {
       text: [
         { icon: 'text', label: 'Edit', on: () => setPanel('text') } as Tool,
@@ -288,7 +352,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ],
       wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
     }[selLayer.type]
-    tools = [...specific, ...common]
+    tools = [...capsAll, ...specific, ...common]
   } else {
     tools = [
       { icon: 'screen', label: 'Record screen', on: () => { player?.pause(); setScreenRec(true) } },
@@ -341,7 +405,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'photo' && selClip) panelView = <PhotoPanel ed={ed} clip={selClip} onClose={closePanel} />
   else if (panel === 'templates') panelView = <TemplatesPanel ed={ed} onClose={closePanel} onToast={setToast} />
   else if (panel === 'ai') panelView = <AIPanel ed={ed} onClose={closePanel} />
-  else if (panel === 'subtitles') panelView = <SubtitlePanel ed={ed} t={time} onClose={closePanel} onSeek={seek} />
+  else if (panel === 'subtitles') panelView = <SubtitlePanel ed={ed} t={time} onClose={closePanel} onSeek={seek}
+    onSelectAll={() => { const first = ed.project.layers.filter(isSub).sort((a, b) => a.start - b.start)[0]; if (first) { ed.setSel({ type: 'layer', id: first.id, all: true }); setPanel('text-style') } }} />
   else if (panel === 'audio') panelView = (
     <AudioPanel ed={ed} time={time} onClose={closePanel}
       onRecordStart={() => { if (player) { player.muted = true; player.play() } }}
@@ -402,12 +467,15 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         <span className="time">{fmtTime(time)} <span className="muted">/ {fmtTime(ed.layout.total)}</span></span>
         <span className="play-group">
           <button className="icon-btn" disabled={empty} onClick={() => player?.seek(0)} aria-label="Go to start" title={t('Go to start')}><Icon name="toStart" /></button>
+          <button className="icon-btn" disabled={empty} onClick={() => skip(-SKIP)} aria-label="Back 5 seconds" title={t('Back 5 s (← or J)')}><Icon name="rewind" /></button>
           <button className="icon-btn play" disabled={empty} onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
             <Icon name={playing ? 'pause' : 'play'} />
           </button>
+          <button className="icon-btn" disabled={empty} onClick={() => skip(SKIP)} aria-label="Forward 5 seconds" title={t('Forward 5 s (→ or L)')}><Icon name="forward" /></button>
           <button className="icon-btn" disabled={empty} onClick={() => seek(ed.layout.total)} aria-label="Go to end" title={t('Go to end')}><Icon name="toEnd" /></button>
         </span>
         <span className="zoom">
+          <button className={`rate-btn${rate !== 1 ? ' on' : ''}`} disabled={empty} onClick={nextRate} aria-label="Playback speed" title={t('Playback speed')}>{rate}x</button>
           <button className={`icon-btn snap${snap ? ' on' : ''}`} onClick={toggleSnap} aria-label="Snap" aria-pressed={snap} title={t('Magnetic snap')}><Icon name="magnet" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.max(4, z / 1.5))} aria-label="Zoom out"><Icon name="minus" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.min(400, z * 1.5))} aria-label="Zoom in"><Icon name="plus" /></button>
@@ -446,6 +514,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       <input ref={overlayInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'overlay'); e.target.value = '' }} />
 
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
+      {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder onClose={() => setScreenRec(false)} onDone={addRecording} />}
       {exporting && <ExportSheet project={ed.project} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>

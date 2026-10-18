@@ -497,3 +497,21 @@ input, textarea { font: inherit; color: inherit; }
 .meter p { margin: 0; }
 .clone-box { display: grid; gap: 8px; padding: 10px; margin: 6px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
 .rec-live { color: #ff3b30; font-variant-numeric: tabular-nums; }
+
+/* fast backward / forward and preview speed */
+.rate-btn { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 99px; padding: 0 8px; height: 28px; align-self: center; font-size: 12px; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.rate-btn.on { color: var(--sel); border-color: var(--sel); }
+@media (max-width: 520px) {
+  .transport { grid-template-columns: 1fr auto; row-gap: 2px; }
+  .play-group { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+}
+
+/* where new media goes */
+.place-option { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px; margin-bottom: 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); }
+.place-option svg { color: var(--accent); flex: 0 0 auto; }
+.place-option span { display: grid; gap: 2px; min-width: 0; }
+.place-option small { color: var(--muted); font-size: 12px; }
+.place-option.on { border-color: var(--accent); }
+
+/* every caption picked together */
+.tl-layer.group { outline-color: var(--sel); }

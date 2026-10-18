@@ -270,7 +270,8 @@ export class Renderer {
   }
 
   private mediaSize(l: MediaLayer, src: MediaSource | undefined) {
-    const ar = src && src.width ? src.width / src.height : 16 / 9
+    const c = l.crop
+    const ar = src && src.width ? (src.width * (c?.w ?? 1)) / (src.height * (c?.h ?? 1)) : 16 / 9
     const base = Math.min(this.W, this.H) * 0.5 * l.box.scale
     const w = ar >= 1 ? base * ar : base
     const h = ar >= 1 ? base : base / ar
@@ -283,21 +284,24 @@ export class Renderer {
     const { ctx, W, H } = this
     const { w, h, fw, fh } = this.mediaSize(l, inp.sources[l.sourceId])
     let img: CanvasImageSource = f.image
+    const c = l.crop
+    let sx = c ? c.x * f.width : 0, sy = c ? c.y * f.height : 0, sw = c ? c.w * f.width : f.width, sh = c ? c.h * f.height : f.height
     const p = colorParams(l.adjust, l.filter, l.filterAmount)
     const needsGrade = l.chroma.enabled || l.filter || Object.values(l.adjust).some((v) => v !== 0)
     if (needsGrade) {
       this.layerGrader ??= Grader.create(makeCanvas())
       if (this.layerGrader) {
-        const gw = Math.max(2, Math.round(Math.min(fw, f.width))), gh = Math.max(2, Math.round(Math.min(fh, f.height)))
+        const gw = Math.max(2, Math.round(Math.min(fw, sw))), gh = Math.max(2, Math.round(Math.min(fh, sh)))
         this.layerGrader.resize(gw, gh)
         const sc = this.scratch
         sc.width = gw; sc.height = gh
         const s = ctx2d(sc)
         s.clearRect(0, 0, gw, gh)
-        s.drawImage(f.image, 0, 0, gw, gh)
+        s.drawImage(f.image, sx, sy, sw, sh, 0, 0, gw, gh)
         const key = l.chroma.enabled ? hexRgb(l.chroma.color) : null
         this.layerGrader.drawGraded(sc, p, seed, key ? { color: key, similarity: l.chroma.similarity, smoothness: l.chroma.smoothness } : undefined)
         img = this.layerGrader.canvas
+        sx = 0; sy = 0; sw = gw; sh = gh
       }
     }
     ctx.save()
@@ -310,7 +314,7 @@ export class Renderer {
       else ctx.roundRect(-w / 2, -h / 2, w, h, Math.min(w, h) * 0.12)
       ctx.clip()
     }
-    ctx.drawImage(img, -fw / 2, -fh / 2, fw, fh)
+    ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh)
     if (l.border > 0) {
       ctx.lineWidth = l.border * Math.min(W, H) * 0.01
       ctx.strokeStyle = '#fff'
