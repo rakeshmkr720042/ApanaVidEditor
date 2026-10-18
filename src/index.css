@@ -397,3 +397,19 @@ input, textarea { font: inherit; color: inherit; }
 .audio-box .row .select { flex: 1; min-width: 0; }
 .btn.rec { color: #ff5a5a; border-color: #ff5a5a; }
 .scene-swap { display: block; width: 96px; margin-top: 4px; font-size: 11px; padding: 3px 0; border-radius: 6px; border: 1px solid var(--line, #333); background: transparent; color: inherit; cursor: pointer; }
+
+/* quiz → video */
+.quiz-box .text-input { min-height: 0; }
+.quiz-box > textarea.text-input { min-height: 180px; }
+.quiz-list { display: grid; gap: 8px; }
+.quiz-title { font-weight: 700; }
+.quiz-item { display: grid; gap: 4px; background: var(--panel-2); border-radius: 10px; padding: 8px; }
+.quiz-item .text-input { font-size: 14px; padding: 6px 8px; background: var(--panel); }
+.quiz-item > .btn { justify-self: start; }
+.quiz-q, .quiz-opt { display: flex; align-items: center; gap: 4px; }
+.quiz-q .text-input, .quiz-opt .text-input { flex: 1; min-width: 0; }
+.quiz-q textarea.text-input { resize: vertical; font-weight: 600; }
+.quiz-num { flex: 0 0 22px; text-align: center; font-weight: 700; font-size: 13px; opacity: .7; }
+.quiz-mark { flex: 0 0 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line, #444); background: transparent; color: inherit; font-weight: 700; cursor: pointer; }
+.quiz-mark.on { background: #22c55e; border-color: #22c55e; color: #fff; }
+.quiz-list > .btn { justify-self: start; }

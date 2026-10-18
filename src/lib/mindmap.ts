@@ -1,6 +1,6 @@
 import type { Scene } from '../model/scenes'
 import { ensureFont } from '../engine/text'
-import { getFFmpeg, runFFmpeg } from './ffmpeg'
+import { renderCanvasVideo } from './canvasVideo'
 import { uid } from './format'
 
 /**
@@ -565,83 +565,13 @@ export async function mindAnimLength(ms: MindScene, W: number, H: number) {
 
 // ---------------------------------------------------------------- video
 
-function ivf(frames: { data: Uint8Array; ms: number }[], fourcc: string, w: number, h: number): Uint8Array {
-  const size = 32 + frames.reduce((s, f) => s + 12 + f.data.length, 0)
-  const out = new Uint8Array(size)
-  const dv = new DataView(out.buffer)
-  out.set([68, 75, 73, 70]) // DKIF
-  dv.setUint16(4, 0, true); dv.setUint16(6, 32, true)
-  out.set([...fourcc].map((c) => c.charCodeAt(0)), 8)
-  dv.setUint16(12, w, true); dv.setUint16(14, h, true)
-  dv.setUint32(16, 1000, true); dv.setUint32(20, 1, true); dv.setUint32(24, frames.length, true) // millisecond timestamps
-  let o = 32
-  for (const f of frames) {
-    dv.setUint32(o, f.data.length, true); dv.setUint32(o + 4, f.ms, true); dv.setUint32(o + 8, 0, true)
-    out.set(f.data, o + 12)
-    o += 12 + f.data.length
-  }
-  return out
-}
-
-async function pickCodec(W: number, H: number, bitrate: number) {
-  if (typeof VideoEncoder === 'undefined') return null
-  for (const t of [{ codec: 'vp09.00.40.08', fourcc: 'VP90', ext: 'mp4' }, { codec: 'vp8', fourcc: 'VP80', ext: 'webm' }]) {
-    const r = await VideoEncoder.isConfigSupported({ codec: t.codec, width: W, height: H, bitrate, framerate: 30 }).catch(() => null)
-    if (r?.supported) return t
-  }
-  return null
-}
-
 /**
- * Renders one step as a clip of `seconds`: the movement at full frame rate, then the still map with
- * a frame a second (a still costs almost nothing). Returns null where the device can't encode
- * video, and the scene then uses its still picture.
+ * Renders one step as a clip of `seconds`: the movement at full frame rate, then the still map.
+ * Returns null where the device can't encode video, and the scene then uses its still picture.
  */
 export async function renderMindVideo(ms: MindScene, W: number, H: number, seconds: number, fps = 30): Promise<{ blob: Blob; ext: string } | null> {
-  const bitrate = Math.round(Math.min(8e6, W * H * fps * 0.07))
-  const codec = await pickCodec(W, H, bitrate)
-  if (!codec) return null
   const { laid, plan, theme } = await prepare(ms, W, H)
-  const c = canvas(W, H)
-  const g = c.getContext('2d')!
-  const frames: { data: Uint8Array; ms: number }[] = []
-  let err: unknown = null
-  const enc = new VideoEncoder({
-    output: (chunk) => { const d = new Uint8Array(chunk.byteLength); chunk.copyTo(d); frames.push({ data: d, ms: Math.round(chunk.timestamp / 1000) }) },
-    error: (e) => { err = e },
-  })
-  enc.configure({ codec: codec.codec, width: W, height: H, bitrate, framerate: fps, latencyMode: 'quality' })
-  const animFrames = Math.ceil(Math.min(plan.end, seconds) * fps)
-  const times: number[] = []
-  for (let n = 0; n <= animFrames; n++) times.push(n / fps)
-  for (let tt = times[times.length - 1] + 1; tt < seconds - 0.5; tt += 1) times.push(tt)
-  times.push(Math.max(times[times.length - 1] + 1 / fps, seconds - 1 / fps))
-  for (let n = 0; n < times.length; n++) {
-    if (err) break
-    const t = times[n]
-    if (n <= animFrames || n === animFrames + 1) drawFrame(g, laid, plan, theme, t, W, H)
-    const vf = new VideoFrame(c, { timestamp: Math.round(t * 1e6) })
-    enc.encode(vf, { keyFrame: n === 0 || n > animFrames })
-    vf.close()
-    while (enc.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 2))
-  }
-  await enc.flush().catch((e) => { err ??= e })
-  enc.close()
-  if (err) throw err
-  frames.sort((a, b) => a.ms - b.ms)
-
-  const ff = await getFFmpeg()
-  const name = `mm-${uid()}`
-  await ff.writeFile(`${name}.ivf`, ivf(frames, codec.fourcc, W, H))
-  try {
-    const { code } = await runFFmpeg(['-i', `${name}.ivf`, '-c', 'copy', `${name}.${codec.ext}`])
-    if (code !== 0) return null
-    const data = (await ff.readFile(`${name}.${codec.ext}`)) as Uint8Array
-    return { blob: new Blob([data.slice().buffer], { type: `video/${codec.ext}` }), ext: codec.ext }
-  } finally {
-    await ff.deleteFile(`${name}.ivf`).catch(() => {})
-    await ff.deleteFile(`${name}.${codec.ext}`).catch(() => {})
-  }
+  return renderCanvasVideo(W, H, seconds, [[0, Math.min(plan.end, seconds)]], (g, t) => drawFrame(g, laid, plan, theme, t, W, H), fps)
 }
 
 // ---------------------------------------------------------------- scenes
