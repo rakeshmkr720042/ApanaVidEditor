@@ -29,7 +29,7 @@ export function CaptionFrameEditor({ ed, frame, onChange }: { ed: Editor; frame:
       <Chips options={PRESETS} value={frame ? frame.preset : 'off'} onChange={pick} wrap />
       {frame && (
         <>
-          <p className="muted small">{t('Drag the frame on the video to move it, or its corner to resize it.')}</p>
+          <p className="muted small">{t('Drag the frame on the video to move it, or its sides and corners to resize it.')}</p>
           <span className="field-label">{t('Frame colour')}</span>
           <ColorRow value={frame.fill} onChange={(c) => set({ fill: c ?? '#000000' })} />
           <Slider label="Frame opacity" min={0} max={1} value={frame.fillOpacity} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ fillOpacity: v })} />

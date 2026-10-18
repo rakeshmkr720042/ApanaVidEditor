@@ -241,6 +241,24 @@ export function layoutFramed(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, W:
   return { px, lh: px * 1.25, pad, lines: wrapLines(ctx, layer.text, fw - pad * 2) }
 }
 
+/** Height (fraction of the canvas) a frame of width w (fraction) needs to show the text at its own size, unshrunk. */
+export function frameHeightFor(ctx: Ctx, layer: TextLayer, w: number, W: number, H: number) {
+  const st = layer.style
+  const px = Math.max(4, st.size * H), lh = px * 1.25, fw = w * W
+  ctx.save()
+  ctx.font = fontString(st, px)
+  if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D).letterSpacing = `${st.letterSpacing * px}px`
+  // padding depends on the frame's short side, so settle it in two passes
+  let fh = H
+  for (let i = 0; i < 2; i++) {
+    const pad = Math.min(fw, fh) * 0.08 + px * 0.3
+    const lines = wrapLines(ctx, layer.text, Math.max(10, fw - pad * 2))
+    fh = lines.length * lh + pad * 2
+  }
+  ctx.restore()
+  return Math.min(1, (fh + 2) / H)
+}
+
 function drawFramedText(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, t: number, W: number, H: number) {
   const st = layer.style
   const a = animState(layer, t)

@@ -1,9 +1,9 @@
-import type { BlurLayer, Clip, MediaLayer, MediaSource, Project, VisualLayer } from '../types'
+import type { BlurLayer, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
 import { activeAt, type LaidClip } from '../model/timeline'
 import { kenBurnsAt } from '../model/slideshow'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
-import { drawSticker, drawText, ensureFont, fontLoaded, measureText, STICKER_BASE } from './text'
+import { drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
 import { drawWave, waveData, waveReady, waveSize } from './visualizer'
 import { drawUserWatermark, watermarkCenter, watermarkSize, watermarkVisible } from './watermark'
 
@@ -240,6 +240,11 @@ export class Renderer {
   }
 
   /** Rectangle a layer occupies, in canvas pixels, for hit-testing and handles. */
+  /** Frame height (fraction) that fits a caption's text at its own size in a box w wide. */
+  fitFrameHeight(l: TextLayer, w: number) {
+    return frameHeightFor(this.ctx, l, w, this.W, this.H)
+  }
+
   layerRect(l: VisualLayer, sources: Record<string, MediaSource>) {
     const { W, H } = this
     if (l.type === 'blur') return { cx: (l.rect.x + l.rect.w / 2) * W, cy: (l.rect.y + l.rect.h / 2) * H, w: l.rect.w * W, h: l.rect.h * H, rotation: 0 }
