@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BlurLayer, Clip, Layer, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Watermark, WaveLayer } from '../types'
+import type { AudioLayer, BlurLayer, Clip, Layer, MainTrack, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -8,6 +8,7 @@ import { applySlideshow, type SlideshowOptions } from './slideshow'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
 import { outputSize } from '../engine/renderer'
+import { insertAt, newTrack, overlaps, trackKind, withTracks } from './tracks'
 
 /** `all` on a subtitle selects every subtitle together (style, animation and delete apply to all of them). */
 export type Selection = { type: 'clip'; id: string } | { type: 'layer'; id: string; all?: boolean } | null
@@ -45,7 +46,12 @@ function fullFrameScale(p: Project, sources: Record<string, MediaSource>, ar: nu
 
 /** All editing operations on a project, with undo/redo. */
 export function useEditor(initial: Project) {
-  const h = useHistory<Project>(initial)
+  const hist = useHistory<Project>(withTracks(initial, true))
+  // every change keeps each layer on a track row; empty rows go away except while dragging
+  const hSet = hist.set, hLive = hist.live
+  const set = useCallback((p: Project) => hSet(withTracks(p, true)), [hSet])
+  const live = useCallback((p: Project) => hLive(withTracks(p)), [hLive])
+  const h = useMemo(() => ({ ...hist, set, live }), [hist.value, hist.canUndo, hist.canRedo, set, live]) // eslint-disable-line react-hooks/exhaustive-deps
   const project = h.value
   const ref = useRef(project)
   ref.current = project
@@ -53,6 +59,8 @@ export function useEditor(initial: Project) {
   const sourcesRef = useRef(sources)
   sourcesRef.current = sources
   const [sel, setSel] = useState<Selection>(null)
+  /** The row picked in the track headers: new text, stickers, overlays and audio go there when it has room. */
+  const [track, setTrack] = useState<string | null>(null)
 
   const layout = useMemo(() => layoutClips(project.clips), [project.clips])
 
@@ -129,7 +137,10 @@ export function useEditor(initial: Project) {
         })
         at = end
       }
-      h.set({ ...p, layers: [...p.layers, ...layers] })
+      const tr = newTrack('visual')
+      const tracks = [...(p.tracks ?? [])]
+      tracks.splice(insertAt(tracks, 'visual', false), 0, tr)
+      h.set({ ...p, tracks, layers: [...p.layers, ...layers.map((l) => ({ ...l, track: tr.id }))] })
       const sel: Selection = { type: 'layer', id: layers[0].id }
       setSel(sel)
       return { sel, start: layers[0].start, where: mode, cut }
@@ -172,9 +183,68 @@ export function useEditor(initial: Project) {
 
   const addLayer = useCallback((l: Layer) => {
     const p = ref.current
-    h.set({ ...p, layers: [...p.layers, l] })
+    const tr = p.tracks?.find((x) => x.id === track)
+    const fits = tr && tr.kind === trackKind(l) && !tr.locked && !p.layers.some((x) => x.track === tr.id && overlaps(x, l))
+    h.set({ ...p, layers: [...p.layers, fits ? { ...l, track: tr.id } : l] })
     setSel({ type: 'layer', id: l.id })
+  }, [h, track])
+
+  // ----- track rows
+  const addTrack = useCallback((kind: Track['kind']) => {
+    const p = ref.current
+    const tr = newTrack(kind, true)
+    const tracks = [...(p.tracks ?? [])]
+    tracks.splice(insertAt(tracks, kind, true), 0, tr)
+    h.set({ ...p, tracks })
+    setTrack(tr.id)
+    return tr
   }, [h])
+
+  const updateTrack = useCallback((id: string, patch: Partial<Track>) => {
+    const p = ref.current
+    commit({ ...p, tracks: (p.tracks ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)) })
+    if (patch.locked || patch.hidden) setSel((s) => (s?.type === 'layer' && p.layers.find((l) => l.id === s.id)?.track === id ? null : s))
+  }, [commit])
+
+  /** Moves a row one place up or down among rows of its kind (visual rows: up = more in front). */
+  const moveTrack = useCallback((id: string, dir: -1 | 1) => {
+    const p = ref.current
+    const tracks = [...(p.tracks ?? [])]
+    const i = tracks.findIndex((t) => t.id === id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= tracks.length || tracks[j].kind !== tracks[i].kind) return
+    ;[tracks[i], tracks[j]] = [tracks[j], tracks[i]]
+    h.set({ ...p, tracks })
+  }, [h])
+
+  /** Deletes a row and everything on it. */
+  const removeTrack = useCallback((id: string) => {
+    const p = ref.current
+    h.set({ ...p, tracks: (p.tracks ?? []).filter((t) => t.id !== id), layers: p.layers.filter((l) => l.track !== id) })
+    setSel((s) => (s?.type === 'layer' && p.layers.find((l) => l.id === s.id)?.track === id ? null : s))
+    setTrack((t) => (t === id ? null : t))
+  }, [h])
+
+  const setMain = useCallback((patch: Partial<MainTrack>) => {
+    const p = ref.current
+    h.set({ ...p, main: { ...p.main, ...patch } })
+    if (patch.locked) setSel((s) => (s?.type === 'clip' ? null : s))
+  }, [h])
+
+  /** After a drag: a layer that now overlaps another on its row moves to a new row just below it. */
+  const settleLayer = useCallback((id: string) => {
+    let p = ref.current
+    const l = p.layers.find((x) => x.id === id)
+    const tracks = [...(p.tracks ?? [])]
+    const i = tracks.findIndex((t) => t.id === l?.track)
+    if (l && i >= 0 && p.layers.some((x) => x.id !== id && x.track === l.track && overlaps(x, l))) {
+      const tr = newTrack(tracks[i].kind)
+      tracks.splice(i + 1, 0, tr)
+      p = { ...p, tracks, layers: p.layers.map((x) => (x.id === id ? ({ ...x, track: tr.id } as Layer) : x)) }
+    }
+    const next = withTracks(p, true)
+    if (next !== ref.current) commit(next)
+  }, [commit])
 
   const total = () => layoutClips(ref.current.clips).total
 
@@ -260,6 +330,8 @@ export function useEditor(initial: Project) {
       const len = l.end - l.start
       const copy = { ...l, id: uid(), start: l.end, end: l.end + len } as Layer
       if ('box' in copy) copy.box = { ...copy.box }
+      // stays on the same row when there is room after the original, else gets a free row
+      if (p.layers.some((x) => x.track === l.track && overlaps(x, copy))) delete copy.track
       h.set({ ...p, layers: [...p.layers, copy] })
       setSel({ type: 'layer', id: copy.id })
     }
@@ -269,6 +341,7 @@ export function useEditor(initial: Project) {
   const split = useCallback((t: number) => {
     const p = ref.current
     if (sel?.type === 'layer') {
+      if (p.tracks?.find((x) => x.id === p.layers.find((l) => l.id === sel.id)?.track)?.locked) return
       const l = p.layers.find((x) => x.id === sel.id)
       if (!l || t <= l.start + 0.1 || t >= l.end - 0.1) return
       const right = { ...l, id: uid(), start: t } as Layer
@@ -277,6 +350,7 @@ export function useEditor(initial: Project) {
       setSel({ type: 'layer', id: right.id })
       return
     }
+    if (p.main?.locked) return
     const { items } = layoutClips(p.clips)
     const it = items.find((x) => t >= x.start && t < x.start + x.dur)
     if (!it) return
@@ -319,6 +393,7 @@ export function useEditor(initial: Project) {
     begin, end, live: h.live,
     addSource, place, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
+    track, setTrack, addTrack, updateTrack, moveTrack, removeTrack, setMain, settleLayer,
     remove, duplicate, split, moveClip, replaceProject,
   }
 }

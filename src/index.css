@@ -150,7 +150,7 @@ input, textarea { font: inherit; color: inherit; }
 .tl-add { position: absolute; top: 6px; width: 44px; height: 44px; border-radius: 10px; background: #fff; color: #000; border: 0; font-size: 26px; line-height: 1; }
 .tl-lanes { position: relative; margin-top: 6px; }
 .tl-layer {
-  position: absolute; height: 26px; border-radius: 6px; font-size: 11px; color: #fff; display: flex; align-items: center;
+  position: absolute; height: 28px; border-radius: 6px; font-size: 11px; color: #fff; display: flex; align-items: center;
   padding: 0 8px; overflow: hidden; white-space: nowrap; outline: 2px solid transparent; outline-offset: -2px; cursor: pointer;
 }
 .tl-layer span { position: relative; text-overflow: ellipsis; overflow: hidden; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
@@ -515,3 +515,50 @@ input, textarea { font: inherit; color: inherit; }
 
 /* every caption picked together */
 .tl-layer.group { outline-color: var(--sel); }
+
+/* track rows: header column with per-track switches, + Add track */
+.tl-heads {
+  position: sticky; left: 0; z-index: 7; flex: 0 0 128px; margin-right: -128px; background: var(--panel);
+  border-right: 1px solid var(--line); box-shadow: 4px 0 8px rgba(0, 0, 0, .25); padding-bottom: 8px;
+}
+.tl-head-ruler { height: 20px; }
+.tl-head { display: flex; align-items: center; gap: 2px; padding: 0 4px 0 6px; font-size: 11px; }
+.tl-head.main { height: 56px; margin-top: 4px; }
+.tl-head-rows { margin-top: 6px; }
+.tl-head-name {
+  flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: var(--text); font-size: 11px; padding: 4px 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 6px;
+}
+.tl-head.main .tl-head-name { font-weight: 600; }
+.tl-head.on .tl-head-name { background: var(--accent); color: #fff; }
+.tl-head > button:not(.tl-head-name) {
+  flex: 0 0 24px; height: 24px; display: grid; place-items: center; background: none; border: 0; color: var(--text); border-radius: 6px; padding: 0;
+}
+.tl-head > button.off { color: var(--sel); }
+.tl-head.locked .tl-head-name { opacity: .6; }
+.tl-addtrack { padding: 6px 6px 0; position: relative; }
+.tl-addtrack > button {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 4px; font-size: 12px;
+  border-radius: 8px; border: 1px dashed var(--muted); background: var(--panel-2); color: var(--text);
+}
+.tl-addmenu { display: grid; gap: 4px; margin-top: 4px; }
+.tl-addmenu button {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px; font-size: 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text); text-align: left;
+}
+.tl-row { position: absolute; left: 0; right: 0; height: 34px; border-bottom: 1px solid rgba(255, 255, 255, .04); pointer-events: none; }
+.tl-row.on { background: rgba(255, 255, 255, .05); }
+.tl-layer.hidden { opacity: .35; }
+.tl-layer.locked, .tl-clip.locked { cursor: not-allowed; }
+.tl-layer.locked::after, .tl-clip.locked::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: repeating-linear-gradient(135deg, rgba(0, 0, 0, .28) 0 6px, transparent 6px 12px);
+}
+.track-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.track-actions .btn { display: inline-flex; align-items: center; gap: 4px; }
+.btn.danger { color: #ff6b6b; border-color: #ff6b6b55; }
+.sheet h2 .link { background: none; border: 0; color: var(--accent); font-size: 13px; padding: 0; }
+@media (max-width: 420px) {
+  .tl-heads { flex-basis: 112px; margin-right: -112px; }
+  .tl-head > button:not(.tl-head-name) { flex-basis: 22px; }
+}
