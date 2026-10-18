@@ -128,6 +128,13 @@ const hi: Record<string, string> = {
   'What the voice says when the answer appears': 'उत्तर आने पर आवाज़ क्या बोले',
   'Write or paste questions with options, or flashcards. Each one gets a countdown, then the right answer is shown.': 'विकल्पों वाले सवाल या फ़्लैशकार्ड लिखें या पेस्ट करें। हर सवाल पर काउंटडाउन चलेगा, फिर सही उत्तर दिखेगा।',
   'Tip: start each question with Q:, put options on lines like A) B) C) and mark the right one with *, or add a line "Answer: B". For flashcards write Q: and A: lines, or front | back on one line.': 'सुझाव: हर सवाल Q: से शुरू करें, विकल्प A) B) C) वाली लाइनों में लिखें और सही वाले पर * लगाएं, या "Answer: B" लाइन जोड़ें। फ़्लैशकार्ड के लिए Q: और A: लाइनें लिखें, या एक लाइन में आगे | पीछे।',
+  'Data to video': 'डेटा से वीडियो', 'Data': 'डेटा', 'Edit table': 'टेबल बदलें', 'Chart': 'चार्ट', 'Chart style': 'चार्ट स्टाइल', 'Chart title': 'चार्ट का टाइटल',
+  'Auto': 'अपने-आप', 'Columns': 'कॉलम', 'Donut': 'डोनट', 'Table': 'टेबल', 'Big numbers': 'बड़े नंबर', 'Bold': 'चटक',
+  'Biggest first': 'सबसे बड़ा पहले', 'A scene for each row': 'हर पंक्ति का अलग सीन', 'Point out the top value at the end': 'आख़िर में सबसे बड़ा मान दिखाएं',
+  'Name': 'नाम', 'Value': 'मान', 'Label': 'लेबल', 'Row': 'पंक्ति', 'Add column': 'कॉलम जोड़ें', 'Source (optional)': 'स्रोत (ज़रूरी नहीं)',
+  'chart': 'चार्ट', 'charts': 'चार्ट', 'rows': 'पंक्तियां', 'Open CSV': 'CSV खोलें', 'Animating the chart…': 'चार्ट एनिमेट हो रहा है…', 'No data found': 'कोई डेटा नहीं मिला',
+  'Paste a table from a spreadsheet, CSV, or lines like "Delhi: 42". It becomes a chart whose bars, points or rows come in one by one with the voice.': 'स्प्रेडशीट या CSV से टेबल पेस्ट करें, या "दिल्ली: 42" जैसी लाइनें लिखें। इससे चार्ट बनेगा जिसके बार, पॉइंट या पंक्तियां आवाज़ के साथ एक-एक करके आएंगी।',
+  'Tip: copy cells from Excel or Google Sheets and paste them here, or write one row per line like "Delhi: 42" or "City | 2011 | 2024". A blank line starts a new chart; "# Title" names it.': 'सुझाव: Excel या Google Sheets से सेल कॉपी करके यहां पेस्ट करें, या हर लाइन में एक पंक्ति लिखें, जैसे "दिल्ली: 42" या "शहर | 2011 | 2024"। खाली लाइन से नया चार्ट शुरू होता है; "# टाइटल" उसका नाम है।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

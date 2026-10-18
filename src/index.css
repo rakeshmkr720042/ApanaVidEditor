@@ -413,3 +413,23 @@ input, textarea { font: inherit; color: inherit; }
 .quiz-mark { flex: 0 0 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line, #444); background: transparent; color: inherit; font-weight: 700; cursor: pointer; }
 .quiz-mark.on { background: #22c55e; border-color: #22c55e; color: #fff; }
 .quiz-list > .btn { justify-self: start; }
+
+/* data → video */
+.data-box > textarea.text-input { min-height: 180px; font-family: ui-monospace, monospace; font-size: 13px; }
+.data-list { display: grid; gap: 8px; }
+.data-table { display: grid; gap: 6px; background: var(--panel-2); border-radius: 10px; padding: 8px; min-width: 0; }
+.data-table .text-input { font-size: 14px; padding: 6px 8px; background: var(--panel); min-height: 0; }
+.data-title { display: flex; gap: 4px; align-items: center; }
+.data-title .text-input { flex: 1; min-width: 0; font-weight: 700; }
+.data-scroll { overflow-x: auto; }
+.data-grid { border-collapse: separate; border-spacing: 3px; }
+.data-grid th, .data-grid td { padding: 0; }
+.data-grid .text-input { width: 96px; }
+.data-grid th .text-input { font-weight: 700; }
+.data-grid td:first-child .text-input, .data-grid th:first-child .text-input { width: 120px; }
+.data-grid .text-input.num { text-align: right; }
+.data-col { display: flex; align-items: center; }
+.data-col .btn { padding: 2px 4px; }
+.data-table .row { align-items: center; }
+.data-source { flex: 1; min-width: 0; }
+.data-list > .btn { justify-self: start; }

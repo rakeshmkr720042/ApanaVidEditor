@@ -11,6 +11,11 @@ import {
   QUIZ_THEMES, countdownSound, deckLang, defaultQuizSettings, drawQuizPreview, drawQuizStill, item, parseQuiz, quizToScenes, quizToText,
   renderQuizVideo, tidyDeck, type QuizDeck, type QuizScene, type QuizSettings,
 } from '../lib/quiz'
+import { DataGrid } from './DataGrid'
+import {
+  DATA_THEMES, dataPlan, dataToScenes, dataToText, defaultDataSettings, docLang, drawDataPreview, drawDataStill, parseData, renderDataVideo, row as dataRow,
+  table as dataTable, tidyDoc, type ChartKind, type DataDoc, type DataSettings,
+} from '../lib/datachart'
 import { clipDuration } from '../model/timeline'
 import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
@@ -36,6 +41,9 @@ let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as A
 let quizDraft = { tab: 'text' as 'text' | 'list', text: '', deck: { title: '', items: [item('', ['', '', '', ''])] } as QuizDeck, picked: 0 }
 let quizMemo: QuizSettings = defaultQuizSettings()
 let quizModeSet = false // the user picked quiz or flashcards themselves
+// the table being written, and how it is drawn
+let dataDraft = { tab: 'text' as 'text' | 'grid', text: '', doc: { tables: [dataTable('', [''], [dataRow(), dataRow(), dataRow()])] } as DataDoc, picked: 0 }
+let dataMemo: DataSettings = defaultDataSettings()
 const MAP_SLACK = 4 // extra seconds of still map at the end of each clip, so it can be lengthened on the timeline
 
 const TRANSITIONS = [
@@ -88,14 +96,33 @@ A: Eight`
 
 const QUIZ_SLACK = 2 // extra seconds of still answer at the end of each clip
 
-/** Puts freshly made quiz scenes where the old ones were (or at the end). */
-const withQuiz = (list: Scene[], got: Scene[]) => {
-  const at = list.findIndex((s) => s.quiz)
-  const rest = list.filter((s) => !s.quiz)
+const DATA_HINT = `# Population of big cities (millions)
+City | 2011 | 2024
+Mumbai | 18.4 | 21.7
+Delhi | 16.3 | 33.8
+Kolkata | 14.1 | 15.6
+Source: UN estimates
+
+# This year in numbers
+Viewers: 12,500
+Growth: 38%
+Rating: 4.8`
+
+const CHART_KINDS: { value: 'auto' | ChartKind; label: string }[] = [
+  { value: 'auto', label: 'Auto' }, { value: 'bars', label: 'Bars' }, { value: 'columns', label: 'Columns' }, { value: 'line', label: 'Line' },
+  { value: 'donut', label: 'Donut' }, { value: 'table', label: 'Table' }, { value: 'numbers', label: 'Big numbers' },
+]
+
+/** Puts freshly made quiz (or chart) scenes where the old ones were (or at the end). */
+const withMade = (list: Scene[], got: Scene[], of: (s: Scene) => boolean) => {
+  const at = list.findIndex(of)
+  const rest = list.filter((s) => !of(s))
   if (at < 0) return [...rest, ...got]
-  const before = list.slice(0, at).filter((s) => !s.quiz).length
+  const before = list.slice(0, at).filter((s) => !of(s)).length
   return [...rest.slice(0, before), ...got, ...rest.slice(before)]
 }
+const withQuiz = (list: Scene[], got: Scene[]) => withMade(list, got, (s) => !!s.quiz)
+const withData = (list: Scene[], got: Scene[]) => withMade(list, got, (s) => !!s.data)
 
 /** Waveform colours that suit the picture behind them. */
 const waveColors = (look: AudioLook, theme: string): [string, string] => {
@@ -106,7 +133,7 @@ const waveColors = (look: AudioLook, theme: string): [string, string] => {
 const extOf = (b: Blob) => (b.type === 'image/png' ? 'png' : b.type === 'image/webp' ? 'webp' : 'jpg')
 
 /** Slides, PDF pages, photos or a pasted script → scenes you can script and time → clips on the timeline. */
-export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap' | 'audio' | 'quiz'; onClose: () => void; onDone: (msg: string) => void }) {
+export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data'; onClose: () => void; onDone: (msg: string) => void }) {
   const [scenes, setScenes] = useState<Scene[]>([])
   // a new audio → video run starts with the waveform and captions on
   const [o, setO] = useState(() => (start === 'audio' && !memo.wave ? (memo = { ...memo, wave: 'bars', captions: true, theme: memo.theme === 'clean' ? 'dark' : memo.theme }) : memo))
@@ -132,6 +159,12 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const setQuizDraft = (patch: Partial<typeof quizDraft>) => setQd((v) => (quizDraft = { ...v, ...patch }))
   const [qs, setQs] = useState(quizMemo)
   const quizPreview = useRef<HTMLCanvasElement>(null)
+  const [charting, setCharting] = useState(start === 'data')
+  const [dd, setDd] = useState(dataDraft)
+  const setDataDraft = (patch: Partial<typeof dataDraft>) => setDd((v) => (dataDraft = { ...v, ...patch }))
+  const [ds, setDs] = useState(dataMemo)
+  const dataPreview = useRef<HTMLCanvasElement>(null)
+  const csvInput = useRef<HTMLInputElement>(null)
   const audioInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const coverInput = useRef<HTMLInputElement>(null)
@@ -451,6 +484,80 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     } finally { setBusy(null) }
   }
 
+  // ---- data table → chart video
+
+  const currentDoc = useMemo((): DataDoc => (dd.tab === 'text' ? parseData(dd.text) : tidyDoc(dd.doc)), [dd.tab, dd.text, dd.doc])
+
+  const switchDataTab = (tab: 'text' | 'grid') => {
+    if (tab === dd.tab) return
+    if (tab === 'grid') {
+      const d = parseData(dd.text)
+      setDataDraft({ tab, doc: d.tables.length ? d : dataDraft.doc, picked: 0 })
+    } else setDataDraft({ tab, text: currentDoc.tables.length ? dataToText(currentDoc) : dd.text })
+  }
+
+  // live preview of the chart being written
+  useEffect(() => {
+    const c = dataPreview.current
+    if (!c || !charting || !currentDoc.tables.length) return
+    let live = true
+    const id = setTimeout(() => {
+      const { w, h } = frame()
+      const off = document.createElement('canvas')
+      off.width = 480; off.height = Math.round((480 * h) / w)
+      const tb = currentDoc.tables[Math.min(dd.picked, currentDoc.tables.length - 1)]
+      void drawDataPreview(tb, ds, off).then(() => {
+        if (!live) return
+        c.width = off.width; c.height = off.height
+        c.getContext('2d')!.drawImage(off, 0, 0)
+      })
+    }, 150)
+    return () => { live = false; clearTimeout(id) }
+  }, [currentDoc, ds, dd.picked, charting]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addData = async () => {
+    setError(null)
+    try {
+      const { w, h } = frame()
+      const got = await dataToScenes(currentDoc, ds, w, h, (p) => setBusy({ label: t('Making scenes…'), p }))
+      setScenes((list) => withData(list, got))
+      setCharting(false)
+      // the numbers are on screen already, so no captions; each scene follows on from the last, so cuts
+      const lang = docLang(currentDoc)
+      if (!scenes.some((s) => !s.data)) {
+        set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice === 'track' ? 'none' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: false, transition: null, kenBurns: false, fill: false })
+      }
+    } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
+  }
+
+  // a new look redraws the chart scenes already made; anything else makes them again
+  const setDataSettings = async (patch: Partial<DataSettings>) => {
+    const next = dataMemo = { ...ds, ...patch }
+    setDs(next)
+    const made = scenes.filter((s) => s.data)
+    if (!made.length) return
+    const { w, h } = frame()
+    setBusy({ label: t('Making scenes…'), p: 0 })
+    try {
+      if (!('theme' in patch)) {
+        // the tables as they were written (a sorted copy keeps the same ids)
+        const seen = new Set<string>()
+        const tables = made.map((s) => s.data!.table).filter((x) => !seen.has(x.id) && seen.add(x.id))
+        const source = new Map(currentDoc.tables.map((x) => [x.id, x]))
+        const got = await dataToScenes({ tables: tables.map((x) => source.get(x.id) ?? x) }, next, w, h, (p) => setBusy({ label: t('Making scenes…'), p }))
+        setScenes((list) => withData(list, got))
+        return
+      }
+      const done = new Map<string, Partial<Scene>>()
+      for (let i = 0; i < made.length; i++) {
+        setBusy({ label: t('Making scenes…'), p: i / made.length })
+        const data = { ...made[i].data!, settings: next }
+        done.set(made[i].id, { data, image: await drawDataStill(data, w, h) })
+      }
+      setScenes((list) => list.map((s) => (done.has(s.id) ? { ...s, ...done.get(s.id) } : s)))
+    } finally { setBusy(null) }
+  }
+
   const pickTrack = async (f: File | undefined) => {
     if (!f) return
     try {
@@ -491,7 +598,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       for (let i = 0; i < scenes.length; i++) {
         setBusy({ label: t('Adding scenes…'), p: i / scenes.length })
         const s = scenes[i]
-        if (s.mind || s.quiz) { built.push({ scene: s, source: null as unknown as MediaSource, voice: null }); continue } // made below, once its length is known
+        if (s.mind || s.quiz || s.data) { built.push({ scene: s, source: null as unknown as MediaSource, voice: null }); continue } // made below, once its length is known
         // a photo shown on several chapters is stored once
         let src = loaded.get(s.image)
         if (!src) {
@@ -572,6 +679,30 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           }
         }
       }
+      const charts = built.filter((b) => b.scene.data)
+      if (charts.length) {
+        // each chart scene becomes a clip as long as its scene, its rows coming in with the voice
+        const lens = sceneLengths(built, o, o.voice === 'track' ? track : null)
+        const trs = transitionLengths(lens, o)
+        const last = ed.project.clips[ed.project.clips.length - 1]
+        const firstIn = last?.transition ? Math.max(0, Math.min(last.transition.duration, clipDuration(last) / 2, (lens[0] + trs[0]) / 2)) : 0
+        const { w, h } = frame()
+        for (let k = 0; k < charts.length; k++) {
+          setBusy({ label: t('Animating the chart…'), p: k / charts.length })
+          const b = charts[k]
+          const i = built.indexOf(b)
+          const d = b.scene.data!
+          const plan = dataPlan(d, o.voice === 'ai' ? b.voice?.duration ?? 0 : 0)
+          const offset = i === 0 ? firstIn : trs[i - 1]
+          const video = await renderDataVideo(d, plan, w, h, offset + lens[i] + trs[i] + QUIZ_SLACK, offset).catch(() => null)
+          const src = video
+            ? await loadSource(video.blob, `${b.scene.name}.${video.ext}`)
+            : await loadSource(b.scene.image, `${b.scene.name}.png`)
+          ed.addSource(src)
+          await saveMedia(src)
+          b.source = src
+        }
+      }
       if (o.voice === 'track' && track) { ed.addSource(track); await saveMedia(track) }
       const { w, h } = frame()
       ed.replaceProject(placeScenes(ed.project, built, o, o.voice === 'track' ? track : null, w / h))
@@ -585,8 +716,10 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet scene-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
-        <h2>{t(start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
-        <p className="muted small">{t(start === 'quiz'
+        <h2>{t(start === 'data' ? 'Data to video' : start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
+        <p className="muted small">{t(start === 'data'
+          ? 'Paste a table from a spreadsheet, CSV, or lines like "Delhi: 42". It becomes a chart whose bars, points or rows come in one by one with the voice.'
+          : start === 'quiz'
           ? 'Write or paste questions with options, or flashcards. Each one gets a countdown, then the right answer is shown.'
           : start === 'audio'
           ? 'Pick or record a podcast, talk or voice note. It is cut into chapters at its pauses; each gets a picture, captions of what is said, and a moving waveform.'
@@ -601,6 +734,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           <button className={`btn${mapping ? ' on' : ''}`} disabled={!!busy} onClick={() => setMapping((v) => !v)}>{t('Mind map')}</button>
           <button className={`btn${listening ? ' on' : ''}`} disabled={!!busy} onClick={() => setListening((v) => !v)}>{t('Audio')}</button>
           <button className={`btn${quizzing ? ' on' : ''}`} disabled={!!busy} onClick={() => setQuizzing((v) => !v)}>{t('Quiz')}</button>
+          <button className={`btn${charting ? ' on' : ''}`} disabled={!!busy} onClick={() => setCharting((v) => !v)}>{t('Data')}</button>
           {scenes.length > 0 && <button className="btn" disabled={!!busy} onClick={() => setScenes([])}>{t('Clear')}</button>}
         </div>
 
@@ -713,6 +847,42 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           </>
         )}
 
+        {charting && (
+          <div className="script-box data-box">
+            <Chips options={[{ value: 'text', label: 'Write or paste' }, { value: 'grid', label: 'Edit table' }]} value={dd.tab} onChange={switchDataTab} />
+            {dd.tab === 'text' ? (
+              <>
+                <textarea className="text-input" rows={10} value={dd.text} placeholder={DATA_HINT} autoFocus spellCheck={false}
+                  onChange={(e) => setDataDraft({ text: e.target.value })} />
+                <p className="muted small">{t('Tip: copy cells from Excel or Google Sheets and paste them here, or write one row per line like "Delhi: 42" or "City | 2011 | 2024". A blank line starts a new chart; "# Title" names it.')}{' '}
+                  <button className="btn small ghost" onClick={() => csvInput.current?.click()}>{t('Open CSV')}</button></p>
+              </>
+            ) : <DataGrid doc={dd.doc} onChange={(doc) => setDataDraft({ doc })} onPick={(picked) => setDataDraft({ picked })} />}
+            {currentDoc.tables.length > 0 && (
+              <>
+                <p className="muted small">{currentDoc.tables.length} {t(currentDoc.tables.length === 1 ? 'chart' : 'charts')} · {currentDoc.tables.reduce((s, x) => s + x.rows.length, 0)} {t('rows')}</p>
+                {dd.tab === 'text' && currentDoc.tables.length > 1 && (
+                  <Chips options={currentDoc.tables.map((x, i) => ({ value: i, label: x.title || `${i + 1}` }))} value={Math.min(dd.picked, currentDoc.tables.length - 1)} onChange={(picked) => setDataDraft({ picked })} wrap />
+                )}
+                <canvas ref={dataPreview} className="mind-preview" />
+              </>
+            )}
+            <button className="btn primary" disabled={!!busy || !currentDoc.tables.length} onClick={addData}>{t('Make scenes')}</button>
+          </div>
+        )}
+
+        {(charting || scenes.some((s) => s.data)) && (
+          <>
+            <span className="field-label">{t('Chart')}</span>
+            <Chips options={CHART_KINDS} value={ds.kind} onChange={(kind) => { if (!busy) void setDataSettings({ kind }) }} wrap />
+            <span className="field-label">{t('Chart style')}</span>
+            <Chips options={DATA_THEMES.map((c) => ({ value: c.id, label: c.label }))} value={ds.theme} onChange={(theme) => { if (!busy) void setDataSettings({ theme }) }} />
+            <Toggle label="Biggest first" value={ds.sort} onChange={(sort) => { if (!busy) void setDataSettings({ sort }) }} />
+            <Toggle label="A scene for each row" value={ds.steps} onChange={(steps) => { if (!busy) void setDataSettings({ steps }) }} />
+            <Toggle label="Point out the top value at the end" value={ds.highlight} onChange={(highlight) => { if (!busy) void setDataSettings({ highlight }) }} />
+          </>
+        )}
+
         {(mapping || scenes.some((s) => s.mind)) && (
           <>
             <span className="field-label">{t('Map style')}</span>
@@ -745,7 +915,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                     <textarea className="text-input" rows={2} value={s.quiz.say2} placeholder={t('What the voice says when the answer appears')}
                       onChange={(e) => update(s.id, { quiz: { ...s.quiz!, say2: e.target.value } })} />
                   )}
-                  {s.quiz ? null : s.audio ? (
+                  {s.quiz || s.data ? null : s.audio ? (
                     <div className="scene-tools">
                       <span className="small muted">{fmtTime(s.audio.start)} – {fmtTime(s.audio.end)}</span>
                     </div>
@@ -796,7 +966,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                 <Chips options={[...WAVE_STYLES, { value: 'none', label: 'None' }]} value={o.wave ?? 'none'} onChange={(v) => setWave(v === 'none' ? null : v)} />
               </>
             )}
-            {noVoice && scenes.some((s) => !s.quiz) && (
+            {noVoice && scenes.some((s) => !s.quiz && !s.data) && (
               <Slider label="Each scene" min={1} max={20} step={0.5} value={o.seconds} format={(v) => `${v.toFixed(1)}s`} onChange={(seconds) => set({ seconds })} />
             )}
             <Toggle label="Show the text as captions" value={o.captions} onChange={(captions) => set({ captions })} />
@@ -832,6 +1002,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           onChange={(e) => { if (e.target.files?.length) setAudio({ photos: [...e.target.files], look: 'photos' }); e.target.value = '' }} />
         <input ref={coverInput} type="file" accept="image/*" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) setAudio({ cover: f, look: 'cover' }); e.target.value = '' }} />
+        <input ref={csvInput} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values" hidden
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((text) => setDataDraft({ tab: 'text', text })); e.target.value = '' }} />
         <input ref={swapInput} type="file" accept="image/*" hidden onChange={(e) => { void swapPicture(e.target.files?.[0]); e.target.value = '' }} />
       </div>
     </div>
