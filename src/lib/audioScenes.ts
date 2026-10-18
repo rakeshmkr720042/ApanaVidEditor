@@ -203,6 +203,7 @@ export async function bitmapOf(b: Blob | null) {
 export async function audioToScenes(p: {
   duration: number; gaps: Gap[]; cues: Cue[]; target: number; title: string; look: AudioLook
   pics: Pic[]; leftover: Leftover; cover: Blob | null; theme: CardTheme; wave: WaveStyle | null; W: number; H: number; progress: (p: number) => void
+  points?: (texts: string[]) => Promise<string[]> // key points for the cards of chapters with no picture (Local AI)
 }): Promise<{ scenes: Scene[]; matched: number; byAI: boolean; unused: number }> {
   const cuts = chapterCuts(p.duration, p.gaps, p.cues, p.target)
   const bounds = [0, ...cuts, p.duration]
@@ -214,11 +215,18 @@ export async function audioToScenes(p: {
     return { start, end, cues, text: cues.map((c) => c.text.trim()).join(' ') }
   })
   const choice = look === 'photos' ? await planPictures(chapters.map((c) => c.text), p.pics, p.leftover) : null
+  // chapters that get a drawn card can carry a key point of what is said in them
+  const bare = chapters.map((_, i) => i).filter((i) => choice?.plan[i] == null && chapters[i].text.trim() && !(i === 0 && chapters.length > 1))
+  let points: string[] = []
+  if (p.points && bare.length) {
+    try { points = await p.points(bare.map((i) => chapters[i].text)) } catch { /* the first words of each chapter instead */ }
+  }
   const scenes: Scene[] = []
   for (let i = 0; i < chapters.length; i++) {
     p.progress(i / chapters.length)
     const { start, end, cues, text } = chapters[i]
-    const sub = i === 0 && chapters.length > 1 ? '' : headingOf(text)
+    const point = points[bare.indexOf(i)] ?? ''
+    const sub = i === 0 && chapters.length > 1 ? '' : point || headingOf(text)
     const pic = choice?.plan[i] != null ? p.pics[choice.plan[i]!] : null
     const part: AudioPart = { start, end, cues, heard: text, look: pic ? 'photos' : look === 'photos' ? 'card' : look, pic: pic?.id, title: p.title, sub }
     const image = pic ? pic.image : await drawAudioCard({ title: p.title, sub, theme: p.theme, cover, wave: p.wave, W: p.W, H: p.H })

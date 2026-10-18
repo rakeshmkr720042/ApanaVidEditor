@@ -134,6 +134,21 @@ export async function keyPoints(text: string): Promise<string> {
   return out
 }
 
+/** One short key point for each part of a talk, to put on the cards of parts that have no picture. Empty where the model gave none. */
+export async function chapterPoints(texts: string[]): Promise<string[]> {
+  const out = await ask(
+    'For each numbered part of a talk, write its key point as a short heading of at most 8 words. '
+    + 'Reply with one line per part, like "3: the key point", and nothing else. Do not invent anything. ' + sameLanguage(texts.join(' ')),
+    texts.map((x, i) => `${i + 1}: ${x.replace(/\s+/g, ' ').slice(0, 500)}`).join('\n'),
+  )
+  const res = texts.map(() => '')
+  for (const m of out.matchAll(/^\s*(\d+)\s*[:.)-]\s*(.+)$/gm)) {
+    const i = Number(m[1]) - 1
+    if (i >= 0 && i < texts.length && !res[i]) res[i] = m[2].trim().replace(/^["“'*]+|["”'*.]+$/g, '').slice(0, 80)
+  }
+  return res
+}
+
 /**
  * Article version of keyPoints: the headline, source line and pictures are kept as they are,
  * only the story text is shortened, and the pictures go back in between the new sections.
