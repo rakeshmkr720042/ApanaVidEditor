@@ -3,8 +3,9 @@ import { cleanText } from '../model/scenes'
 import { ensureFont } from '../engine/text'
 import { kindOf } from './media'
 import { uid } from './format'
+import { readMoving } from './moving'
 
-/** Turns picked files (PDF, PowerPoint, photos) into scenes: one per page, slide or photo. */
+/** Turns picked files (PDF, PowerPoint, photos, GIFs, video clips) into scenes: one per page, slide, photo or clip. */
 
 const LONG_SIDE = 1920
 const base = (name: string) => name.replace(/\.[^.]+$/, '')
@@ -22,9 +23,17 @@ export async function filesToScenes(files: File[], progress: ImportProgress): Pr
   for (const f of files) {
     if (isPdf(f)) out.push(...await pdfToScenes(f, progress))
     else if (isPptx(f)) out.push(...await pptxToScenes(f, progress))
-    else if (kindOf(f) === 'image') out.push({ id: uid(), image: f, name: base(f.name), text: '', duration: null })
+    else if (kindOf(f) === 'image' && !/gif$/i.test(f.type) && !/\.gif$/i.test(f.name)) out.push({ id: uid(), image: f, name: base(f.name), text: '', duration: null })
+    else if (kindOf(f) === 'image' || kindOf(f) === 'video') {
+      progress(base(f.name), 0)
+      const got = await readMoving(f)
+      if (!got) throw new Error(`${f.name}: this video could not be opened here`)
+      // a video clip keeps its own length unless the scene is given another
+      const duration = got.media?.kind === 'video' ? Math.round(got.media.length * 10) / 10 : null
+      out.push({ id: uid(), image: got.image, name: base(f.name), text: '', duration, media: got.media })
+    }
     else if (/\.ppt$/i.test(f.name)) throw new Error(`${f.name}: old .ppt files can't be read. Save it as .pptx or PDF first.`)
-    else throw new Error(`${f.name}: pick a PDF, a PowerPoint (.pptx) or photos`)
+    else throw new Error(`${f.name}: pick a PDF, a PowerPoint (.pptx), photos, GIFs or video clips`)
   }
   return out
 }

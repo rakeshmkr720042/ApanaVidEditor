@@ -27,6 +27,14 @@ export interface Scene {
   quiz?: QuizScene // a quiz question or flashcard: becomes an animated clip timed to its voice
   data?: DataScene // a step of a chart made from a table: becomes an animated clip timed to its voice
   art?: ArticlePic // an article's cover or one of its pictures: kept so it can be redrawn in another style
+  media?: MovingMedia // a GIF or video clip: `image` is its first frame; it becomes a moving clip when placed
+}
+
+/** A GIF or a video clip the user gave. It is shown moving (looped to fit its scene), without its own sound under a voice. */
+export interface MovingMedia {
+  kind: 'gif' | 'video'
+  file: Blob
+  length: number // seconds of one play-through
 }
 
 /** What a text card shows: a big title, a titled list or paragraph, or a large quote. */
@@ -139,6 +147,7 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
   const first = p.clips.length
   const trs = transitionLengths(lens, o)
   const trLen = (i: number) => trs[i]
+  const withTrack = o.voice === 'track' && track
   const fresh: Clip[] = built.map((b, i) => {
     const type = o.transition === 'mix' ? MIX_TRANSITIONS[i % MIX_TRANSITIONS.length] : o.transition
     // a transition overlaps the next scene, so lengthen the clip to keep the scene's own time
@@ -147,13 +156,14 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
       ...newClip(b.source, uid()), out: len, fit: o.fill ? 'fill' : 'fit',
       transition: type && i < built.length - 1 ? { type, duration: trLen(i) } : null,
       kenBurns: o.kenBurns ? KB_SOFT[i % KB_SOFT.length] : null,
+      // a video clip's own sound would talk over the narration
+      volume: b.scene.media?.kind === 'video' && (b.voice || withTrack) ? 0 : 1,
     }
   })
   const clips = [...p.clips, ...fresh]
   const { items, total } = layoutClips(clips)
 
   const layers = [...p.layers]
-  const withTrack = o.voice === 'track' && track
   const trackStart = withTrack ? items[first].start + items[first].transIn : null
   // new captions match the ones already in the project; otherwise they keep clear of the waveform
   const look = subtitleLook(p.layers)
