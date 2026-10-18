@@ -6,6 +6,8 @@ interface DesktopBridge {
   /** Screen recording: the shell asks which screen or window to capture. */
   onPickScreen?(cb: (sources: ScreenSource[]) => void): () => void
   pickScreen?(id: string | null): void
+  /** Reads a web page or picture outside the browser's cross-origin rules (Article to video). */
+  fetchUrl?(url: string): Promise<{ ok: boolean; status: number; type: string; url: string; data: Uint8Array }>
 }
 
 export interface ScreenSource { id: string; name: string; thumb: string; screen: boolean }
