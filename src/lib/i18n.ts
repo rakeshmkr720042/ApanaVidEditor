@@ -241,6 +241,8 @@ const hi: Record<string, string> = {
   'Delete this track and everything on it?': 'यह ट्रैक और इस पर रखा सब कुछ हटाएं?', 'items': 'आइटम',
   'Lock (no changes)': 'लॉक (बदलाव बंद)', 'Track volume': 'ट्रैक वॉल्यूम', 'Move up': 'ऊपर ले जाएं', 'Move down': 'नीचे ले जाएं',
   'Delete track': 'ट्रैक हटाएं', 'A higher track shows in front of the ones below it.': 'ऊपर वाला ट्रैक नीचे वाले ट्रैकों के आगे दिखता है।',
+  'keep this screen open': 'यह स्क्रीन खुली रखें', 'you can switch to other apps meanwhile': 'तब तक आप दूसरे ऐप इस्तेमाल कर सकते हैं',
+  'you can switch tabs, just keep this tab open': 'आप दूसरे टैब पर जा सकते हैं, बस यह टैब बंद न करें',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

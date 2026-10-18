@@ -13,6 +13,8 @@ interface DesktopBridge {
   googleCancel?(): void
   googleRefresh?(o: { clientId: string; clientSecret: string; refresh: string }): Promise<{ access: string; expiresIn: number }>
   /** A request to www.googleapis.com from the main process. */
+  /** Stops Windows from sleeping while an export runs. */
+  keepAwake?(on: boolean): void
   googleFetch?(r: { url: string; method: string; headers: Record<string, string>; body?: Uint8Array | string }): Promise<{ status: number; location: string | null; range: string | null; text: string }>
 }
 

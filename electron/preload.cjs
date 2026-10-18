@@ -20,4 +20,5 @@ contextBridge.exposeInMainWorld('desktop', {
   googleCancel: () => ipcRenderer.send('desktop:google-cancel'),
   googleRefresh: (opts) => ipcRenderer.invoke('desktop:google-refresh', opts),
   googleFetch: (req) => ipcRenderer.invoke('desktop:google-fetch', req),
+  keepAwake: (on) => ipcRenderer.send('desktop:keep-awake', !!on),
 })

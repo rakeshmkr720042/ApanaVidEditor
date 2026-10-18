@@ -1,5 +1,6 @@
 import { createFile, DataStream } from 'mp4box'
 import type { MediaSource } from '../types'
+import { sleep } from './background'
 import type { FrameImage } from './renderer'
 
 /**
@@ -158,7 +159,7 @@ class DecoderReader implements FrameReader {
       }
       if (this.queue.length || this.next >= this.d.samples.length && this.decoder!.decodeQueueSize === 0) break
       if (this.decoder!.decodeQueueSize < 8) await this.feed(4)
-      else await new Promise<void>((r) => { this.waiters.push(r); setTimeout(r, 50) })
+      else await new Promise<void>((r) => { this.waiters.push(r); sleep(50).then(r) })
       if (this.error) throw this.error
     }
     if (!this.current && this.queue.length) this.current = this.queue.shift()!
@@ -211,13 +212,14 @@ class ElementReader implements FrameReader {
     if (Math.abs(v.currentTime - time) > 1e-3) {
       await new Promise<void>((r) => {
         const done = () => { clearTimeout(to); r() }
-        const to = setTimeout(done, 3000)
+        const to = setTimeout(done, 3000) // only a safety net, so throttling on a hidden page is fine
         v.addEventListener('seeked', done, { once: true })
         v.currentTime = time
       })
       // make sure the decoded frame is presented before drawing
-      if ('requestVideoFrameCallback' in v) {
-        await new Promise<void>((r) => { const to = setTimeout(r, 40); v.requestVideoFrameCallback(() => { clearTimeout(to); r() }) })
+      // (a hidden page presents no frames, so the callback would never come)
+      if ('requestVideoFrameCallback' in v && !document.hidden) {
+        await Promise.race([sleep(40), new Promise<void>((r) => v.requestVideoFrameCallback(() => r()))])
       }
     }
     return { image: v, width: v.videoWidth, height: v.videoHeight }
