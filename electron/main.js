@@ -1,8 +1,10 @@
 // Electron main process for the Windows desktop app. The built Vite app (dist/) is served
 // from a privileged app:// scheme so it gets a secure origin with cross-origin isolation
 // headers (COOP/COEP, needed for SharedArrayBuffer) and a CSP, like the hosted web app.
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, net, protocol, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, net, protocol, safeStorage, session, shell } from 'electron'
+import { createHash, randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { basename, dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -207,6 +209,83 @@ ipcMain.handle('desktop:fetch', async (e, url) => {
   const data = new Uint8Array(await res.arrayBuffer())
   if (data.byteLength > FETCH_LIMIT) throw new Error('This file is too big')
   return { ok: res.ok, status: res.status, type: res.headers.get('content-type') || '', url: res.url, data }
+})
+
+// YouTube upload: Google sign-in with the loopback + PKCE flow for "Desktop app" OAuth clients.
+// The consent page opens in the default browser and comes back to a one-time server on 127.0.0.1.
+// The refresh token is handed to the page encrypted with Windows' own data protection.
+const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+const seal = (s) => safeStorage.isEncryptionAvailable() ? `enc:${safeStorage.encryptString(s).toString('base64')}` : `raw:${s}`
+const unseal = (s) => s.startsWith('enc:') ? safeStorage.decryptString(Buffer.from(s.slice(4), 'base64')) : s.replace(/^raw:/, '')
+
+async function googleToken(params) {
+  const res = await net.fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params).toString(),
+  })
+  const j = await res.json().catch(() => ({}))
+  if (!res.ok || !j.access_token) throw new Error(`Google sign-in failed: ${j.error_description || j.error || res.status}`)
+  return j
+}
+
+let cancelSignIn = null
+const page = (msg) => `<!doctype html><meta charset="utf-8"><title>ApanaVidEditor</title><body style="font:16px system-ui;padding:40px;background:#0f1115;color:#eee">${msg}`
+
+ipcMain.handle('desktop:google-signin', async (e, { clientId, clientSecret, scope }) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  if (typeof clientId !== 'string' || !clientId || typeof scope !== 'string') throw new Error('Add your OAuth client ID first.')
+  cancelSignIn?.()
+  const verifier = b64url(randomBytes(32))
+  const state = b64url(randomBytes(16))
+  const server = createServer()
+  await new Promise((ok, fail) => { server.once('error', fail); server.listen(0, '127.0.0.1', ok) })
+  const redirect = `http://127.0.0.1:${server.address().port}`
+  try {
+    const code = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Sign-in took too long. Try again.')), 5 * 60_000)
+      cancelSignIn = () => { clearTimeout(timer); reject(new Error('Sign-in was cancelled.')) }
+      server.on('request', (req, res) => {
+        const q = new URL(req.url, redirect).searchParams
+        if (q.get('state') !== state) { res.writeHead(404).end(); return }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+        clearTimeout(timer)
+        if (q.get('code')) {
+          res.end(page('Signed in to ApanaVidEditor. You can close this tab and go back to the app.'))
+          resolve(q.get('code'))
+        } else {
+          res.end(page('Sign-in was not finished. You can close this tab.'))
+          reject(new Error(q.get('error') === 'access_denied' ? 'Sign-in was cancelled.' : `Google sign-in failed (${q.get('error')}).`))
+        }
+      })
+      shell.openExternal('https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+        client_id: clientId, redirect_uri: redirect, response_type: 'code', scope, state, access_type: 'offline', prompt: 'consent',
+        code_challenge: b64url(createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256',
+      })).catch(reject)
+    })
+    win?.focus()
+    const j = await googleToken({
+      client_id: clientId, ...(clientSecret ? { client_secret: clientSecret } : {}), code, code_verifier: verifier, redirect_uri: redirect, grant_type: 'authorization_code',
+    })
+    return { access: j.access_token, expiresIn: j.expires_in, refresh: j.refresh_token ? seal(j.refresh_token) : undefined }
+  } finally {
+    cancelSignIn = null
+    server.close()
+  }
+})
+
+ipcMain.on('desktop:google-cancel', (e) => { if (e.sender === win?.webContents) cancelSignIn?.() })
+
+ipcMain.handle('desktop:google-refresh', async (e, { clientId, clientSecret, refresh }) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  const j = await googleToken({ client_id: clientId, ...(clientSecret ? { client_secret: clientSecret } : {}), refresh_token: unseal(refresh), grant_type: 'refresh_token' })
+  return { access: j.access_token, expiresIn: j.expires_in }
+})
+
+// YouTube API calls (the upload pieces come straight from the exported video in memory)
+ipcMain.handle('desktop:google-fetch', async (e, { url, method, headers, body }) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  if (typeof url !== 'string' || !url.startsWith('https://www.googleapis.com/')) throw new Error('Not allowed')
+  const res = await net.fetch(url, { method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(10 * 60_000) })
+  return { status: res.status, location: res.headers.get('location'), range: res.headers.get('range'), text: await res.text() }
 })
 
 ipcMain.on('desktop:ready', (e) => {

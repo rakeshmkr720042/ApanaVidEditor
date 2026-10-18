@@ -8,6 +8,8 @@ import { layoutClips } from '../model/timeline'
 import { fmtTime } from '../lib/format'
 import { Chips, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
+import { youTubeMode } from '../lib/youtube'
+import { YouTubeSheet } from './YouTubeSheet'
 
 interface Props {
   project: Project
@@ -55,6 +57,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const [results, setResults] = useState<Result[]>([])
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [youtube, setYoutube] = useState<Result | null>(null)
   const abort = useRef<AbortController | null>(null)
 
   useEffect(() => () => results.forEach((r) => URL.revokeObjectURL(r.url)), [results])
@@ -209,6 +212,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
                   <button className="btn primary" onClick={() => save(r)}>{t('Save')}</button>
                   {canShare && <button className="btn" onClick={() => share(r)}>{t('Share')}</button>}
                   {r.cover && <button className="btn" onClick={() => saveCover(r)}>{t('Cover')}</button>}
+                  {youTubeMode() && r.blob.type.startsWith('video') && <button className="btn" onClick={() => setYoutube(r)}>YouTube</button>}
                 </div>
               </div>
             ))}
@@ -216,6 +220,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
         )}
         {toast && <p className="muted small">{toast}</p>}
         {!running && <button className="btn wide ghost" onClick={onClose}>{t('Close')}</button>}
+        {youtube && <YouTubeSheet blob={youtube.blob} cover={youtube.cover} title={name} onClose={() => setYoutube(null)} />}
       </div>
     </div>
   )
