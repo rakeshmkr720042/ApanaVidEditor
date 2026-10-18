@@ -74,10 +74,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | null>(null)
   const [screenRec, setScreenRec] = useState(false)
   // new photos/videos/recordings waiting for the user to say where they go
-  const [pending, setPending] = useState<{ srcs: MediaSource[]; crop: Crop | null; what: string } | null>(null)
+  const [pending, setPending] = useState<{ srcs: MediaSource[]; crop: Crop | null; what: string; dur?: number } | null>(null)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
+  const replaceInput = useRef<HTMLInputElement>(null)
   const slideOpts = useRef<SlideshowOptions>(defaultSlideshow())
   const pickPhotos = (o: SlideshowOptions) => { slideOpts.current = o; photoInput.current?.click() }
 
@@ -163,7 +164,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     player?.seek(placed.start)
     const at = fmtTime(placed.start)
     const first = placed.where === 'end' && placed.start === 0
-    const where = first ? t('to the timeline') : placed.where === 'track' ? `${t('on a new track at')} ${at}`
+    const where = first ? t('to the timeline') : placed.where === 'track' ? `${t('on a track at')} ${at}`
       : placed.where === 'playhead' ? `${t('to the main video at')} ${at}`
         : placed.where === 'start' ? t('to the start of the main video') : `${t('to the end of the main video')} (${at})`
     setToast(`${what} ${t('added')} ${where}${placed.cut ? `. ${t('It stops where the main video ends.')}` : ''}`)
@@ -175,10 +176,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   }
 
   /** Photos and videos for the main track: an empty project takes them as is, otherwise ask where. */
-  const addVisual = (srcs: MediaSource[], crop: Crop | null, what: string) => {
+  const addVisual = (srcs: MediaSource[], crop: Crop | null, what: string, dur?: number) => {
     if (!srcs.length) return
-    if (ed.project.clips.length === 0) announce(ed.place(srcs, 'end', time, { crop }), what)
-    else { player?.pause(); setPending({ srcs, crop, what }) }
+    if (ed.project.clips.length === 0) announce(ed.place(srcs, 'end', time, { crop, dur }), what)
+    else { player?.pause(); setPending({ srcs, crop, what, dur }) }
   }
 
   const importFiles = async (files: FileList | File[], target: 'main' | 'overlay' | 'slides') => {
@@ -207,8 +208,13 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     if (!added.length) return
     if (target === 'slides') {
       const photos = added.filter((s) => s.kind === 'image')
-      ed.addSlides(photos, slideOpts.current)
-      setToast(`${photos.length} ${t('photos added to the slideshow in the main video')}`)
+      // a main video with videos in it is not a slideshow: ask where the photos go (default: at the playhead)
+      const hasVideo = ed.project.clips.some((c) => ed.sources[c.sourceId]?.kind !== 'image')
+      if (hasVideo) { setPanel(null); addVisual(photos, null, describe(photos), slideOpts.current.duration) }
+      else {
+        ed.addSlides(photos, slideOpts.current)
+        setToast(`${photos.length} ${t('photos added to the slideshow in the main video')}`)
+      }
     } else if (target === 'main') addVisual(added, null, describe(added))
     else for (const s of added) {
       const l = ed.addOverlay(time, s)
@@ -227,7 +233,21 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const placePending = (where: Placement) => {
     if (!pending) return
     setPending(null)
-    announce(ed.place(pending.srcs, where, time, { crop: pending.crop }), pending.what)
+    announce(ed.place(pending.srcs, where, time, { crop: pending.crop, dur: pending.dur }), pending.what)
+  }
+
+  /** Puts another photo or video in place of the selected one, keeping its time, size and look. */
+  const replaceWith = async (file: File) => {
+    const target = ed.sel
+    try {
+      const src = await loadSource(file, file.name)
+      if (src.kind === 'audio') { setToast(t('Pick a photo or video')); return }
+      ed.addSource(src)
+      await saveMedia(src)
+      if (ed.replaceMedia(target, src)) setToast(src.kind === 'image' ? t('Photo replaced') : t('Video replaced'))
+    } catch (e) {
+      setToast((e as Error).message)
+    }
   }
 
   // desktop app: File > Open Video / files opened from Explorer
@@ -315,6 +335,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const photo = ed.sources[selClip.sourceId]?.kind === 'image'
     tools = [
       ...(photo ? [{ icon: 'image', label: 'Photo', on: () => setPanel('photo') } as Tool] : []),
+      { icon: 'replace', label: 'Replace', on: () => replaceInput.current?.click() },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
@@ -344,6 +365,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       sticker: [{ icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers') } as Tool],
       media: [
         ...(ed.sources[(selLayer as MediaLayer).sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
+        { icon: 'replace', label: 'Replace', on: () => replaceInput.current?.click() } as Tool,
         { icon: 'overlay', label: 'Overlay', on: () => setPanel('overlay') } as Tool,
         { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma') } as Tool,
         { icon: 'filter', label: 'Filters', on: () => setPanel('filters') } as Tool,
@@ -517,6 +539,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
       <input ref={mainInput} type="file" accept="video/*,image/*,audio/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'main'); e.target.value = '' }} />
       <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'slides'); e.target.value = '' }} />
+      <input ref={replaceInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) replaceWith(f); e.target.value = '' }} />
       <input ref={overlayInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'overlay'); e.target.value = '' }} />
 
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}

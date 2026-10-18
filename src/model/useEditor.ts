@@ -111,7 +111,8 @@ export function useEditor(initial: Project) {
    * above the main video), or into the main video at the playhead (splitting the clip there), start or end.
    * Several files go one after another. An empty project always gets them as its main video.
    */
-  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop'] }): Placed | null => {
+  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop']; dur?: number }): Placed | null => {
+    const photoDur = patch?.dur ?? 3
     const p = ref.current
     const visual = srcs.filter((s) => s.kind !== 'audio')
     if (!visual.length) return null
@@ -124,7 +125,7 @@ export function useEditor(initial: Project) {
       const all = { ...sourcesRef.current, ...Object.fromEntries(visual.map((s) => [s.id, s])) }
       for (const src of visual) {
         if (at >= tot - 0.1 && layers.length) break
-        const dur = src.kind === 'image' ? 3 : src.duration
+        const dur = src.kind === 'image' ? photoDur : src.duration
         const end = Math.min(tot, at + dur)
         if (end < at + dur - 0.05) cut = true
         const c = patch?.crop ?? null
@@ -137,15 +138,19 @@ export function useEditor(initial: Project) {
         })
         at = end
       }
-      const tr = newTrack('visual')
+      // the row picked in the track headers when it is free over the whole span, else a new row
+      const span = { start: layers[0].start, end: layers[layers.length - 1].end }
+      const picked = p.tracks?.find((x) => x.id === track)
+      const free = picked && picked.kind === 'visual' && !picked.locked && !picked.hidden && !p.layers.some((x) => x.track === picked.id && overlaps(x, span))
+      const tr = free ? picked : newTrack('visual')
       const tracks = [...(p.tracks ?? [])]
-      tracks.splice(insertAt(tracks, 'visual', false), 0, tr)
+      if (!free) tracks.splice(insertAt(tracks, 'visual', false), 0, tr)
       h.set({ ...p, tracks, layers: [...p.layers, ...layers.map((l) => ({ ...l, track: tr.id }))] })
       const sel: Selection = { type: 'layer', id: layers[0].id }
       setSel(sel)
       return { sel, start: layers[0].start, where: mode, cut }
     }
-    const clips = visual.map((s) => ({ ...newClip(s, uid()), ...(patch?.crop ? { crop: patch.crop } : {}) }))
+    const clips = visual.map((s) => ({ ...newClip(s, uid()), ...(s.kind === 'image' ? { out: photoDur } : {}), ...(patch?.crop ? { crop: patch.crop } : {}) }))
     let list = [...p.clips]
     let idx = mode === 'start' ? 0 : list.length
     if (mode === 'playhead') {
@@ -168,7 +173,34 @@ export function useEditor(initial: Project) {
     const sel: Selection = { type: 'clip', id: clips[0].id }
     setSel(sel)
     return { sel, start, where: mode, cut: false }
-  }, [h])
+  }, [h, track])
+
+  /**
+   * Swaps the photo or video of a main-video clip or a track item for another file, keeping where it is,
+   * how long it shows, its size and position, and its look (filters, adjust, transition).
+   */
+  const replaceMedia = useCallback((target: Selection, src: MediaSource): boolean => {
+    const p = ref.current
+    if (src.kind === 'audio' || !target) return false
+    const all = { ...sourcesRef.current, [src.id]: src }
+    if (target.type === 'clip') {
+      const c = p.clips.find((x) => x.id === target.id)
+      if (!c) return false
+      const len = c.out - c.in
+      const out = src.kind === 'image' ? len : Math.min(src.duration, len)
+      commit({ ...p, clips: p.clips.map((x) => (x.id === c.id ? { ...x, sourceId: src.id, in: 0, out, crop: null } : x)) })
+      return true
+    }
+    const l = p.layers.find((x) => x.id === target.id)
+    if (!l || l.type !== 'media') return false
+    const old = all[l.sourceId]
+    const arOf = (s?: MediaSource) => (s?.width && s.height ? s.width / s.height : 16 / 9)
+    // a full-frame item stays full frame with the new picture's shape
+    const scale = l.box.scale * fullFrameScale(p, all, arOf(src)) / fullFrameScale(p, all, arOf(old))
+    const end = src.kind === 'image' ? l.end : Math.min(l.end, l.start + src.duration / (l.speed ?? 1))
+    commit({ ...p, layers: p.layers.map((x) => (x.id === l.id ? { ...l, sourceId: src.id, in: 0, end, crop: null, box: { ...l.box, scale } } : x)) })
+    return true
+  }, [commit])
 
   /** Adds photos as slides and lays every photo out as a slideshow, in one undo step. */
   const addSlides = useCallback((srcs: MediaSource[], o: SlideshowOptions) => {
@@ -391,7 +423,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, place, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
+    addSource, place, replaceMedia, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
     track, setTrack, addTrack, updateTrack, moveTrack, removeTrack, setMain, settleLayer,
     remove, duplicate, split, moveClip, replaceProject,
