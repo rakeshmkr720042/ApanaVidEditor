@@ -16,6 +16,7 @@ import {
   DATA_THEMES, dataPlan, dataToScenes, dataToText, defaultDataSettings, docLang, drawDataPreview, drawDataStill, parseData, renderDataVideo, row as dataRow,
   table as dataTable, tidyDoc, type ChartKind, type DataDoc, type DataSettings,
 } from '../lib/datachart'
+import { CANT_OPEN, articleToScenes, drawArticlePic, linkOf, readArticle, type ArticleLength } from '../lib/article'
 import { clipDuration } from '../model/timeline'
 import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
@@ -44,6 +45,8 @@ let quizModeSet = false // the user picked quiz or flashcards themselves
 // the table being written, and how it is drawn
 let dataDraft = { tab: 'text' as 'text' | 'grid', text: '', doc: { tables: [dataTable('', [''], [dataRow(), dataRow(), dataRow()])] } as DataDoc, picked: 0 }
 let dataMemo: DataSettings = defaultDataSettings()
+// the article being turned into a video
+let articleDraft = { url: '', text: '', length: 'short' as ArticleLength, pictures: true, info: '' }
 const MAP_SLACK = 4 // extra seconds of still map at the end of each clip, so it can be lengthened on the timeline
 
 const TRANSITIONS = [
@@ -108,6 +111,17 @@ Viewers: 12,500
 Growth: 38%
 Rating: 4.8`
 
+const ARTICLE_HINT = `# Headline of the article
+
+Source: example.com
+
+Paste the article text here, or get it from a link above.
+
+## A section heading
+Its paragraphs…
+
+![Picture caption](https://example.com/picture.jpg)`
+
 const CHART_KINDS: { value: 'auto' | ChartKind; label: string }[] = [
   { value: 'auto', label: 'Auto' }, { value: 'bars', label: 'Bars' }, { value: 'columns', label: 'Columns' }, { value: 'line', label: 'Line' },
   { value: 'donut', label: 'Donut' }, { value: 'table', label: 'Table' }, { value: 'numbers', label: 'Big numbers' },
@@ -133,7 +147,7 @@ const waveColors = (look: AudioLook, theme: string): [string, string] => {
 const extOf = (b: Blob) => (b.type === 'image/png' ? 'png' : b.type === 'image/webp' ? 'webp' : 'jpg')
 
 /** Slides, PDF pages, photos or a pasted script → scenes you can script and time → clips on the timeline. */
-export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data'; onClose: () => void; onDone: (msg: string) => void }) {
+export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article'; onClose: () => void; onDone: (msg: string) => void }) {
   const [scenes, setScenes] = useState<Scene[]>([])
   // a new audio → video run starts with the waveform and captions on
   const [o, setO] = useState(() => (start === 'audio' && !memo.wave ? (memo = { ...memo, wave: 'bars', captions: true, theme: memo.theme === 'clean' ? 'dark' : memo.theme }) : memo))
@@ -164,6 +178,9 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const setDataDraft = (patch: Partial<typeof dataDraft>) => setDd((v) => (dataDraft = { ...v, ...patch }))
   const [ds, setDs] = useState(dataMemo)
   const dataPreview = useRef<HTMLCanvasElement>(null)
+  const [reading, setReading] = useState(start === 'article')
+  const [art, setArt] = useState(articleDraft)
+  const setArticle = (patch: Partial<typeof articleDraft>) => setArt((v) => (articleDraft = { ...v, ...patch }))
   const csvInput = useRef<HTMLInputElement>(null)
   const audioInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
@@ -222,7 +239,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const setTheme = async (theme: string) => {
     set({ theme })
     if (scenes.some((s) => s.audio)) { await redrawAudio(theme, o.wave); return }
-    const cards = scenes.filter((s) => s.card)
+    const cards = scenes.filter((s) => s.card || s.art)
     if (!cards.length) return
     const { w, h } = frame()
     setBusy({ label: t('Making scenes…'), p: 0 })
@@ -230,7 +247,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       const images = new Map<string, Blob>()
       for (let i = 0; i < cards.length; i++) {
         setBusy({ label: t('Making scenes…'), p: i / cards.length })
-        images.set(cards[i].id, await drawTextCard(cards[i].card!, themeOf(theme), w, h))
+        const c = cards[i]
+        images.set(c.id, c.art ? await drawArticlePic(c.art, themeOf(theme), w, h) : await drawTextCard(c.card!, themeOf(theme), w, h))
       }
       setScenes((list) => list.map((s) => (images.has(s.id) ? { ...s, image: images.get(s.id)! } : s)))
     } finally { setBusy(null) }
@@ -399,6 +417,40 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       }
       setScenes((list) => list.map((s) => (done.has(s.id) ? { ...s, ...done.get(s.id) } : s)))
     } finally { setBusy(null) }
+  }
+
+  // ---- article link → video
+
+  const getArticle = async (raw = art.url) => {
+    const url = linkOf(raw)
+    if (!url) { setError(t('Type or paste the link of an article, starting with https://')); return }
+    setError(null); setNote(null)
+    setBusy({ label: t('Opening the article…'), p: 0.3 })
+    try {
+      const a = await readArticle(url)
+      setArticle({ url, text: a.text, info: `${a.title} · ${a.words} ${t('words')} · ${a.pictures} ${t('pictures')}` })
+    } catch (e) {
+      const msg = (e as Error).message
+      setError(t(msg === CANT_OPEN ? CANT_OPEN : msg))
+    } finally { setBusy(null) }
+  }
+
+  const addArticle = async () => {
+    // a link pasted into the text box is opened instead
+    if (linkOf(art.text) && !art.text.includes('\n')) { setArticle({ url: art.text.trim(), text: '' }); void getArticle(art.text); return }
+    setError(null); setNote(null)
+    let missed = 0
+    try {
+      const { w, h } = frame()
+      const got = await articleToScenes(art.text, { length: art.length, pictures: art.pictures }, themeOf(o.theme), w, h,
+        (p) => setBusy({ label: t('Making scenes…'), p }), (ok) => { if (!ok) missed++ })
+      setScenes((s) => [...s, ...got])
+      setReading(false)
+      if (missed) setNote(`${missed} ${t('pictures could not be downloaded and were left out.')}`)
+      // the cards show the words, so no captions; a voice reads them in the article's language
+      const lang = hasDeva(got.map((s) => s.text).join(' ')) ? 'hi' : 'en'
+      if (!scenes.length) set({ voice: o.voice === 'none' && VOICES[lang] ? 'ai' : o.voice === 'track' ? 'none' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: false, transition: 'fade', transitionDuration: 0.5, kenBurns: false, fill: false })
+    } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
   }
 
   // ---- quiz / flashcards → video
@@ -716,8 +768,10 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet scene-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
-        <h2>{t(start === 'data' ? 'Data to video' : start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
-        <p className="muted small">{t(start === 'data'
+        <h2>{t(start === 'article' ? 'Article to video' : start === 'data' ? 'Data to video' : start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
+        <p className="muted small">{t(start === 'article'
+          ? 'Paste the link of a blog post or news article. Its headline, sections and pictures become scenes, read by the voice.'
+          : start === 'data'
           ? 'Paste a table from a spreadsheet, CSV, or lines like "Delhi: 42". It becomes a chart whose bars, points or rows come in one by one with the voice.'
           : start === 'quiz'
           ? 'Write or paste questions with options, or flashcards. Each one gets a countdown, then the right answer is shown.'
@@ -735,6 +789,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           <button className={`btn${listening ? ' on' : ''}`} disabled={!!busy} onClick={() => setListening((v) => !v)}>{t('Audio')}</button>
           <button className={`btn${quizzing ? ' on' : ''}`} disabled={!!busy} onClick={() => setQuizzing((v) => !v)}>{t('Quiz')}</button>
           <button className={`btn${charting ? ' on' : ''}`} disabled={!!busy} onClick={() => setCharting((v) => !v)}>{t('Data')}</button>
+          <button className={`btn${reading ? ' on' : ''}`} disabled={!!busy} onClick={() => setReading((v) => !v)}>{t('Article')}</button>
           {scenes.length > 0 && <button className="btn" disabled={!!busy} onClick={() => setScenes([])}>{t('Clear')}</button>}
         </div>
 
@@ -871,6 +926,23 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           </div>
         )}
 
+        {reading && (
+          <div className="script-box article-box">
+            <form className="row" noValidate onSubmit={(e) => { e.preventDefault(); void getArticle() }}>
+              <input className="text-input grow" type="url" inputMode="url" value={art.url} placeholder="https://…" aria-label={t('Article link')} autoFocus
+                onChange={(e) => setArticle({ url: e.target.value })} />
+              <button className="btn" type="submit" disabled={!!busy || !art.url.trim()}>{t('Get article')}</button>
+            </form>
+            {art.info && <p className="small">✓ {art.info}</p>}
+            <textarea className="text-input" rows={10} value={art.text} placeholder={ARTICLE_HINT}
+              onChange={(e) => setArticle({ text: e.target.value })} />
+            <p className="muted small">{t('Check the text and remove anything you don\'t want. If a site doesn\'t open, copy the article in your browser and paste it here. Lines like ![caption](link) are pictures.')}</p>
+            <Chips options={[{ value: 'short', label: 'Key points' }, { value: 'full', label: 'Full article' }]} value={art.length} onChange={(length) => setArticle({ length })} />
+            <Toggle label="Pictures from the article" value={art.pictures} onChange={(pictures) => setArticle({ pictures })} />
+            <button className="btn primary" disabled={!!busy || !art.text.trim()} onClick={addArticle}>{t('Make scenes')}</button>
+          </div>
+        )}
+
         {(charting || scenes.some((s) => s.data)) && (
           <>
             <span className="field-label">{t('Chart')}</span>
@@ -892,7 +964,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           </>
         )}
 
-        {(pasting || scenes.some((s) => s.card) || (listening && ad.look === 'card') || scenes.some((s) => s.audio && s.audio.look === 'card')) && (
+        {(pasting || reading || scenes.some((s) => s.card || s.art) || (listening && ad.look === 'card') || scenes.some((s) => s.audio && s.audio.look === 'card')) && (
           <>
             <span className="field-label">{t('Card style')}</span>
             <Chips options={CARD_THEMES.map((c) => ({ value: c.id, label: c.label }))} value={o.theme} onChange={(v) => { if (!busy) void setTheme(v) }} />

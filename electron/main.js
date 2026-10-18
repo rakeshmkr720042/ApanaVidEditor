@@ -195,6 +195,19 @@ ipcMain.on('desktop:picked-screen', (e, id) => {
   screenPick?.(typeof id === 'string' ? id : null)
 })
 
+// Article to video: the page is read here, where browser CORS rules don't apply
+const FETCH_LIMIT = 25 * 1024 * 1024
+ipcMain.handle('desktop:fetch', async (e, url) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) throw new Error('Only web links can be opened')
+  const res = await net.fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(20000) })
+  const size = Number(res.headers.get('content-length') || 0)
+  if (size > FETCH_LIMIT) throw new Error('This file is too big')
+  const data = new Uint8Array(await res.arrayBuffer())
+  if (data.byteLength > FETCH_LIMIT) throw new Error('This file is too big')
+  return { ok: res.ok, status: res.status, type: res.headers.get('content-type') || '', url: res.url, data }
+})
+
 ipcMain.on('desktop:ready', (e) => {
   if (e.sender !== win?.webContents) return
   rendererReady = true

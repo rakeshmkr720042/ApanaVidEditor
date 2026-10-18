@@ -8,6 +8,7 @@ import { captionY, type AudioPart } from '../lib/audioScenes'
 import type { MindScene } from '../lib/mindmap'
 import { quizPlan, type QuizPlan, type QuizScene } from '../lib/quiz'
 import { dataPlan, type DataScene } from '../lib/datachart'
+import type { ArticlePic } from '../lib/article'
 
 /**
  * Scene builder: every "something → video" input (slides, PDF pages, photos, and later scripts,
@@ -25,6 +26,7 @@ export interface Scene {
   audio?: AudioPart // a chapter of an audio file: timed to the sound, captions follow the speech
   quiz?: QuizScene // a quiz question or flashcard: becomes an animated clip timed to its voice
   data?: DataScene // a step of a chart made from a table: becomes an animated clip timed to its voice
+  art?: ArticlePic // an article's cover or one of its pictures: kept so it can be redrawn in another style
 }
 
 /** What a text card shows: a big title, a titled list or paragraph, or a large quote. */

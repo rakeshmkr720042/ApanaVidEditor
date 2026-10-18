@@ -15,4 +15,5 @@ contextBridge.exposeInMainWorld('desktop', {
     return () => ipcRenderer.removeListener('desktop:pick-screen', listener)
   },
   pickScreen: (id) => ipcRenderer.send('desktop:picked-screen', id),
+  fetchUrl: (url) => ipcRenderer.invoke('desktop:fetch', url),
 })

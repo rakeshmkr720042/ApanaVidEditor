@@ -338,6 +338,9 @@ input, textarea { font: inherit; color: inherit; }
 .scene-secs { width: 64px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-size: 13px; }
 .script-box { display: grid; gap: 6px; margin-top: 6px; }
 .script-box .text-input { font-size: 14px; line-height: 1.45; min-height: 160px; resize: vertical; }
+.article-box form { flex-wrap: nowrap; margin-top: 0; }
+.article-box form .btn { flex: none; }
+.article-box form .text-input { min-height: 0; flex: 1; min-width: 0; resize: none; }
 .btn.on { border-color: var(--accent); color: var(--accent); }
 /* ---------- caption frame (subtitles panel) */
 .sub-frame { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; margin: 6px 0; }
