@@ -169,6 +169,7 @@ input, textarea { font: inherit; color: inherit; }
   font-size: 11px; color: var(--text); min-width: 62px; border-radius: 10px; flex: 0 0 auto;
 }
 .tool:not(:disabled):active { background: var(--panel-2); }
+.tool.on { color: var(--accent); }
 .tool.back { border-right: 1px solid var(--line); border-radius: 0; margin-right: 4px; }
 
 /* ---------- panels */
@@ -523,6 +524,9 @@ input, textarea { font: inherit; color: inherit; }
 }
 .tl-head-ruler { height: 20px; }
 .tl-head { display: flex; align-items: center; gap: 2px; padding: 0 4px 0 6px; font-size: 11px; }
+.tl-head.dragging { position: relative; z-index: 3; background: var(--panel-3); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.tl-head-name { touch-action: none; }
+.tl-key { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; background: var(--sel); transform: rotate(45deg); border: 1px solid #000; pointer-events: none; }
 .tl-head.main { height: 56px; margin-top: 4px; }
 .tl-head-rows { margin-top: 6px; }
 .tl-head-name {

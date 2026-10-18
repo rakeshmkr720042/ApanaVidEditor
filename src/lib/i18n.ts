@@ -243,6 +243,17 @@ const hi: Record<string, string> = {
   'Delete track': 'ट्रैक हटाएं', 'A higher track shows in front of the ones below it.': 'ऊपर वाला ट्रैक नीचे वाले ट्रैकों के आगे दिखता है।',
   'keep this screen open': 'यह स्क्रीन खुली रखें', 'you can switch to other apps meanwhile': 'तब तक आप दूसरे ऐप इस्तेमाल कर सकते हैं',
   'you can switch tabs, just keep this tab open': 'आप दूसरे टैब पर जा सकते हैं, बस यह टैब बंद न करें',
+  'Layer order': 'लेयर क्रम', 'Bring to front': 'सबसे आगे', 'One step forward': 'एक कदम आगे', 'One step back': 'एक कदम पीछे',
+  'Send to back': 'सबसे पीछे', 'Already in front': 'पहले से सबसे आगे है', 'Already at the back': 'पहले से सबसे पीछे है',
+  'Puts this layer in front of or behind the layers that show at the same time. Rows higher in the timeline are in front.': 'इस लेयर को उसी समय दिखने वाली लेयरों के आगे या पीछे करता है। टाइमलाइन में ऊपर वाली पंक्ति आगे दिखती है।',
+  'Tap: new items go here. Drag up or down: change which row is in front': 'टैप: नई चीज़ें यहां जाएंगी। ऊपर-नीचे खींचें: कौन सी पंक्ति आगे दिखे',
+  'Blend': 'ब्लेंड', 'Normal': 'नॉर्मल', 'Multiply': 'मल्टीप्लाई', 'Screen': 'स्क्रीन', 'Soft light': 'सॉफ़्ट लाइट', 'Darken': 'गहरा',
+  'Lighten': 'हल्का', 'Difference': 'डिफ़रेंस', 'Color dodge': 'कलर डॉज', 'Flip up-down': 'ऊपर-नीचे पलटें',
+  'Screen and Add keep the bright parts (light leaks, fire, sparkles on black); Multiply keeps the dark parts (shapes on white).': 'Screen और Add चमकीले हिस्से रखते हैं (काले पर लाइट, आग, चमक); Multiply गहरे हिस्से रखता है (सफ़ेद पर आकृतियां)।',
+  'Keyframes': 'कीफ़्रेम', 'keyframes': 'कीफ़्रेम', 'Add keyframe': 'कीफ़्रेम जोड़ें', 'Remove keyframe': 'कीफ़्रेम हटाएं', 'Remove all': 'सब हटाएं',
+  'Previous': 'पिछला', 'Next': 'अगला', 'Move the playhead inside this layer first.': 'पहले प्लेहेड को इस लेयर के अंदर ले जाएं।',
+  'Move the playhead, then drag, resize or turn the layer (or change its opacity): a new keyframe is saved there by itself.': 'प्लेहेड आगे ले जाएं, फिर लेयर को खींचें, बड़ा-छोटा करें या घुमाएं (या पारदर्शिता बदलें): वहां नया कीफ़्रेम अपने आप बन जाएगा।',
+  'Put the playhead where the motion starts and tap Add keyframe. Then move the playhead and change the layer.': 'प्लेहेड वहां रखें जहां मूवमेंट शुरू हो और "कीफ़्रेम जोड़ें" दबाएं। फिर प्लेहेड आगे ले जाकर लेयर बदलें।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

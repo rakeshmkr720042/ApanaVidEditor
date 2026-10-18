@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Clip, Crop, MediaSource } from '../types'
+import type { Clip, Crop, MediaLayer, MediaSource } from '../types'
 import type { Editor } from '../model/useEditor'
 import { Chips } from '../ui/kit'
 import { Icon } from './Icon'
 import { t } from '../lib/i18n'
 
-interface Props { ed: Editor; clip: Clip; source: MediaSource; time: number; onClose: () => void }
+/** Crops a main-video clip, or an overlay video/photo (`layer`; it turns with its box, so no Rotate here). */
+interface Props { ed: Editor; clip?: Clip; layer?: MediaLayer; source: MediaSource; time: number; onClose: () => void }
 
 const RATIOS: { value: string; label: string; r: number | null }[] = [
   { value: 'free', label: 'Free', r: null }, { value: '1:1', label: '1:1', r: 1 }, { value: '9:16', label: '9:16', r: 9 / 16 },
@@ -13,13 +14,13 @@ const RATIOS: { value: string; label: string; r: number | null }[] = [
 ]
 
 /** Crop, rotate and flip a clip. The crop is stored relative to the source frame. */
-export function CropEditor({ ed, clip, source, time, onClose }: Props) {
+export function CropEditor({ ed, clip, layer, source, time, onClose }: Props) {
   const [img, setImg] = useState<string | null>(null)
-  const [crop, setCrop] = useState<Crop>(clip.crop ?? { x: 0, y: 0, w: 1, h: 1 })
+  const [crop, setCrop] = useState<Crop>((clip ?? layer)?.crop ?? { x: 0, y: 0, w: 1, h: 1 })
   const [ratio, setRatio] = useState('free')
-  const [rotate, setRotate] = useState(clip.rotate)
-  const [flipH, setFlipH] = useState(clip.flipH)
-  const [flipV, setFlipV] = useState(clip.flipV)
+  const [rotate, setRotate] = useState<Clip['rotate']>(clip?.rotate ?? 0)
+  const [flipH, setFlipH] = useState(!!(clip ?? layer)?.flipH)
+  const [flipV, setFlipV] = useState(!!(clip ?? layer)?.flipV)
   const area = useRef<HTMLDivElement>(null)
   const drag = useRef<{ mode: string; x0: number; y0: number; c0: Crop } | null>(null)
 
@@ -87,7 +88,8 @@ export function CropEditor({ ed, clip, source, time, onClose }: Props) {
 
   const done = () => {
     const full = crop.x < 0.001 && crop.y < 0.001 && crop.w > 0.999 && crop.h > 0.999
-    ed.updateClip(clip.id, { crop: full ? null : crop, rotate, flipH, flipV })
+    if (clip) ed.updateClip(clip.id, { crop: full ? null : crop, rotate, flipH, flipV })
+    else if (layer) ed.updateLayer<MediaLayer>(layer.id, { crop: full ? null : crop, flipH, flipV })
     onClose()
   }
 
@@ -110,7 +112,7 @@ export function CropEditor({ ed, clip, source, time, onClose }: Props) {
       <div className="modal-foot">
         <Chips options={ratios} value={ratio} onChange={applyRatio} />
         <div className="row">
-          <button className="btn" onClick={() => { const r = ((rotate + 90) % 360) as Clip['rotate']; setRotate(r); applyRatio(ratio, r) }}>⟳ {t('Rotate')} {rotate ? `${rotate}°` : ''}</button>
+          {clip && <button className="btn" onClick={() => { const r = ((rotate + 90) % 360) as Clip['rotate']; setRotate(r); applyRatio(ratio, r) }}>⟳ {t('Rotate')} {rotate ? `${rotate}°` : ''}</button>}
           <button className={`btn${flipH ? ' primary' : ''}`} onClick={() => setFlipH(!flipH)}>⇋ {t('Flip')}</button>
           <button className={`btn${flipV ? ' primary' : ''}`} onClick={() => setFlipV(!flipV)}>⇵</button>
           <button className="btn" onClick={() => { setCrop({ x: 0, y: 0, w: 1, h: 1 }); setRotate(0); setFlipH(false); setFlipV(false); setRatio('free') }}>{t('Reset')}</button>
