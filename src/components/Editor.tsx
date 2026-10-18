@@ -26,6 +26,7 @@ import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
 import { TemplatesPanel } from '../panels/TemplatesPanel'
 import { ScreenRecorder } from './ScreenRecorder'
 import { PlaceSheet } from './PlaceSheet'
+import { playable } from '../model/tracks'
 
 const SKIP = 5 // seconds jumped by fast backward / forward
 const RATES = [1, 1.5, 2, 4, 0.5]
@@ -104,7 +105,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     return () => p.destroy()
   }, [])
 
-  useEffect(() => { player?.setProject(ed.project, ed.sources) }, [player, ed.project, ed.sources])
+  // what plays: hidden track rows left out, muted rows silent, top row in front
+  const output = useMemo(() => playable(ed.project), [ed.project])
+  useEffect(() => { player?.setProject(output, ed.sources) }, [player, output, ed.sources])
 
   const saveNow = useCallback(() => {
     const first = ed.project.clips.find((c) => !c.fromTemplate) ?? ed.project.clips[0]
@@ -255,7 +258,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const selLayer = sel?.type === 'layer' ? ed.project.layers.find((l) => l.id === sel.id) ?? null : null
   // clip under the playhead, used when a clip tool is chosen with nothing selected
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
-  const targetClip = selClip ?? clipAtPlayhead
+  const targetClip = selClip ?? (ed.project.main?.locked ? null : clipAtPlayhead)
 
   useEffect(() => { if (!sel && panel && !['text', 'stickers', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'templates', 'slideshow', 'filters', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
 
@@ -516,7 +519,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder onClose={() => setScreenRec(false)} onDone={addRecording} />}
-      {exporting && <ExportSheet project={ed.project} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
+      {exporting && <ExportSheet project={output} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>
   )
 }

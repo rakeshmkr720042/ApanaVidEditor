@@ -75,6 +75,7 @@ interface LayerBase {
   id: string
   start: number // timeline seconds
   end: number
+  track?: string // id of the Track row it sits on (given to every layer by withTracks)
 }
 
 export type TextAnim = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'pop' | 'typewriter' | 'zoom' | 'bounce'
@@ -210,11 +211,28 @@ export interface Watermark {
   end: number
 }
 
+/** A timeline row under the main video. Its switches apply to every layer on it. */
+export interface Track {
+  id: string
+  kind: 'visual' | 'audio'
+  name?: string // empty = "Track 2", "Audio 1"…
+  hidden?: boolean // left out of the preview and the export
+  muted?: boolean
+  locked?: boolean // its layers can't be selected, moved or changed
+  volume?: number // 0..2, multiplies each layer's own volume
+  keep?: boolean // made with "+ Track": stays when empty
+}
+
+/** Switches for the main video row. */
+export interface MainTrack { muted?: boolean; locked?: boolean }
+
 export interface Project {
   clips: Clip[]
   layers: Layer[]
   settings: ProjectSettings
   watermark?: Watermark | null
+  tracks?: Track[] // top to bottom; a higher row is drawn in front. Missing in projects saved before tracks.
+  main?: MainTrack
 }
 
 export const MIN_CLIP = 0.2

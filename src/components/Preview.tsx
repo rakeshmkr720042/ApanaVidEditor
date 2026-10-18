@@ -3,6 +3,7 @@ import type { Player } from '../engine/player'
 import type { Editor } from '../model/useEditor'
 import type { Layer, TextLayer, VisualLayer } from '../types'
 import { defaultFrame } from '../engine/text'
+import { isLocked, playable } from '../model/tracks'
 import { t as tr } from '../lib/i18n'
 
 type Rect = { x: number; y: number; w: number; h: number }
@@ -61,7 +62,8 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
 
   const scale = box.w / W
   const visible = (l: { start: number; end: number }) => t >= l.start && t < l.end
-  const layers = ed.project.layers.filter((l): l is VisualLayer => l.type !== 'audio' && visible(l))
+  // in drawing order (top track row last); hidden and locked rows can't be picked
+  const layers = playable(ed.project).layers.filter((l): l is VisualLayer => l.type !== 'audio' && visible(l) && !isLocked(ed.project, l))
   const selected = ed.sel?.type === 'layer' ? layers.find((l) => l.id === ed.sel!.id) : undefined
   const rect = selected && player ? player.renderer.layerRect(selected, ed.sources) : null
   const wmRect = wmEdit && player ? player.renderer.watermarkRect(ed.project, ed.sources, t) : null

@@ -222,6 +222,12 @@ const hi: Record<string, string> = {
   'All captions': 'सभी कैप्शन',
   'One caption': 'एक कैप्शन',
   'Delete all captions?': 'सभी कैप्शन हटाएँ?',
+  'Main': 'मुख्य', 'Track': 'ट्रैक', 'Sound': 'आवाज़', 'Lock': 'लॉक', 'Show on video': 'वीडियो में दिखाएं',
+  'Track settings': 'ट्रैक सेटिंग', 'Add track': 'ट्रैक जोड़ें', 'Video track': 'वीडियो ट्रैक', 'Audio track': 'ऑडियो ट्रैक',
+  'New items go to the picked track': 'नई चीज़ें चुने गए ट्रैक पर जाएंगी', 'Track name': 'ट्रैक का नाम',
+  'Delete this track and everything on it?': 'यह ट्रैक और इस पर रखा सब कुछ हटाएं?', 'items': 'आइटम',
+  'Lock (no changes)': 'लॉक (बदलाव बंद)', 'Track volume': 'ट्रैक वॉल्यूम', 'Move up': 'ऊपर ले जाएं', 'Move down': 'नीचे ले जाएं',
+  'Delete track': 'ट्रैक हटाएं', 'A higher track shows in front of the ones below it.': 'ऊपर वाला ट्रैक नीचे वाले ट्रैकों के आगे दिखता है।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()
