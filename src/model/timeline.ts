@@ -47,6 +47,9 @@ export function sourceAt(c: Clip, local: number): { time: number; speed: number 
   return { time: c.out, speed: 1 }
 }
 
+/** Playback speed of a video/audio layer (1 when it has none). */
+export const layerSpeed = (l: Layer) => (l.type === 'media' || l.type === 'audio' ? l.speed ?? 1 : 1)
+
 export interface LaidClip {
   clip: Clip
   index: number

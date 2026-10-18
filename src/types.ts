@@ -140,6 +140,7 @@ export interface MediaLayer extends LayerBase {
   filter: string | null
   filterAmount: number
   crop?: Crop | null // part of the source to show (screen recordings of a custom area)
+  speed?: number // playback speed, missing = 1
 }
 
 export interface BlurLayer extends LayerBase {
@@ -159,6 +160,7 @@ export interface AudioLayer extends LayerBase {
   fadeOut: number
   label: string
   kind: 'music' | 'sound' | 'voice'
+  speed?: number // playback speed, missing = 1
 }
 
 export type WaveStyle = 'bars' | 'line' | 'circle'

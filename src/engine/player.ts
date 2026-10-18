@@ -1,5 +1,5 @@
 import type { MediaSource, Project } from '../types'
-import { activeAt, layoutClips, sourceAt, type LaidClip } from '../model/timeline'
+import { activeAt, layerSpeed, layoutClips, sourceAt, type LaidClip } from '../model/timeline'
 import { clipKey, layerKey, outputSize, Renderer, type FrameImage } from './renderer'
 
 interface Need { key: string; source: MediaSource; time: number; rate: number; volume: number; preload?: boolean }
@@ -38,7 +38,8 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     if (!active && !soon) continue
     const local = Math.max(0, t - l.start)
     const vol = l.type === 'audio' ? l.volume * fadeGain(local, l.end - l.start, l.fadeIn, l.fadeOut) : l.volume
-    needs.push({ key: layerKey(l), source: src, time: l.in + local, rate: 1, volume: active ? vol : 0, preload: !active })
+    const sp = layerSpeed(l)
+    needs.push({ key: layerKey(l), source: src, time: l.in + local * sp, rate: sp, volume: active ? vol : 0, preload: !active })
   }
   return needs
 }

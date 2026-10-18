@@ -3,7 +3,7 @@ import type { AudioLayer, BlurLayer, Clip, Layer, MainTrack, MediaLayer, MediaSo
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
-import { clipSegments, defaultAdjust, layoutClips, newClip, sourceAt } from './timeline'
+import { clipSegments, defaultAdjust, layerSpeed, layoutClips, newClip, sourceAt } from './timeline'
 import { applySlideshow, type SlideshowOptions } from './slideshow'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
@@ -345,7 +345,7 @@ export function useEditor(initial: Project) {
       const l = p.layers.find((x) => x.id === sel.id)
       if (!l || t <= l.start + 0.1 || t >= l.end - 0.1) return
       const right = { ...l, id: uid(), start: t } as Layer
-      if (right.type === 'media' || right.type === 'audio' || right.type === 'wave') right.in = (l as MediaLayer).in + (t - l.start)
+      if (right.type === 'media' || right.type === 'audio' || right.type === 'wave') right.in = (l as MediaLayer).in + (t - l.start) * layerSpeed(l)
       h.set({ ...p, layers: p.layers.flatMap((x) => (x.id === l.id ? [{ ...l, end: t } as Layer, right] : [x])) })
       setSel({ type: 'layer', id: right.id })
       return
