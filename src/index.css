@@ -294,7 +294,7 @@ input, textarea { font: inherit; color: inherit; }
 .select { width: 100%; padding: 9px 10px; border-radius: 8px; background: var(--panel-2); color: inherit; border: 1px solid var(--line); font-size: 14px; margin: 4px 0 6px; }
 .ai-status { margin-top: 12px; display: grid; gap: 6px; }
 .warn { color: #ffcc00; }
-.error-text { color: #ff6b6b; margin-top: 10px; }
+.error-text { color: #ff6b6b; margin-top: 10px; white-space: pre-line; }
 .ok-text { color: #34c759; margin-top: 10px; }
 
 /* watermark panel */
@@ -436,3 +436,10 @@ input, textarea { font: inherit; color: inherit; }
 .data-table .row { align-items: center; }
 .data-source { flex: 1; min-width: 0; }
 .data-list > .btn { justify-self: start; }
+
+/* Local AI */
+.local-ai .help { white-space: pre-line; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+.local-ai code { user-select: all; font-size: 12px; }
+.ai-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.progress.waiting div { width: 30%; animation: progress-wait 1.2s ease-in-out infinite alternate; }
+@keyframes progress-wait { from { margin-left: 0; } to { margin-left: 70%; } }
