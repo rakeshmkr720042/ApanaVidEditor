@@ -7,6 +7,7 @@ import { newWave, subtitleLook } from './useEditor'
 import { captionY, type AudioPart } from '../lib/audioScenes'
 import type { MindScene } from '../lib/mindmap'
 import { quizPlan, type QuizPlan, type QuizScene } from '../lib/quiz'
+import { dataPlan, type DataScene } from '../lib/datachart'
 
 /**
  * Scene builder: every "something → video" input (slides, PDF pages, photos, and later scripts,
@@ -23,6 +24,7 @@ export interface Scene {
   mind?: MindScene // one step of a mind map: becomes an animated clip when the scenes are placed
   audio?: AudioPart // a chapter of an audio file: timed to the sound, captions follow the speech
   quiz?: QuizScene // a quiz question or flashcard: becomes an animated clip timed to its voice
+  data?: DataScene // a step of a chart made from a table: becomes an animated clip timed to its voice
 }
 
 /** What a text card shows: a big title, a titled list or paragraph, or a large quote. */
@@ -95,18 +97,22 @@ export interface BuiltScene {
 export const planOf = (b: BuiltScene): QuizPlan | null =>
   b.scene.quiz ? quizPlan(b.scene.quiz, b.voice?.duration ?? 0, b.voice2?.duration ?? 0) : null
 
+/** How long an animated scene has to be (its quiz or chart plan), or null for the others. */
+const fixedLength = (b: BuiltScene, voiced: boolean): number | null =>
+  planOf(b)?.end ?? (b.scene.data ? dataPlan(b.scene.data, voiced ? b.voice?.duration ?? 0 : 0).end : null)
+
 /** How long each scene stays on screen, before transition overlap is added. */
 export function sceneLengths(built: BuiltScene[], o: SceneOptions, track: MediaSource | null): number[] {
   if (o.voice === 'track' && track) {
     // the user's own narration: share it out, but keep scenes they timed themselves
-    const own = built.map((b) => planOf(b)?.end ?? b.scene.duration)
+    const own = built.map((b) => fixedLength(b, false) ?? b.scene.duration)
     const fixed = own.reduce<number>((s, d) => s + (d ?? 0), 0)
     const free = own.filter((d) => d == null).length
     const each = free ? Math.max(1, (track.duration - fixed) / free) : 0
     return own.map((d) => d ?? each)
   }
   // a quiz scene is as long as its question, countdown and answer
-  return built.map((b) => planOf(b)?.end ?? b.scene.duration ?? (b.voice ? VOICE_LEAD + b.voice.duration + VOICE_TAIL : Math.max(o.seconds, readingTime(b.scene))))
+  return built.map((b) => fixedLength(b, true) ?? b.scene.duration ?? (b.voice ? VOICE_LEAD + b.voice.duration + VOICE_TAIL : Math.max(o.seconds, readingTime(b.scene))))
 }
 
 /** Seconds needed to read a text card without a voice (about three words a second). */
