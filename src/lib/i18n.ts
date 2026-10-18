@@ -10,6 +10,8 @@ const hi: Record<string, string> = {
   'Fill': 'भरें', 'Green screen': 'ग्रीन स्क्रीन', 'Opacity': 'पारदर्शिता', 'Reset': 'रीसेट', 'Apply to all': 'सब पर लगाएं',
   'Offline ready': 'ऑफ़लाइन तैयार', 'Get offline pack': 'ऑफ़लाइन पैक लें', 'Intensity': 'तीव्रता', 'Duration': 'समय',
   'Fade in': 'धीरे शुरू', 'Fade out': 'धीरे खत्म', 'Mute': 'म्यूट', 'Background': 'बैकग्राउंड', 'Aspect ratio': 'आकार',
+  'File size': 'फ़ाइल साइज़', 'Small file': 'छोटी फ़ाइल', 'High quality': 'हाई क्वालिटी', 'Estimated size': 'अंदाज़न साइज़',
+  'photos, slides and text usually come out smaller': 'फ़ोटो, स्लाइड और टेक्स्ट वाला वीडियो अक्सर इससे छोटा बनता है',
   'Watermark': 'वॉटरमार्क', 'Resolution': 'क्वालिटी', 'Cover': 'कवर', 'Batch': 'बैच', 'Rotate': 'घुमाएं', 'Flip': 'पलटें',
   'Keyframe-free cut, original quality': 'बिना क्वालिटी खोए तेज़ एक्सपोर्ट', 'Rename': 'नाम बदलें', 'Open': 'खोलें',
   'Pick videos or photos from your phone. Everything stays on your device.': 'फ़ोन से वीडियो या फ़ोटो चुनें। सब कुछ आपके फ़ोन में ही रहता है।',
