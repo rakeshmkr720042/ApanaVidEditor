@@ -10,6 +10,8 @@ import { ensureFont } from './text'
 
 export type Format = 'mp4' | 'webm' | 'mov' | 'gif' | 'mp3'
 export type Resolution = '480' | '720' | '1080' | '1440'
+/** How hard to squeeze the file: smaller files trade away some sharpness in fast motion. */
+export type SizeMode = 'small' | 'balanced' | 'high'
 
 export interface ExportJob {
   format: Format
@@ -18,6 +20,7 @@ export interface ExportJob {
   watermark: string | null
   cover: number | null // timeline time of the cover frame, embedded in MP4/MOV
   aspect?: AspectRatio // overrides the project's frame shape (platform presets)
+  size?: SizeMode // defaults to 'high' (the old fixed bitrate)
 }
 
 export interface ExportOutput { blob: Blob; ext: string; cover: Blob | null; width: number; height: number; encoder: string }
@@ -72,6 +75,47 @@ function ivf(chunks: Uint8Array[], fourcc: string, w: number, h: number, fps: nu
   return out
 }
 
+const SIZE: Record<SizeMode, { bpp: number; keySecs: number; audioK: number; vorbisQ: number; crf: number }> = {
+  small: { bpp: 0.045, keySecs: 10, audioK: 96, vorbisQ: 2, crf: 28 },
+  balanced: { bpp: 0.07, keySecs: 5, audioK: 128, vorbisQ: 3, crf: 25 },
+  high: { bpp: 0.11, keySecs: 2, audioK: 192, vorbisQ: 5, crf: 21 },
+}
+
+/** Share of the timeline (0..1) that shows moving video; photos, slides and text cards need far fewer bits. */
+export function motionShare(project: Project, sources: Record<string, MediaSource>): number {
+  const { items, total } = layoutClips(project.clips)
+  if (total <= 0) return 1
+  const spans: [number, number][] = []
+  for (const it of items) if (sources[it.clip.sourceId]?.kind === 'video') spans.push([it.start, it.start + it.dur])
+  for (const l of project.layers) if (l.type === 'media' && sources[l.sourceId]?.kind === 'video') spans.push([l.start, l.end])
+  spans.sort((a, b) => a[0] - b[0])
+  let moving = 0, end = 0
+  for (const [a, b] of spans) {
+    const s = Math.max(a, end, 0), e = Math.min(b, total)
+    if (e > s) moving += e - s
+    end = Math.max(end, b)
+  }
+  return Math.min(1, moving / total)
+}
+
+/** Target video bitrate: bits per pixel by size mode, cut down to 35% for still content. */
+export function videoBitrate(w: number, h: number, fps: number, mode: SizeMode, motion: number): number {
+  const fpsScale = 30 * Math.pow(fps / 30, 0.7) // doubling the frame rate needs much less than double the bits
+  return Math.round(Math.min(16e6, w * h * fpsScale * SIZE[mode].bpp * (0.35 + 0.65 * motion)))
+}
+
+/** Rough upper estimate of the exported file size in bytes (encoders often land below it on still content); null for GIF. */
+export function estimateSize(project: Project, sources: Record<string, MediaSource>, job: ExportJob): number | null {
+  if (job.format === 'gif') return null
+  if (job.aspect && job.aspect !== project.settings.aspect) project = { ...project, settings: { ...project.settings, aspect: job.aspect } }
+  const { total } = layoutClips(project.clips)
+  const mode = job.size ?? 'high'
+  const audio = SIZE[mode].audioK * 1000
+  if (job.format === 'mp3') return (total * audio) / 8
+  const { w, h } = outputSize(project, sources, Number(job.resolution))
+  return (total * (videoBitrate(w, h, job.fps, mode, motionShare(project, sources)) + audio)) / 8
+}
+
 /** Renders the project frame by frame with the same renderer as the preview, then muxes with ffmpeg. */
 export async function exportProject(
   project: Project,
@@ -88,6 +132,11 @@ export async function exportProject(
   const short = gif ? Math.min(480, Number(job.resolution)) : Number(job.resolution)
   const { w, h } = outputSize(project, sources, short)
   const fps = gif ? Math.min(15, job.fps) : job.fps
+  const mode = job.size ?? 'high'
+  const size = SIZE[mode]
+  const aac = ['-c:a', 'aac', '-b:a', `${size.audioK}k`]
+  const vorbis = ['-c:a', 'libvorbis', '-q:a', String(size.vorbisQ)]
+  const x264 = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(size.crf), '-g', String(Math.round(fps * size.keySecs)), '-pix_fmt', 'yuv420p']
   const ff = await getFFmpeg()
   const cleanup: string[] = []
   const write = async (name: string, data: Uint8Array) => { await ff.writeFile(name, data); cleanup.push(name) }
@@ -104,7 +153,7 @@ export async function exportProject(
     if (job.format === 'mp3') {
       if (!hasAudio) throw new Error('This project has no sound to export')
       onProgress(0.5, 'Encoding MP3…')
-      const { code } = await runFFmpeg(['-i', 'a.wav', '-c:a', 'libmp3lame', '-b:a', '192k', 'out.mp3'], (p) => onProgress(0.5 + p * 0.45, 'Encoding MP3…'))
+      const { code } = await runFFmpeg(['-i', 'a.wav', '-c:a', 'libmp3lame', '-b:a', `${size.audioK}k`, 'out.mp3'], (p) => onProgress(0.5 + p * 0.45, 'Encoding MP3…'))
       if (code !== 0) throw new Error('MP3 encoding failed')
       cleanup.push('out.mp3')
       const data = (await ff.readFile('out.mp3')) as Uint8Array
@@ -133,7 +182,8 @@ export async function exportProject(
     }
 
     const frameCount = Math.max(1, Math.round(total * fps))
-    const bitrate = Math.round(Math.min(16e6, w * h * fps * (gif ? 0.2 : 0.11)))
+    const bitrate = gif ? Math.round(Math.min(16e6, w * h * fps * 0.2)) : videoBitrate(w, h, fps, mode, motionShare(project, sources))
+    const keyEvery = Math.max(1, Math.round(fps * size.keySecs))
     const target = await pickEncoder(job.format, w, h, fps, bitrate)
     const chunks: Uint8Array[] = []
     let encoderName = 'ffmpeg'
@@ -154,7 +204,7 @@ export async function exportProject(
         if (encErr) throw encErr
         await renderAt(Math.min(total - 1e-3, n / fps + 1e-4), n)
         const vf = new VideoFrame(renderer.canvas, { timestamp: Math.round((n * 1e6) / fps), duration: Math.round(1e6 / fps) })
-        enc.encode(vf, { keyFrame: n % (fps * 2) === 0 })
+        enc.encode(vf, { keyFrame: n % keyEvery === 0 })
         vf.close()
         while (enc.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 2))
         if (n % 3 === 0) onProgress(0.08 + (n / frameCount) * 0.8, `Rendering ${Math.round((n / frameCount) * 100)}%`)
@@ -203,19 +253,19 @@ export async function exportProject(
       if (gif) {
         args = [...vin, '-vf', `fps=${fps},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0', out]
       } else if (ext === 'webm') {
-        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'copy', '-c:a', 'libvorbis', '-q:a', '5', out]
+        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'copy', ...vorbis, out]
       } else if (target.kind === 'h264') {
-        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]
+        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'copy', ...aac, '-movflags', '+faststart', out]
       } else {
         // H.264 encoder not available on this device: transcode in software
-        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]
+        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, ...x264, ...aac, '-movflags', '+faststart', out]
         encoderName = `${target.codec} → x264`
       }
     } else {
       const vin = ['-framerate', String(fps), '-i', 'f%06d.jpg']
       if (gif) args = [...vin, '-vf', `split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0', out]
-      else if (ext === 'webm') args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'libvpx', '-b:v', String(bitrate), '-deadline', 'realtime', '-cpu-used', '8', '-c:a', 'libvorbis', '-q:a', '5', out]
-      else args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]
+      else if (ext === 'webm') args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'libvpx', '-b:v', String(bitrate), '-g', String(keyEvery), '-deadline', 'realtime', '-cpu-used', '8', ...vorbis, out]
+      else args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, ...x264, ...aac, '-movflags', '+faststart', out]
     }
     const { code, logs } = await runFFmpeg(args, (p) => onProgress(0.9 + Math.max(0, Math.min(1, p)) * 0.09, 'Finishing…'))
     if (code !== 0) throw new Error('Could not write the video file: ' + logs.slice(-3).join(' '))

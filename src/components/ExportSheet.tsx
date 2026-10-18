@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AspectRatio, MediaSource, Project } from '../types'
-import { exportProject, Cancelled, type ExportJob, type Format, type Resolution } from '../engine/exporter'
+import { exportProject, estimateSize, Cancelled, type ExportJob, type Format, type Resolution, type SizeMode } from '../engine/exporter'
 import { exportFast, isSimpleProject } from '../lib/export'
 import { resetFFmpeg } from '../lib/ffmpeg'
 import { isNative, saveNative } from '../lib/save'
@@ -28,6 +28,12 @@ const RES: { value: Resolution; label: string }[] = [
   { value: '480', label: '480p' }, { value: '720', label: '720p' }, { value: '1080', label: '1080p' }, { value: '1440', label: '2K' },
 ]
 
+const SIZES: { value: SizeMode; label: string }[] = [
+  { value: 'small', label: 'Small file' }, { value: 'balanced', label: 'Balanced' }, { value: 'high', label: 'High quality' },
+]
+const SIZE_KEY = 'export-size'
+const mb = (bytes: number) => (bytes >= 1073741824 ? `${(bytes / 1073741824).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1048576))} MB`)
+
 /** Platform presets: each sets the frame shape, the short side and the frame rate in one tap. */
 const PRESETS: { id: string; label: string; aspect: AspectRatio; resolution: Resolution; fps: number }[] = [
   { id: 'youtube', label: 'YouTube 1080p (16:9)', aspect: '16:9', resolution: '1080', fps: 30 },
@@ -37,7 +43,7 @@ const PRESETS: { id: string; label: string; aspect: AspectRatio; resolution: Res
   { id: 'square', label: 'Square (1:1 1080x1080)', aspect: '1:1', resolution: '1080', fps: 30 },
 ]
 
-const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3' ? '' : ` · ${RES.find((r) => r.value === j.resolution)?.label}${j.aspect ? ` ${j.aspect}` : ''} · ${j.format === 'gif' ? Math.min(15, j.fps) : j.fps}fps`}`
+const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3' ? '' : ` · ${RES.find((r) => r.value === j.resolution)?.label}${j.aspect ? ` ${j.aspect}` : ''} · ${j.format === 'gif' ? Math.min(15, j.fps) : j.fps}fps`}${j.format === 'gif' || !j.size ? '' : ` · ${t(SIZES.find((x) => x.value === j.size)!.label)}`}`
 
 export function ExportSheet({ project, sources, name, snapshot, onClose }: Props) {
   const total = layoutClips(project.clips).total
@@ -46,6 +52,11 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const [res, setRes] = useState<Resolution>('1080')
   const [fps, setFps] = useState(30)
   const [preset, setPreset] = useState('')
+  const [size, setSizeState] = useState<SizeMode>(() => {
+    try { const v = localStorage.getItem(SIZE_KEY); if (v === 'small' || v === 'balanced' || v === 'high') return v } catch { /* private mode */ }
+    return 'balanced'
+  })
+  const setSize = (v: SizeMode) => { setSizeState(v); try { localStorage.setItem(SIZE_KEY, v) } catch { /* private mode */ } }
   // the app's own mark is off by default once the user has their own watermark
   const [watermark, setWatermark] = useState(!project.watermark?.enabled)
   const [useCover, setUseCover] = useState(false)
@@ -69,7 +80,8 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   }, [useCover, coverT, snapshot])
 
   const presetAspect = PRESETS.find((p) => p.id === preset)?.aspect
-  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : res, fps, watermark: watermark ? 'ApanaVidEditor' : null, cover: useCover ? coverT : null, aspect: presetAspect })
+  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : res, fps, watermark: watermark ? 'ApanaVidEditor' : null, cover: useCover ? coverT : null, aspect: presetAspect, size })
+  const estimate = estimateSize(project, sources, job())
   const pickPreset = (id: string) => {
     setPreset(id)
     const p = PRESETS.find((x) => x.id === id)
@@ -163,6 +175,17 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
                 )}
                 <span className="field-label">{t('Format')}</span>
                 <Chips options={FORMATS} value={format} onChange={setFormat} wrap />
+                {format !== 'gif' && (
+                  <>
+                    <span className="field-label">{t('File size')}</span>
+                    <Chips options={SIZES.map((o) => ({ ...o, label: t(o.label) }))} value={size} onChange={setSize} />
+                    {estimate != null && (
+                      <p className="muted small" data-testid="size-estimate">
+                        {t('Estimated size')}: ~{mb(estimate)}{format !== 'mp3' ? ` · ${t('photos, slides and text usually come out smaller')}` : ''}
+                      </p>
+                    )}
+                  </>
+                )}
                 {format !== 'mp3' && (
                   <>
                     <span className="field-label">{t('Resolution')}</span>
