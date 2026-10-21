@@ -310,6 +310,9 @@ const hi: Record<string, string> = {
   'The notes file keeps screenshots. Text sends only the notes still to do.': 'नोट्स फ़ाइल में स्क्रीनशॉट भी जाते हैं। टेक्स्ट में सिर्फ़ बाकी नोट्स जाते हैं।',
   'Open a notes file from a tester': 'टेस्टर की नोट्स फ़ाइल खोलें', 'note added': 'नोट जुड़ा', 'notes added': 'नोट्स जुड़े',
   'This is not a notes file.': 'यह नोट्स फ़ाइल नहीं है।',
+  // overlay (picture-in-picture)
+  'Add overlay': 'ओवरले जोड़ें', 'Size & opacity': 'साइज़ और पारदर्शिता', 'Full screen': 'पूरी स्क्रीन',
+  'Top left': 'ऊपर बाएं', 'Top right': 'ऊपर दाएं', 'Bottom left': 'नीचे बाएं', 'Bottom right': 'नीचे दाएं',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()
