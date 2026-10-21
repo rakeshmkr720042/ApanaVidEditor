@@ -128,6 +128,7 @@ async function asr(r: Extract<AiRequest, { type: 'asr' }>) {
       cues.push({ start: s, end: Math.max(s + 0.3, e), text })
     }
   }
+  post({ id: r.id, type: 'progress', stage: 'work', p: 1 })
   post({ id: r.id, type: 'asr', cues })
 }
 
