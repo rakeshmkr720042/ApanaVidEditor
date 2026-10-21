@@ -295,6 +295,21 @@ const hi: Record<string, string> = {
   'This AI model is not downloaded yet. Connect to the internet once, or download it in Offline & online on the home screen.': 'यह AI मॉडल अभी डाउनलोड नहीं हुआ है। एक बार इंटरनेट से जुड़ें, या होम स्क्रीन पर "ऑफ़लाइन और ऑनलाइन" में इसे डाउनलोड करें।',
   'Storage used': 'इस्तेमाल हुई जगह', 'Downloading…': 'डाउनलोड हो रहा है…',
   'Online (MyMemory). For offline translation, pick the From language and download that language pair in Offline & online on the home screen.': 'ऑनलाइन (MyMemory)। ऑफ़लाइन अनुवाद के लिए "से" वाली भाषा चुनें और होम स्क्रीन पर "ऑफ़लाइन और ऑनलाइन" में वह भाषा-जोड़ी डाउनलोड करें।',
+  // testing notes
+  'Testing notes': 'टेस्टिंग नोट्स', 'Notes': 'नोट्स', 'Problem': 'कमी / गड़बड़', 'New idea': 'नया आइडिया', 'Note': 'नोट',
+  'Found a problem or want something new? Write it here while you test, so it is not forgotten. Notes stay on this device until you send them.': 'कोई कमी मिली या कुछ नया चाहिए? टेस्ट करते समय यहीं लिख दें, ताकि भूलें नहीं। नोट्स इसी डिवाइस में रहते हैं जब तक आप भेजते नहीं।',
+  'What went wrong? What did you tap just before?': 'क्या गड़बड़ हुई? उससे ठीक पहले क्या दबाया था?', 'What should the app do?': 'ऐप में क्या होना चाहिए?',
+  'Where': 'कहाँ', 'Add screenshot': 'स्क्रीनशॉट जोड़ें', 'Remove screenshot': 'स्क्रीनशॉट हटाएं', 'Save note': 'नोट सेव करें',
+  'Saved on this device.': 'इस डिवाइस में सेव हो गया।', 'Could not read this picture.': 'यह फ़ोटो नहीं पढ़ पाए।',
+  'To do': 'करना बाकी', 'All': 'सभी', 'Nothing marked done yet.': 'अभी कुछ भी पूरा नहीं हुआ।', 'No notes yet.': 'अभी कोई नोट नहीं।',
+  'Mark done': 'पूरा हुआ', 'Mark not done': 'बाकी है', 'Send to the developer': 'डेवलपर को भेजें',
+  'Your name (so the developer knows who sent it)': 'आपका नाम (ताकि डेवलपर को पता चले किसने भेजा)',
+  'Share notes file': 'नोट्स फ़ाइल शेयर करें', 'Send as text (WhatsApp)': 'टेक्स्ट में भेजें (WhatsApp)', 'Copy all': 'सब कॉपी करें', 'Make GitHub issue': 'GitHub issue बनाएं', 'Close': 'बंद करें',
+  'Notes file ready to send.': 'नोट्स फ़ाइल भेजने के लिए तैयार है।', 'Copied. Paste it in any chat.': 'कॉपी हो गया। किसी भी चैट में पेस्ट करें।',
+  'Notes file saved in Downloads. Send it to the developer.': 'नोट्स फ़ाइल Downloads में सेव हुई। इसे डेवलपर को भेजें।',
+  'The notes file keeps screenshots. Text sends only the notes still to do.': 'नोट्स फ़ाइल में स्क्रीनशॉट भी जाते हैं। टेक्स्ट में सिर्फ़ बाकी नोट्स जाते हैं।',
+  'Open a notes file from a tester': 'टेस्टर की नोट्स फ़ाइल खोलें', 'note added': 'नोट जुड़ा', 'notes added': 'नोट्स जुड़े',
+  'This is not a notes file.': 'यह नोट्स फ़ाइल नहीं है।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

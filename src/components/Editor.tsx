@@ -26,6 +26,7 @@ import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
 import { TemplatesPanel } from '../panels/TemplatesPanel'
 import { ScreenRecorder } from './ScreenRecorder'
 import { PlaceSheet } from './PlaceSheet'
+import { FeedbackSheet } from './FeedbackSheet'
 import { playable } from '../model/tracks'
 import { atTime } from '../model/keyframes'
 import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../panels/LayerTools'
@@ -62,6 +63,7 @@ type PanelName = 'speed' | 'volume' | 'filters' | 'adjust' | 'transition' | 'for
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
   const [name, setName] = useState(initial.name)
+  const [notesSheet, setNotesSheet] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [player, setPlayer] = useState<Player | null>(null)
   const [time, setTime] = useState(0)
@@ -462,6 +464,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         <button className="icon-btn" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
         <button className="title" onClick={rename}>{name}</button>
         <div className="top-actions">
+          <button className="icon-btn" onClick={() => { player?.pause(); setNotesSheet(true) }} aria-label={t('Testing notes')} title={t('Testing notes')}><Icon name="note" /></button>
           <button className="icon-btn" disabled={!ed.canUndo} onClick={ed.undo} aria-label="Undo"><Icon name="undo" /></button>
           <button className="icon-btn" disabled={!ed.canRedo} onClick={ed.redo} aria-label="Redo"><Icon name="redo" /></button>
           <span className="menu-anchor">
@@ -563,6 +566,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder onClose={() => setScreenRec(false)} onDone={addRecording} />}
+      {notesSheet && <FeedbackSheet where={`Editor: ${name}${panel ? ` › ${panel}` : ''}`} onClose={() => setNotesSheet(false)} />}
       {exporting && <ExportSheet project={output} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>
   )

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
@@ -6,6 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   // Relative base so the same build works on a web host and inside Capacitor.
   base: './',
+  // shown in testing notes so the developer knows which build a tester had
+  define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')).version) },
   plugins: [
     react(),
     VitePWA({
