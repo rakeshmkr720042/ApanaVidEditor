@@ -22,7 +22,7 @@ import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
 import { saveMedia } from '../lib/db'
 import { fmtTime } from '../lib/format'
-import { ASR_MODELS, SPOKEN, VOICES, langName, speakLines, stopAI, transcribeSamples } from '../engine/ai'
+import { ASR_MODELS, SPOKEN, VOICES, langName, savedModel, saveModel, speakLines, stopAI, transcribeSamples } from '../engine/ai'
 import { WAVE_STYLES, analyse, decodeMono, primeWave } from '../engine/visualizer'
 import { audioToScenes, bitmapOf, drawAudioCard, findGaps, type AudioLook } from '../lib/audioScenes'
 import { fillInOrder, picsFromFiles, type Leftover, type Pic } from '../lib/rawMedia'
@@ -42,7 +42,7 @@ let draft = '' // pasted script, kept if the sheet is closed before making scene
 let mapDraft = { tab: 'outline' as 'outline' | 'tree', outline: '', tree: node('', [node('')]), overview: true }
 let mapMemo: MapSettings | null = null
 // the audio being turned into a video, and how
-let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as AudioLook, cover: null as Blob | null, target: 12, listen: true, lang: 'auto', model: ASR_MODELS[0].id }
+let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as AudioLook, cover: null as Blob | null, target: 12, listen: true, lang: 'auto', model: savedModel() }
 // extra material beside the main file: pictures for the scenes, and music under the video
 let matDraft = { pics: [] as Pic[], music: null as MediaSource | null, leftover: 'card' as Leftover }
 // the quiz being written, and how it looks
@@ -1099,7 +1099,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                     <select className="select" value={ad.lang} onChange={(e) => setAudio({ lang: e.target.value })} aria-label={t('Language spoken')}>
                       {SPOKEN.map((c) => <option key={c} value={c}>{c === 'auto' ? t('Detect automatically') : langName(c)}</option>)}
                     </select>
-                    <select className="select" value={ad.model} onChange={(e) => setAudio({ model: e.target.value })} aria-label={t('Quality')}>
+                    <select className="select" value={ad.model} onChange={(e) => { saveModel(e.target.value); setAudio({ model: e.target.value }) }} aria-label={t('Quality')}>
                       {ASR_MODELS.map((m) => <option key={m.id} value={m.id}>{t(m.label)} ({m.size})</option>)}
                     </select>
                   </div>

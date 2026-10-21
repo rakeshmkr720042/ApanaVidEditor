@@ -370,7 +370,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'trash', label: 'Delete', on: removeSel },
     ]
     const capsAll = selLayer.type === 'text' && selLayer.subtitle
-      ? [{ icon: 'subtitles', label: sel?.type === 'layer' && sel.all ? 'One caption' : 'All captions', on: () => ed.setSel({ type: 'layer', id: selLayer.id, all: !(sel?.type === 'layer' && sel.all) }) } as Tool]
+      ? [
+          { icon: 'subtitles', label: sel?.type === 'layer' && sel.all ? 'One caption' : 'All captions', on: () => ed.setSel({ type: 'layer', id: selLayer.id, all: !(sel?.type === 'layer' && sel.all) }) } as Tool,
+          { icon: 'ai', label: 'Listen again', on: () => { player?.pause(); ed.setSel({ type: 'layer', id: selLayer.id }); setPanel('ai') } } as Tool,
+        ]
       : []
     const specific: Tool[] = {
       text: [
