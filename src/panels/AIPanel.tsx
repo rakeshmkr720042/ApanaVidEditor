@@ -12,14 +12,14 @@ import { deleteVoiceSample, getVoiceSample, saveMedia, saveVoiceSample } from '.
 import { getLocalAI, localAI, setLocalAI } from '../lib/localai'
 import { CLONE_LANGS, referenceWav, voiceCloneSpace } from '../engine/voiceclone'
 import {
-  ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, langName, sampleVoice, setEmail, transcribe, translateCues,
+  ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, hasVoice, langName, sampleVoice, saveModel, savedModel, setEmail, transcribe, translateCues,
   type Progress,
 } from '../engine/ai'
 
 interface P { ed: Editor; onClose: () => void }
 
 // remembered while the editor is open, so closing the panel loses nothing
-const memo = { tab: 'captions', model: ASR_MODELS[1].id, spoken: 'auto', toEnglish: false, subLang: 'auto', target: 'hi', voice: 'hi', duck: 0.15, mine: false }
+const memo = { tab: 'captions', model: savedModel(), spoken: 'auto', voiceOnly: true, toEnglish: false, subLang: 'auto', target: 'hi', voice: 'hi', duck: 0.15, mine: false }
 
 const DEVANAGARI = ['hi', 'mr', 'ne']
 
@@ -39,7 +39,8 @@ const LangSelect = ({ value, onChange, codes, auto }: { value: string; onChange:
 )
 
 export function AIPanel({ ed, onClose }: P) {
-  const [tab, setTab] = useState(memo.tab)
+  // opened from a caption's "Listen again" tool: start on captions
+  const [tab, setTab] = useState(() => (ed.sel?.type === 'layer' && ed.project.layers.some((l) => l.id === (ed.sel as { id: string }).id && l.type === 'text' && l.subtitle) ? 'captions' : memo.tab))
   const [, rerender] = useState(0)
   const set = (patch: Partial<typeof memo>) => { Object.assign(memo, patch); rerender((n) => n + 1) }
   const [busy, setBusy] = useState<{ label: string; p: number } | null>(null)
@@ -142,8 +143,8 @@ export function AIPanel({ ed, onClose }: P) {
     try { setDone(await fn()) } catch (e) { setError((e as Error).message) } finally { setBusy(null) }
   }
 
-  /** Swaps the subtitle layers for new cues in one undo step. */
-  const replaceSubs = (next: Cue[], lang: string) => {
+  /** Swaps the subtitle layers (all, or only those inside `range`) for new cues in one undo step. */
+  const replaceSubs = (next: Cue[], lang: string, range?: [number, number]) => {
     const p = ed.project
     const style = subs[0]?.style ?? subtitleStyle()
     const font = DEVANAGARI.includes(lang) ? 'Noto Sans Devanagari' : style.font === 'Noto Sans Devanagari' ? subtitleStyle().font : style.font
@@ -154,17 +155,39 @@ export function AIPanel({ ed, onClose }: P) {
       style: { ...style, font }, box: { x: 0.5, y, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none',
       frame: subs[0]?.frame ? { ...subs[0].frame, rect: { ...subs[0].frame.rect } } : null,
     }))
-    ed.replaceProject({ ...p, layers: [...p.layers.filter((l) => !(l.type === 'text' && l.subtitle)), ...layers] })
+    const gone = (l: (typeof p.layers)[number]) => l.type === 'text' && l.subtitle && (!range || (l.start < range[1] && l.end > range[0]))
+    ed.replaceProject({ ...p, layers: [...p.layers.filter((l) => !gone(l)), ...layers] })
+    return layers
     memo.subLang = lang
     if ((mine ? CLONE_LANGS : Object.keys(VOICES)).includes(lang)) memo.voice = lang
   }
 
+  const voice = hasVoice(ed.project) && memo.voiceOnly
+  const listenOpts = { model: memo.model, language: memo.spoken, toEnglish: memo.toEnglish, voice }
+  const heard = (lang: string | null) => (memo.toEnglish ? 'en' : memo.spoken !== 'auto' ? memo.spoken : lang ?? 'auto')
+
   const generate = () => run(t('Listening to the video…'), async () => {
     if (subs.length && !confirm(t('Replace the subtitles you already have?'))) return ''
-    const out = await transcribe(ed.project, ed.sources, { model: memo.model, language: memo.spoken, toEnglish: memo.toEnglish }, progress(t('Listening to the video…')))
+    const { cues: out, language } = await transcribe(ed.project, ed.sources, listenOpts, progress(t('Listening to the video…')))
     if (!out.length) throw new Error(t('No speech was found in this video'))
-    replaceSubs(out, memo.toEnglish ? 'en' : memo.spoken)
-    return `${out.length} ${t('captions added. Edit any line in Subtitles.')}`
+    replaceSubs(out, heard(language))
+    const found = memo.spoken === 'auto' && language ? ` ${t('Language heard')}: ${langName(language)}.` : ''
+    return `${out.length} ${t('captions added. Edit any line in Subtitles.')}${found}`
+  })
+
+  // the caption picked on the timeline, to listen to that bit again
+  const picked = ed.sel?.type === 'layer' && !ed.sel.all ? subs.find((s) => ed.sel?.type === 'layer' && s.id === ed.sel.id) : undefined
+  const redo = () => run(t('Listening again…'), async () => {
+    if (!picked) return ''
+    const i = subs.indexOf(picked)
+    // a little either side, without reaching into the neighbouring captions
+    const range: [number, number] = [Math.max(subs[i - 1]?.end ?? 0, picked.start - 1), Math.min(subs[i + 1]?.start ?? total, picked.end + 1)]
+    const { cues: out, language } = await transcribe(ed.project, ed.sources, { ...listenOpts, range }, progress(t('Listening again…')))
+    if (!out.length) throw new Error(t('No speech was found in this part'))
+    const made = replaceSubs(out.map((c) => ({ ...c, start: Math.max(range[0], c.start), end: Math.min(range[1], c.end) })), heard(language), range)
+    // keep the new caption picked, so it can be listened to again with another quality
+    if (made[0]) ed.setSel({ type: 'layer', id: made[0].id })
+    return t('This caption was made again. Try a higher quality if it is still wrong.')
   })
 
   const translate = (apply: boolean) => run(t('Translating…'), async () => {
@@ -223,12 +246,17 @@ export function AIPanel({ ed, onClose }: P) {
           <span className="field-label">{t('Language spoken in the video')}</span>
           <LangSelect value={memo.spoken} codes={SPOKEN} auto onChange={(spoken) => set({ spoken })} />
           <span className="field-label">{t('Quality')}</span>
-          <Chips options={ASR_MODELS.map((m) => ({ value: m.id, label: `${t(m.label)} ${m.size}` }))} value={memo.model} onChange={(model) => set({ model })} wrap />
+          <Chips options={ASR_MODELS.map((m) => ({ value: m.id, label: `${t(m.label)} ${m.size}` }))} value={memo.model} onChange={(model) => { saveModel(model); set({ model }) }} wrap />
+          <p className="muted small">{t('For Hindi and Hinglish, Accurate or Best gives much better captions. Best needs a computer.')}</p>
+          {hasVoice(ed.project) && <Toggle label="Listen only to my voice recordings (not the music)" value={memo.voiceOnly} onChange={(voiceOnly) => set({ voiceOnly })} />}
           <Toggle label="Write captions in English" value={memo.toEnglish} onChange={(toEnglish) => set({ toEnglish })} />
           <div className="row">
             <button className="btn primary" disabled={!!busy || !total} onClick={generate}>{t('Generate captions')}</button>
             <button className="btn" disabled={!!busy || !cues.length} onClick={() => download('subtitles.srt', toSrt(cues))}>{t('Download .srt')}</button>
           </div>
+          {picked
+            ? <button className="btn" disabled={!!busy} onClick={redo}>{t('Listen again to the selected caption')}</button>
+            : cues.length > 0 && <p className="muted small">{t('A caption is wrong? Fix the words in Subtitles, or tap it on the timeline and choose Listen again.')}</p>}
         </>
       )}
 
