@@ -3,16 +3,18 @@ import { importProjectFile } from '../lib/projectFile'
 import { deleteProject, listProjects, storageEstimate, type ProjectRecord } from '../lib/db'
 import { createProject } from '../lib/newProject'
 import { fmtTime } from '../lib/format'
-import { isCoreCached, prefetchCore } from '../lib/ffmpeg'
-import { prefetchFonts } from '../engine/text'
+import { isCoreCached } from '../lib/ffmpeg'
+import { isEngineCached } from '../engine/offline'
 import { getLang, setLang, t } from '../lib/i18n'
 import { Icon } from './Icon'
 import { LocalAISheet } from './LocalAISheet'
+import { OfflineSheet } from './OfflineSheet'
 import { localAI } from '../lib/localai'
 
 export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang: () => void }) {
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null)
-  const [offline, setOffline] = useState<'unknown' | 'ready' | 'downloading' | 'no'>('unknown')
+  const [offline, setOffline] = useState<'unknown' | 'ready' | 'no'>('unknown')
+  const [netSheet, setNetSheet] = useState(false)
   const [usage, setUsage] = useState<string | null>(null)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,10 +27,11 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
     try { onOpen(await importProjectFile(f)) } catch (e) { setError((e as Error).message) } finally { setOpening(false) }
   }
 
+  const checkOffline = () => Promise.all([isCoreCached(), isEngineCached()]).then(([a, b]) => setOffline(a && b ? 'ready' : 'no'))
   const refresh = () => listProjects().then(setProjects).catch(() => setProjects([]))
   useEffect(() => {
     refresh()
-    isCoreCached().then((ok) => setOffline(ok ? 'ready' : 'no'))
+    checkOffline()
     storageEstimate().then((e) => e?.usage != null && setUsage(`${(e.usage / 1048576).toFixed(0)} MB`))
   }, [])
 
@@ -38,11 +41,6 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
     if (!confirm(`${t('Delete')} "${p.name}"?`)) return
     await deleteProject(p.id)
     refresh()
-  }
-
-  const getOffline = async () => {
-    setOffline('downloading')
-    try { await Promise.all([prefetchCore(), prefetchFonts()]); setOffline((await isCoreCached()) ? 'ready' : 'no') } catch { setOffline('no') }
   }
 
   return (
@@ -65,8 +63,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         <input ref={fileInput} type="file" accept=".avp,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
         {error && <p className="error-text">{error}</p>}
         <div className="offline-row">
-          {offline === 'no' && <button className="btn small" onClick={getOffline}><Icon name="download" size={16} /> {t('Get offline pack')} <span className="muted">~33 MB</span></button>}
-          {offline === 'downloading' && <span className="muted small">{t('Downloading…')}</span>}
+          <button className="btn small" onClick={() => setNetSheet(true)}>
+            {offline === 'ready' ? '✓ ' : <Icon name="download" size={16} />} {t('Offline & online')}
+          </button>
           {offline === 'ready' && <span className="badge">✓ {t('Offline ready')}</span>}
           {usage && <span className="muted small">{t('Storage used')}: {usage}</span>}
         </div>
@@ -85,6 +84,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           ))}
         </div>
       </main>
+      {netSheet && <OfflineSheet onClose={() => { setNetSheet(false); checkOffline() }} />}
       {aiSheet && <LocalAISheet onClose={() => { setAiSheet(false); setAiOn(!!localAI()) }} />}
     </div>
   )

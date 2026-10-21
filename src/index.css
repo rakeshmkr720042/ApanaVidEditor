@@ -566,3 +566,12 @@ input, textarea { font: inherit; color: inherit; }
   .tl-heads { flex-basis: 112px; margin-right: -112px; }
   .tl-head > button:not(.tl-head-name) { flex-basis: 22px; }
 }
+
+/* offline & online sheet */
+.offline-sheet h3 { font-size: 14px; margin: 10px 0 0; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.feature-row, .model-row { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border-radius: 8px; padding: 6px 8px 6px 10px; font-size: 14px; min-height: 38px; }
+.feature-row .grow, .model-row .grow { flex: 1; min-width: 0; }
+.model-row .select { margin: 0; }
+.net-badge { font-size: 12px; padding: 2px 8px; border-radius: 99px; white-space: nowrap; border: 1px solid; }
+.net-badge.ok { color: #7ee2a8; border-color: #2d5c41; }
+.net-badge.net { color: #ffcc66; border-color: #6b5520; }

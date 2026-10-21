@@ -22,6 +22,8 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+      - name: Download built-in AI models
+        run: node scripts/fetch-models.mjs
       - run: npm run build
       - run: npx cap sync android
       - name: Build debug APK

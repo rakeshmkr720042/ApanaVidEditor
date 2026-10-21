@@ -28,13 +28,16 @@ Zoom In.
 **AI captions & dubbing** (the "AI Dub" tool):
 - *Auto captions*: Whisper (tiny/base/small) runs in the browser through transformers.js and turns the timeline's speech
   into timed subtitles, in the spoken language or translated to English. Export them as .srt.
-- *Translate*: subtitles are translated into 60 languages with the free MyMemory API, keeping their timing; the
-  translated .srt is downloaded and can replace the on-screen subtitles. Needs internet; an optional email raises the
-  free limit to 50,000 characters a day.
+- *Translate*: subtitles are translated keeping their timing; the translated .srt is downloaded and can replace the
+  on-screen subtitles. The first available of: Local AI (Ollama on your computer), an offline Marian (opus-mt) model
+  for the language pair (English to/from about 20 languages, others through English; ~80–110 MB each), or the free
+  MyMemory API online (60 languages; an optional email raises the free limit to 50,000 characters a day).
 - *Voice-over*: each subtitle is spoken with an offline Meta MMS voice (English, Hindi, Spanish, French, German,
   Portuguese, Russian, Arabic, Vietnamese, Romanian, Yoruba) at its time, sped up to fit its slot when needed; the
   original sound is lowered and the voice track lands on the timeline, so it is in the export.
-The library and models download on first use (45–250 MB for captions, ~30 MB per voice) and stay in the browser cache.
+The AI engine (transformers.js + ONNX runtime) ships with the app. Models download once (45–250 MB for captions,
+~40 MB per voice) and stay on the device; the Windows and Android builds include Whisper tiny, so captions work
+offline from the first launch.
 
 **Slides to video** (the "Slides to video" tool, or "Slides / PDF to video" on an empty project): pick a PDF, a
 PowerPoint (.pptx) or photos and each page, slide or photo becomes a scene. PDF pages are rendered exactly (pdf.js) and
@@ -49,8 +52,10 @@ Square 1080×1080) that set frame shape, size and frame rate in one tap; MP4 (H.
 (9:16, 1:1, 16:9, 4:5…) with blurred, black or white background; removable watermark; cover thumbnail selector;
 batch export; lossless "fast" export for plain cuts.
 
-**App**: mobile-first dark UI, English/Hindi toggle, works offline after first load (ffmpeg core and fonts are cached
-on first use or with the "Offline pack" button on the home screen).
+**App**: mobile-first dark UI, English/Hindi toggle, works offline after first load (ffmpeg core, AI engine and fonts
+are cached on first use or with the offline pack). **Offline & online** on the home screen shows which features work
+without internet on this device and downloads or deletes AI models (captions, voices, translation pairs). Online only:
+article from a link, voice cloning, YouTube upload, and first-time model downloads.
 
 ## Run
 ```bash

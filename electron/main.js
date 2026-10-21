@@ -17,14 +17,15 @@ const mediaExts = [...videoExts, 'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp3', 'wa
 
 const csp = [
   "default-src 'self'",
-  // transformers.js (AI Dub) is loaded from jsDelivr; ffmpeg and onnxruntime compile wasm
-  "script-src 'self' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net",
+  // everything ships with the app; ffmpeg and onnxruntime compile wasm
+  "script-src 'self' 'wasm-unsafe-eval' blob:",
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "media-src 'self' data: blob: mediastream:",
   "font-src 'self' data: blob:",
-  // model downloads (Hugging Face, jsDelivr), the MyMemory translation API, and Local AI
+  // optional online parts: AI model downloads (Hugging Face), the MyMemory translation API,
+  // article links, voice cloning, YouTube upload, and Local AI
   // (the user's own Ollama server, usually http://localhost:11434)
   "connect-src 'self' data: blob: https: http:",
   "object-src 'none'",
@@ -33,7 +34,7 @@ const csp = [
 
 const isolationHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
-  // credentialless (not require-corp) keeps the CDN model downloads working
+  // credentialless (not require-corp) keeps the optional model downloads working
   'Cross-Origin-Embedder-Policy': 'credentialless',
   'Cross-Origin-Resource-Policy': 'same-origin',
 }
