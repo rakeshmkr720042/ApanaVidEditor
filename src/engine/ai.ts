@@ -100,6 +100,17 @@ function call(req: NoId<AiRequest>, progress?: Progress, transfer: Transferable[
   })
 }
 
+/**
+ * Stops whatever the AI engine is doing (a long listen, say): the engine is closed and every
+ * waiting call fails with `why`. The next call starts it again, with the models still cached.
+ */
+export function stopAI(why = 'Stopped') {
+  worker?.terminate()
+  worker = null
+  for (const w of waiting.values()) w.reject(new Error(why))
+  waiting.clear()
+}
+
 // ---------------------------------------------------------------- speech to text
 
 /** Only the user's own recordings: everything else (video sound, music, effects) is muted. */
