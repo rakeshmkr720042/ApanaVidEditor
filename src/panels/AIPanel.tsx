@@ -13,13 +13,14 @@ import { getLocalAI, localAI, setLocalAI } from '../lib/localai'
 import { CLONE_LANGS, referenceWav, voiceCloneSpace } from '../engine/voiceclone'
 import {
   ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, langName, sampleVoice, setEmail, transcribe, translateCues,
-  type Progress,
+  translator, type Progress,
 } from '../engine/ai'
+import { modelStates, type ModelState } from '../engine/offline'
 
 interface P { ed: Editor; onClose: () => void }
 
 // remembered while the editor is open, so closing the panel loses nothing
-const memo = { tab: 'captions', model: ASR_MODELS[1].id, spoken: 'auto', toEnglish: false, subLang: 'auto', target: 'hi', voice: 'hi', duck: 0.15, mine: false }
+const memo = { tab: 'captions', model: ASR_MODELS[1].id, picked: false, spoken: 'auto', toEnglish: false, subLang: 'auto', target: 'hi', voice: 'hi', duck: 0.15, mine: false }
 
 const DEVANAGARI = ['hi', 'mr', 'ne']
 
@@ -38,6 +39,11 @@ const LangSelect = ({ value, onChange, codes, auto }: { value: string; onChange:
   </select>
 )
 
+/** Whether the chosen model works offline now, or downloads once first. */
+const NetLine = ({ ok }: { ok: boolean }) => (
+  <p className={`small ${ok ? 'ok-text' : 'muted'}`}>{ok ? `✓ ${t('Works offline on this device')}` : `⬇ ${t('Downloads once (needs internet), then works offline')}`}</p>
+)
+
 export function AIPanel({ ed, onClose }: P) {
   const [tab, setTab] = useState(memo.tab)
   const [, rerender] = useState(0)
@@ -50,6 +56,23 @@ export function AIPanel({ ed, onClose }: P) {
   const playing = useRef<AudioBufferSourceNode | null>(null)
   useEffect(() => () => playing.current?.stop(), [])
   useEffect(() => { memo.tab = tab }, [tab])
+
+  // which models already work offline here (built into the app or downloaded before)
+  const [states, setStates] = useState<Record<string, ModelState>>({})
+  const ready = (id?: string) => !!id && !!states[id] && states[id] !== 'none'
+  const refreshStates = () => modelStates([
+    ...ASR_MODELS.map((m) => ({ id: m.id, kind: 'asr' as const })),
+    ...Object.values(VOICES).map((id) => ({ id, kind: 'tts' as const })),
+  ]).then((st) => {
+    // until the user picks a quality, prefer a model that needs no download
+    if (!memo.picked && st[memo.model] === 'none') {
+      const have = ASR_MODELS.find((m) => st[m.id] !== 'none')
+      if (have) memo.model = have.id
+    }
+    setStates(st)
+  })
+  useEffect(() => { refreshStates() }, [])
+  const [route, setRoute] = useState<'local' | 'offline' | 'online'>('online')
 
   // ---- the user's own voice sample, for cloning
   const [sample, setSample] = useState<{ blob: Blob; secs: number } | null>(null)
@@ -129,6 +152,9 @@ export function AIPanel({ ed, onClose }: P) {
   const reference = mine ? sample?.blob ?? null : null
   const voiceCodes = mine ? CLONE_LANGS : Object.keys(VOICES)
 
+  const { subLang, target } = memo
+  useEffect(() => { translator(subLang, target).then(setRoute) }, [subLang, target, local?.translate])
+
   const subs = ed.project.layers.filter((l): l is TextLayer => l.type === 'text' && l.subtitle).sort((a, b) => a.start - b.start)
   const cues: Cue[] = subs.map((s) => ({ start: s.start, end: s.end, text: s.text }))
   const total = ed.layout.total
@@ -139,7 +165,7 @@ export function AIPanel({ ed, onClose }: P) {
   const run = async (label: string, fn: () => Promise<string>) => {
     setError(null); setDone(null)
     setBusy({ label, p: 0 })
-    try { setDone(await fn()) } catch (e) { setError((e as Error).message) } finally { setBusy(null) }
+    try { setDone(await fn()) } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null); refreshStates() }
   }
 
   /** Swaps the subtitle layers for new cues in one undo step. */
@@ -223,7 +249,9 @@ export function AIPanel({ ed, onClose }: P) {
           <span className="field-label">{t('Language spoken in the video')}</span>
           <LangSelect value={memo.spoken} codes={SPOKEN} auto onChange={(spoken) => set({ spoken })} />
           <span className="field-label">{t('Quality')}</span>
-          <Chips options={ASR_MODELS.map((m) => ({ value: m.id, label: `${t(m.label)} ${m.size}` }))} value={memo.model} onChange={(model) => set({ model })} wrap />
+          <Chips options={ASR_MODELS.map((m) => ({ value: m.id, label: `${ready(m.id) ? '✓ ' : ''}${t(m.label)} ${m.size}` }))} value={memo.model}
+            onChange={(model) => set({ model, picked: true })} wrap />
+          <NetLine ok={ready(memo.model)} />
           <Toggle label="Write captions in English" value={memo.toEnglish} onChange={(toEnglish) => set({ toEnglish })} />
           <div className="row">
             <button className="btn primary" disabled={!!busy || !total} onClick={generate}>{t('Generate captions')}</button>
@@ -234,7 +262,11 @@ export function AIPanel({ ed, onClose }: P) {
 
       {tab === 'translate' && (
         <>
-          <p className="muted small">{t(local?.translate ? 'Translates your subtitles with Local AI on your computer and keeps their timing.' : 'Translates your subtitles and keeps their timing. Needs internet.')}</p>
+          <p className="muted small">{t(route === 'local' ? 'Translates your subtitles with Local AI on your computer and keeps their timing.'
+            : route === 'offline' ? 'Translates your subtitles on this device with the offline model and keeps their timing.'
+            : 'Translates your subtitles and keeps their timing. Needs internet.')}</p>
+          <p className={`small ${route === 'online' ? 'warn' : 'ok-text'}`}>{route === 'local' ? `✓ ${t('Local AI (no internet)')}` : route === 'offline' ? `✓ ${t('Offline model')}`
+            : `🌐 ${t(memo.subLang === 'auto' ? 'Online (MyMemory). For offline translation, pick the From language and download that language pair in Offline & online on the home screen.' : 'Online (MyMemory). For offline translation, download the language pair in Offline & online on the home screen.')}`}</p>
           {local && <Toggle label={`${t('Use Local AI')} (${local.model})`} value={local.translate} onChange={(translate) => setLocal(setLocalAI({ translate }))} />}
           {!cues.length && <p className="small warn">{t('Add subtitles first: use Auto captions or import an .srt file.')}</p>}
           <span className="field-label">{t('From')}</span>
@@ -245,7 +277,7 @@ export function AIPanel({ ed, onClose }: P) {
             <button className="btn primary" disabled={!!busy || !cues.length} onClick={() => translate(true)}>{t('Translate subtitles')}</button>
             <button className="btn" disabled={!!busy || !cues.length} onClick={() => translate(false)}>{t('Only download .srt')}</button>
           </div>
-          {!local?.translate && (
+          {route === 'online' && (
             <>
               <span className="field-label">{t('Email (optional, raises the free limit to 50,000 characters a day)')}</span>
               <input className="text-input" type="email" value={email} placeholder="you@example.com"
@@ -296,6 +328,7 @@ export function AIPanel({ ed, onClose }: P) {
           )}
           <span className="field-label">{t('Voice language (should match the subtitles)')}</span>
           <LangSelect value={memo.voice} codes={voiceCodes} onChange={(voice) => set({ voice })} />
+          {mine ? <p className="small warn">🌐 {t('Online (your voice cloning server)')}</p> : <NetLine ok={ready(VOICES[memo.voice])} />}
           {memo.subLang !== 'auto' && !voiceCodes.includes(memo.subLang) && (
             <p className="small warn">{langName(memo.subLang)}: {t('no offline voice yet. Voices available:')} {voiceCodes.map(langName).join(', ')}.</p>
           )}

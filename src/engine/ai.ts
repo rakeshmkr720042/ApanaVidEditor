@@ -1,6 +1,7 @@
 import type { MediaSource, Project } from '../types'
 import type { Cue } from '../lib/srt'
-import type { AiRequest, AiResponse } from './ai.worker'
+import type { AiRequest, AiResponse, Task } from './ai.worker'
+import { keepStorage, modelState, mtRoute, type ModelKind } from './offline'
 import { longMix, mixAudio, mixInPieces, stretch } from './audiomix'
 import { layoutClips } from '../model/timeline'
 import { TOO_BIG } from '../lib/longaudio'
@@ -41,6 +42,15 @@ export const ASR_MODELS = [
   { id: 'onnx-community/whisper-base', label: 'Balanced', size: '~80 MB' },
   { id: 'onnx-community/whisper-small', label: 'Accurate', size: '~250 MB' },
 ]
+export const VOICE_SIZE = '~40 MB'
+
+const TASK: Record<ModelKind, Task> = { asr: 'automatic-speech-recognition', tts: 'text-to-speech', mt: 'translation' }
+
+/** Downloads a model now (it is kept on the device), so the feature works later without internet. */
+export async function downloadModel(id: string, kind: ModelKind, onProgress: (p: number) => void) {
+  keepStorage()
+  await call({ type: 'prepare', task: TASK[kind], model: id }, (stage, p) => stage === 'download' && onProgress(p))
+}
 
 // ---------------------------------------------------------------- worker plumbing
 
@@ -50,7 +60,7 @@ let worker: Worker | null = null
 let nextId = 1
 const waiting = new Map<number, { resolve: (r: AiResponse) => void; reject: (e: Error) => void; progress?: Progress }>()
 
-type NoId<T> = T extends unknown ? Omit<T, 'id'> : never
+type NoId<T> = T extends unknown ? Omit<T, 'id' | 'base'> : never
 
 function call(req: NoId<AiRequest>, progress?: Progress, transfer: Transferable[] = []) {
   if (!worker) {
@@ -74,7 +84,7 @@ function call(req: NoId<AiRequest>, progress?: Progress, transfer: Transferable[
   const id = nextId++
   return new Promise<AiResponse>((resolve, reject) => {
     waiting.set(id, { resolve, reject, progress })
-    worker!.postMessage({ ...req, id } as AiRequest, transfer)
+    worker!.postMessage({ ...req, id, base: new URL('./', document.baseURI).href } as AiRequest, transfer)
   })
 }
 
@@ -168,6 +178,20 @@ async function translateOne(text: string, from: string, to: string, email: strin
   return el.value
 }
 
+/** The offline models for this language pair, when all of them are on the device. */
+export async function offlineRoute(from: string, to: string) {
+  const route = mtRoute(from, to)
+  if (!route) return null
+  for (const id of route) if ((await modelState(id, 'mt')) === 'none') return null
+  return route
+}
+
+/** Which translator will be used: the user's Local AI, an offline model, or the online service. */
+export async function translator(from: string, to: string): Promise<'local' | 'offline' | 'online'> {
+  if (localAI()?.translate) return 'local'
+  return (await offlineRoute(from, to)) ? 'offline' : 'online'
+}
+
 /** Translates every cue, keeping its timing. Repeated lines are translated once. */
 export async function translateCues(cues: Cue[], from: string, to: string, onProgress: (p: number) => void): Promise<Cue[]> {
   const email = getEmail()
@@ -176,6 +200,17 @@ export async function translateCues(cues: Cue[], from: string, to: string, onPro
   let next = 0, finished = 0
   // the user's own model on their computer, when it is set up for translation; it answers one line at a time
   const local = localAI()?.translate ? localAI() : null
+  const offline = local ? null : await offlineRoute(from, to)
+  if (offline) {
+    let texts = unique
+    for (let i = 0; i < offline.length; i++) {
+      const r = await call({ type: 'mt', model: offline[i], texts }, (stage, p) => stage === 'work' && onProgress((i + p) / offline.length))
+      if (r.type !== 'mt') throw new Error('Unexpected reply')
+      texts = r.texts
+    }
+    unique.forEach((u, i) => done.set(u, texts[i] || u))
+    return cues.map((c) => ({ ...c, text: done.get(c.text) ?? c.text }))
+  }
   if (local) {
     for (const text of unique) {
       done.set(text, await translateLine(text, from === 'auto' ? 'auto' : langName(from), langName(to)))

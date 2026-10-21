@@ -1,6 +1,7 @@
 // Copies runtime assets from node_modules into public/ so they are served from our own
-// origin: the ffmpeg.wasm core and the text fonts. Both are cached by the service worker
-// on first use and bundled into the Android APK, so they work offline.
+// origin: the ffmpeg.wasm core, the ONNX runtime for the AI features, and the text fonts.
+// They are cached by the service worker on first use and bundled into the Windows and
+// Android apps, so they work offline.
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,6 +12,11 @@ const nm = join(root, 'node_modules')
 const ffDest = join(root, 'public/ffmpeg')
 mkdirSync(ffDest, { recursive: true })
 for (const f of ['ffmpeg-core.js', 'ffmpeg-core.wasm']) cpSync(join(nm, '@ffmpeg/core/dist/esm', f), join(ffDest, f))
+
+// the plain (CPU) ONNX runtime build: the AI worker runs models on 'wasm', not WebGPU
+const ortDest = join(root, 'public/ort')
+mkdirSync(ortDest, { recursive: true })
+for (const f of ['ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm']) cpSync(join(nm, 'onnxruntime-web/dist', f), join(ortDest, f))
 
 // package id -> CSS family name
 const fonts = {
@@ -38,4 +44,4 @@ for (const [id, family] of Object.entries(fonts)) {
   manifest.push({ family, files })
 }
 writeFileSync(join(fontDest, 'fonts.json'), JSON.stringify(manifest))
-console.log(`assets copied: ffmpeg core, ${manifest.length} fonts`)
+console.log(`assets copied: ffmpeg core, onnx runtime, ${manifest.length} fonts`)

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -5,6 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   // Relative base so the same build works on a web host and inside Capacitor.
   base: './',
+  // shown in testing notes so the developer knows which build a tester had
+  define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')).version) },
   plugins: [
     react(),
     VitePWA({
@@ -28,12 +32,15 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // App shell is precached; the 32 MB ffmpeg core and the fonts are cached on first use.
+        // App shell is precached (the AI worker with its engine is a few MB, so the limit is
+        // raised); the 32 MB ffmpeg core, the 14 MB ONNX runtime and the fonts are cached on
+        // first use. AI models are kept by transformers.js in its own cache.
         globPatterns: ['**/*.{js,mjs,css,html,svg,png,woff2}'],
-        globIgnores: ['ffmpeg/**', 'fonts/**'],
+        globIgnores: ['ffmpeg/**', 'fonts/**', 'ort/**', 'models/**'],
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.includes('/ffmpeg/') || url.pathname.includes('/fonts/'),
+            urlPattern: ({ url }) => ['/ffmpeg/', '/fonts/', '/ort/'].some((d) => url.pathname.includes(d)),
             handler: 'CacheFirst',
             options: { cacheName: 'clipcut-assets', cacheableResponse: { statuses: [200] } },
           },
@@ -41,6 +48,13 @@ export default defineConfig({
       },
     }),
   ],
+  resolve: {
+    alias: {
+      // transformers.js imports the WebGPU build, which embeds a 27 MB wasm we don't use: the AI
+      // worker runs on the CPU build, whose runtime files are copied to public/ort.
+      'onnxruntime-web/webgpu': fileURLToPath(new URL('node_modules/onnxruntime-web/dist/ort.wasm.min.mjs', import.meta.url)),
+    },
+  },
   optimizeDeps: { exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'] },
   worker: { format: 'es' },
 })
