@@ -26,6 +26,7 @@ import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
 import { TemplatesPanel } from '../panels/TemplatesPanel'
 import { ScreenRecorder } from './ScreenRecorder'
 import { PlaceSheet } from './PlaceSheet'
+import { FeedbackSheet } from './FeedbackSheet'
 import { playable } from '../model/tracks'
 import { atTime } from '../model/keyframes'
 import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../panels/LayerTools'
@@ -62,6 +63,7 @@ type PanelName = 'speed' | 'volume' | 'filters' | 'adjust' | 'transition' | 'for
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
   const [name, setName] = useState(initial.name)
+  const [notesSheet, setNotesSheet] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [player, setPlayer] = useState<Player | null>(null)
   const [time, setTime] = useState(0)
@@ -333,6 +335,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   }
 
   const empty = ed.project.clips.length === 0
+  // a mouse wheel scrolls the tool row sideways (desktop has no swipe)
+  const toolsWheel = (e: React.WheelEvent<HTMLElement>) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY
+  }
 
   // ---- toolbar for the current selection
   type Tool = { icon: IconName; label: string; on: () => void; disabled?: boolean; active?: boolean }
@@ -340,6 +346,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   if (selClip) {
     const photo = ed.sources[selClip.sourceId]?.kind === 'image'
     tools = [
+      // a video/photo on top of this one (picture-in-picture), at the playhead
+      { icon: 'overlay', label: 'Add overlay', on: () => overlayInput.current?.click() },
       ...(photo ? [{ icon: 'image', label: 'Photo', on: () => setPanel('photo') } as Tool] : []),
       { icon: 'replace', label: 'Replace', on: () => replaceInput.current?.click() },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
@@ -375,13 +383,13 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ],
       sticker: [{ icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers') } as Tool],
       media: [
-        ...(ed.sources[(selLayer as MediaLayer).sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
-        { icon: 'replace', label: 'Replace', on: () => replaceInput.current?.click() } as Tool,
-        { icon: 'overlay', label: 'Overlay', on: () => setPanel('overlay') } as Tool,
-        { icon: 'anim', label: 'Animation', on: () => setPanel('media-anim') } as Tool,
+        { icon: 'overlay', label: 'Size & opacity', on: () => setPanel('overlay') } as Tool,
         { icon: 'crop', label: 'Crop', on: () => setPanel('layer-crop') } as Tool,
+        { icon: 'anim', label: 'Animation', on: () => setPanel('media-anim') } as Tool,
         { icon: 'blend', label: 'Blend', on: () => setPanel('blend') } as Tool,
         { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma') } as Tool,
+        ...(ed.sources[(selLayer as MediaLayer).sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
+        { icon: 'replace', label: 'Replace', on: () => replaceInput.current?.click() } as Tool,
         { icon: 'filter', label: 'Filters', on: () => setPanel('filters') } as Tool,
         { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') } as Tool,
       ],
@@ -393,13 +401,28 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ],
       wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
     }[selLayer.type]
-    tools = [...capsAll, ...specific, ...common]
+    // an overlay's own tools come first, then where it sits (order, keyframes), then the rest
+    tools = selLayer.type === 'media'
+      ? [...specific.slice(0, 4), ...common.slice(0, 2), ...specific.slice(4), ...common.slice(2)]
+      : [...capsAll, ...specific, ...common]
   } else {
+    // everyday editing first (Add, Overlay, Text...), the "... to video" makers after, so Overlay is never off-screen
     tools = [
+      { icon: 'add', label: 'Add', on: () => mainInput.current?.click() },
+      { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
+      { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
+      { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
+      { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'speed', label: 'Speed', on: () => openClipPanel('speed'), disabled: !targetClip },
+      { icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers'), disabled: empty },
+      { icon: 'filter', label: 'Filters', on: () => openClipPanel('filters'), disabled: !targetClip },
+      { icon: 'adjust', label: 'Adjust', on: () => openClipPanel('adjust'), disabled: !targetClip },
+      { icon: 'blur', label: 'Blur', on: () => ed.addBlur(time), disabled: empty },
+      { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
+      { icon: 'watermark', label: 'Watermark', on: () => setPanel('watermark'), disabled: empty },
+      { icon: 'format', label: 'Format', on: () => setPanel('format') },
       { icon: 'screen', label: 'Record screen', on: () => { player?.pause(); setScreenRec(true) } },
       { icon: 'template', label: 'Intro/Outro', on: () => { player?.pause(); setPanel('templates') } },
-      { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
       { icon: 'image', label: 'Slideshow', on: () => setPanel('slideshow') },
       { icon: 'slides', label: 'Slides to video', on: () => { player?.pause(); setScenes('files') } },
       { icon: 'script', label: 'Script to video', on: () => { player?.pause(); setScenes('text') } },
@@ -408,16 +431,6 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'quiz', label: 'Quiz to video', on: () => { player?.pause(); setScenes('quiz') } },
       { icon: 'chart', label: 'Data to video', on: () => { player?.pause(); setScenes('data') } },
       { icon: 'article', label: 'Article to video', on: () => { player?.pause(); setScenes('article') } },
-      { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
-      { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
-      { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
-      { icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers'), disabled: empty },
-      { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
-      { icon: 'blur', label: 'Blur', on: () => ed.addBlur(time), disabled: empty },
-      { icon: 'watermark', label: 'Watermark', on: () => setPanel('watermark'), disabled: empty },
-      { icon: 'filter', label: 'Filters', on: () => openClipPanel('filters'), disabled: !targetClip },
-      { icon: 'adjust', label: 'Adjust', on: () => openClipPanel('adjust'), disabled: !targetClip },
-      { icon: 'format', label: 'Format', on: () => setPanel('format') },
     ]
   }
 
@@ -465,6 +478,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         <button className="icon-btn" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
         <button className="title" onClick={rename}>{name}</button>
         <div className="top-actions">
+          <button className="icon-btn" onClick={() => { player?.pause(); setNotesSheet(true) }} aria-label={t('Testing notes')} title={t('Testing notes')}><Icon name="note" /></button>
           <button className="icon-btn" disabled={!ed.canUndo} onClick={ed.undo} aria-label="Undo"><Icon name="undo" /></button>
           <button className="icon-btn" disabled={!ed.canRedo} onClick={ed.redo} aria-label="Redo"><Icon name="redo" /></button>
           <span className="menu-anchor">
@@ -539,15 +553,14 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         />
       )}
 
-      <nav className="tools">
-        {sel && <button className="tool back" onClick={() => { ed.setSel(null); setPanel(null) }}><Icon name="back" /><span>{t('Back')}</span></button>}
+      <nav className="tools" onWheel={toolsWheel}>
+        {(selClip || selStored) && <button className="tool back" onClick={() => { ed.setSel(null); setPanel(null) }}><Icon name="back" /><span>{t('Back')}</span></button>}
         {tools.map((tl) => (
           <button key={tl.label} className={`tool${tl.active ? ' on' : ''}`} disabled={tl.disabled} onClick={tl.on}>
             <Icon name={tl.icon} />
             <span>{t(tl.label)}</span>
           </button>
         ))}
-        {!sel && <button className="tool" onClick={() => mainInput.current?.click()}><Icon name="add" /><span>{t('Add')}</span></button>}
       </nav>
 
       {panelView && <div className="panel-wrap">{panelView}</div>}
@@ -566,6 +579,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder onClose={() => setScreenRec(false)} onDone={addRecording} />}
+      {notesSheet && <FeedbackSheet where={`Editor: ${name}${panel ? ` › ${panel}` : ''}`} onClose={() => setNotesSheet(false)} />}
       {exporting && <ExportSheet project={output} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>
   )

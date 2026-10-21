@@ -1,15 +1,12 @@
 /// <reference lib="webworker" />
-// Runs Whisper (speech to text) and MMS (text to speech) in the browser with transformers.js.
-// The library and the models are fetched on first use and then kept in the browser cache.
+// Runs Whisper (speech to text), MMS (text to speech) and Marian (translation) in the browser
+// with transformers.js. The library and the ONNX runtime ship with the app; the models come
+// with the app (Windows/Android builds include a small set), or are downloaded once and then
+// kept in the browser cache, so everything here works without internet after that.
 
-const LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1'
+import { Tensor, env, pipeline } from '@huggingface/transformers'
 
 type Pipe = (input: unknown, opts?: Record<string, unknown>) => Promise<unknown>
-interface Lib {
-  pipeline: (task: string, model: string, opts?: Record<string, unknown>) => Promise<Pipe>
-  env: { allowLocalModels: boolean; useBrowserCache: boolean }
-  Tensor: new (type: string, data: BigInt64Array, dims: number[]) => unknown
-}
 type Dtype = string | Record<string, string>
 /** Whisper as the pipeline exposes it, for language detection. */
 interface WhisperPipe extends Pipe {
@@ -19,24 +16,40 @@ interface WhisperPipe extends Pipe {
   }
 }
 
-export type AiRequest =
-  | { id: number; type: 'asr'; audio: Float32Array; model: string; language: string | null; task: 'transcribe' | 'translate'; offset?: number }
-  | { id: number; type: 'tts'; model: string; texts: string[] }
+/** Every request carries the app's address so the engine and bundled models load from it. */
+interface Base { id: number; base: string }
+export type AiRequest = Base & (
+  | { type: 'asr'; audio: Float32Array; model: string; language: string | null; task: 'transcribe' | 'translate'; offset?: number }
+  | { type: 'tts'; model: string; texts: string[] }
+  | { type: 'mt'; model: string; texts: string[] }
+  | { type: 'prepare'; task: Task; model: string }
+)
+
+export type Task = 'automatic-speech-recognition' | 'text-to-speech' | 'translation'
 
 export type AiResponse =
   | { id: number; type: 'progress'; stage: 'download' | 'work'; p: number }
   | { id: number; type: 'asr'; cues: { start: number; end: number; text: string }[]; language: string | null }
   | { id: number; type: 'tts'; clips: (Float32Array | null)[]; rate: number }
+  | { id: number; type: 'mt'; texts: string[] }
+  | { id: number; type: 'prepare' }
   | { id: number; type: 'error'; message: string }
 
-let lib: Promise<Lib> | null = null
 const pipes = new Map<string, Promise<Pipe & { device: string }>>()
+let bundled: Promise<Set<string>> | null = null
+let base = ''
 
-const loadLib = () => (lib ??= import(/* @vite-ignore */ LIB).then((m: Lib) => {
-  m.env.allowLocalModels = false
-  m.env.useBrowserCache = true
-  return m
-}))
+/** Points the engine at the files that ship with the app (public/ort and public/models). */
+function setup(b: string) {
+  if (base === b) return
+  base = b
+  const onnx = env.backends.onnx as { wasm?: { wasmPaths?: unknown } }
+  if (onnx.wasm) onnx.wasm.wasmPaths = { mjs: b + 'ort/ort-wasm-simd-threaded.mjs', wasm: b + 'ort/ort-wasm-simd-threaded.wasm' }
+  // a path without the origin: transformers.js only checks a local file exists when it is not a full URL
+  env.localModelPath = new URL(b).pathname + 'models/'
+  // models/index.json lists the models built into this copy of the app (none on the website)
+  bundled = fetch(b + 'models/index.json').then((r) => (r.ok ? r.json() : [])).catch(() => []).then((l: string[]) => new Set(l))
+}
 
 /**
  * Weights per Whisper size. Whisper's encoder loses a lot of accuracy when it is
@@ -64,7 +77,7 @@ const gpu = () => (gpuCheck ??= (async () => {
   } catch { return { ok: false, f16: false } }
 })())
 
-function getPipe(task: string, model: string, id: number, cpuOnly = false) {
+function getPipe(task: Task, model: string, id: number, cpuOnly = false) {
   const key = task + ':' + model + (cpuOnly ? ':cpu' : '')
   if (!pipes.has(key)) {
     const files = new Map<string, [number, number]>()
@@ -75,7 +88,12 @@ function getPipe(task: string, model: string, id: number, cpuOnly = false) {
       for (const [l, t] of files.values()) { a += l; b += t }
       post({ id, type: 'progress', stage: 'download', p: b ? a / b : 0 })
     }
-    const p = loadLib().then(async (m) => {
+    const p = bundled!.then(async (inApp) => {
+      // a built-in model is read from the app's own files and never from the internet
+      const local = inApp.has(model)
+      env.allowLocalModels = local
+      env.allowRemoteModels = !local
+      env.useBrowserCache = !local // the app's own files need no second copy in the cache
       const tries: [string, Dtype][] = []
       if (task === 'automatic-speech-recognition') {
         const d = whisperDtypes(model)
@@ -86,14 +104,16 @@ function getPipe(task: string, model: string, id: number, cpuOnly = false) {
         // some repos only ship full-precision weights
         tries.push(['wasm', 'q8'], ['wasm', 'fp32'])
       }
-      let last: unknown
+      // without internet, a saved or built-in model may only have some of these files: the next one is tried
+      let first: unknown
       for (const [device, dtype] of tries) {
         try {
-          const pipe = await m.pipeline(task, model, { dtype, device, progress_callback })
+          const pipe = (await pipeline(task, model, { dtype, device, progress_callback } as never)) as unknown as Pipe
           return Object.assign(pipe, { device })
-        } catch (e) { last = e }
+        } catch (e) { first ??= e }
       }
-      throw last
+      if (!local && (!navigator.onLine || /fetch|network/i.test(String(first)))) throw new Error('This AI model is not downloaded yet. Connect to the internet once, or download it in Offline & online on the home screen.')
+      throw first
     })
     p.catch(() => pipes.delete(key))
     pipes.set(key, p)
@@ -157,7 +177,7 @@ const SAME_AS: Record<string, string> = {
  * reading the scores of the language tokens. Summed over a few pieces so one
  * odd sentence does not decide. (transformers.js would otherwise assume English.)
  */
-async function detectLanguage(pipe: WhisperPipe, Tensor: Lib['Tensor'], slices: Float32Array[]) {
+async function detectLanguage(pipe: WhisperPipe, slices: Float32Array[]) {
   const gc = pipe.model.generation_config
   const langs = Object.entries(gc.lang_to_id ?? {})
   if (!langs.length) return null
@@ -194,7 +214,6 @@ const dedupe = (text: string) => text.replace(/([^\d\s.])\1{4,}/gu, '$1').replac
 
 async function asr(r: Extract<AiRequest, { type: 'asr' }>) {
   let pipe = (await getPipe('automatic-speech-recognition', r.model, r.id)) as unknown as WhisperPipe & { device: string }
-  const { Tensor } = await loadLib()
   normalise(r.audio)
   const cues: { start: number; end: number; text: string }[] = []
   const parts = pieces(r.audio).filter(([a, b]) => rms(r.audio, a, b) >= 0.004) // silence: Whisper would invent words
@@ -211,7 +230,7 @@ async function asr(r: Extract<AiRequest, { type: 'asr' }>) {
     post({ id: r.id, type: 'progress', stage: 'work', p: 0 })
     // a few pieces spread over the recording
     const pick = [...new Set([0, Math.floor(parts.length / 2), parts.length - 1])].slice(0, 3)
-    language = (await run((p) => detectLanguage(p, Tensor, pick.map((i) => r.audio.subarray(...parts[i]))))) as string | null
+    language = (await run((p) => detectLanguage(p, pick.map((i) => r.audio.subarray(...parts[i]))))) as string | null
   }
   for (let i = 0; i < parts.length; i++) {
     post({ id: r.id, type: 'progress', stage: 'work', p: i / parts.length })
@@ -250,8 +269,29 @@ async function tts(r: Extract<AiRequest, { type: 'tts' }>) {
   post({ id: r.id, type: 'tts', clips, rate }, [...buffers])
 }
 
+/** Translates each text with a Marian model (one language pair per model). */
+async function mt(r: Extract<AiRequest, { type: 'mt' }>) {
+  const pipe = await getPipe('translation', r.model, r.id)
+  const texts: string[] = []
+  for (let i = 0; i < r.texts.length; i++) {
+    post({ id: r.id, type: 'progress', stage: 'work', p: i / r.texts.length })
+    const text = r.texts[i].trim()
+    if (!text) { texts.push(''); continue }
+    const out = (await pipe(text, { max_new_tokens: 256 })) as { translation_text: string }[]
+    texts.push(out[0]?.translation_text?.trim() ?? '')
+  }
+  post({ id: r.id, type: 'mt', texts })
+}
+
+/** Loads a model without using it, so it is downloaded and cached for offline use. */
+async function prepare(r: Extract<AiRequest, { type: 'prepare' }>) {
+  await getPipe(r.task, r.model, r.id)
+  post({ id: r.id, type: 'prepare' })
+}
+
 self.onmessage = (e: MessageEvent<AiRequest>) => {
   const r = e.data
-  const run = r.type === 'asr' ? asr(r) : tts(r)
+  setup(r.base)
+  const run = r.type === 'asr' ? asr(r) : r.type === 'tts' ? tts(r) : r.type === 'mt' ? mt(r) : prepare(r)
   run.catch((err: unknown) => post({ id: r.id, type: 'error', message: err instanceof Error ? err.message : String(err) }))
 }

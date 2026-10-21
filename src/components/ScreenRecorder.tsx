@@ -228,7 +228,7 @@ export function ScreenRecorder({ onClose, onDone }: Props) {
           </div>
         )}
         {live && (
-          <div className="crop-area" ref={areaRef} style={{ aspectRatio: `${size.w} / ${size.h}` }}>
+          <div className="crop-area" ref={areaRef} style={{ aspectRatio: `${size.w} / ${size.h}`, '--ar': size.w / size.h } as React.CSSProperties}>
             <video ref={video} muted playsInline />
             {showArea && (
               <>
