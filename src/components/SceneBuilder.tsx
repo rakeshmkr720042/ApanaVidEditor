@@ -20,6 +20,7 @@ import { CANT_OPEN, articleParts, articleToScenes, drawArticlePic, linkOf, readA
 import { clipDuration } from '../model/timeline'
 import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
+import { TOO_BIG, isLong } from '../lib/longaudio'
 import { saveMedia } from '../lib/db'
 import { fmtTime } from '../lib/format'
 import { ASR_MODELS, SPOKEN, VOICES, langName, speakLines, transcribeSamples } from '../engine/ai'
@@ -42,6 +43,21 @@ let draft = '' // pasted script, kept if the sheet is closed before making scene
 let mapDraft = { tab: 'outline' as 'outline' | 'tree', outline: '', tree: node('', [node('')]), overview: true }
 let mapMemo: MapSettings | null = null
 // the audio being turned into a video, and how
+/** Cuts [0, length) into pieces of about ten minutes (16 kHz samples), each ending in the pause nearest the mark. */
+function listenPieces(length: number, gaps: { start: number; end: number }[]): [number, number][] {
+  const R = 16000, step = 600 * R, out: [number, number][] = []
+  let a = 0
+  while (length - a > step * 1.2) {
+    const mark = (a + step) / R
+    const g = gaps.filter((x) => Math.abs((x.start + x.end) / 2 - mark) < 60).sort((x, y) => Math.abs((x.start + x.end) / 2 - mark) - Math.abs((y.start + y.end) / 2 - mark))[0]
+    const b = g ? Math.round(((g.start + g.end) / 2) * R) : a + step
+    out.push([a, b])
+    a = b
+  }
+  out.push([a, length])
+  return out
+}
+
 let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as AudioLook, cover: null as Blob | null, target: 12, listen: true, lang: 'auto', model: ASR_MODELS[0].id }
 // extra material beside the main file: pictures for the scenes, and music under the video
 let matDraft = { pics: [] as Pic[], music: null as MediaSource | null, leftover: 'card' as Leftover }
@@ -328,7 +344,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       const src = await loadSource(f, name)
       if (src.kind !== 'audio' && src.kind !== 'video') throw new Error(t('Pick an audio file'))
       setAudio({ src, title: ad.title && ad.src ? ad.title : name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ') })
-    } catch (e) { setError((e as Error).message) } finally { setBusy(null) }
+    } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
   }
 
   const record = async () => {
@@ -382,16 +398,24 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     setError(null); setNote(null)
     try {
       setBusy({ label: t('Reading the audio…'), p: 0 })
-      const pcm = await decodeMono(src.file)
-      if (!pcm) throw new Error(t('This audio could not be read'))
+      // long recordings are read ten minutes at a time instead of unpacked whole
+      const pcm = await decodeMono(src.file, 16000, src.duration, (p) => setBusy({ label: t('Reading the audio…'), p: p * 0.5 }))
+      if (!pcm) throw new Error(t(isLong(src.duration, src.file.size) ? TOO_BIG : 'This audio could not be read'))
       setBusy({ label: t('Finding pauses…'), p: 0.5 })
       primeWave(src.id, await analyse(pcm)) // the waveform layer will use this analysis
       const gaps = findGaps(pcm)
       let cues: Awaited<ReturnType<typeof transcribeSamples>> = []
       if (ad.listen) {
         try {
-          cues = await transcribeSamples(pcm.slice(), { model: ad.model, language: ad.lang, toEnglish: false }, (stage, p) =>
-            setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : t('Listening to the audio…'), p }))
+          // a long recording is listened to ten minutes at a time, cut in a pause, so only one piece is copied at once
+          const pieces = listenPieces(pcm.length, gaps)
+          for (let i = 0; i < pieces.length; i++) {
+            const [a, b] = pieces[i]
+            const got = await transcribeSamples(pcm.slice(a, b), { model: ad.model, language: ad.lang, toEnglish: false }, (stage, p) =>
+              setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : t('Listening to the audio…'), p: (i + p) / pieces.length }))
+            const off = a / 16000
+            cues.push(...got.map((c) => ({ ...c, start: c.start + off, end: c.end + off })))
+          }
           if (!cues.length) setNote(t('No speech was found, so there are no captions. Scenes are cut at the pauses.'))
         } catch (e) {
           const msg = (e as Error).message
@@ -1045,6 +1069,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
               </button>
             </div>
             {ad.src && <p className="small">♪ {ad.src.name} · {fmtTime(ad.src.duration)}</p>}
+            {ad.src && ad.src.duration > 30 * 60 && <p className="muted small">{t('Long audio: it is read in parts, so making the scenes and captions takes a while. Keep the app open. On a phone, recordings under 30 minutes are safest.')}</p>}
             {material('audio', 'audio')}
             {ad.src && (
               <>

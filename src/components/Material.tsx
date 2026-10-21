@@ -101,5 +101,5 @@ export function CoverageMeter(p: { parts: Part[]; estimate: boolean; rest: strin
 export function Thumb({ blob, moving }: { blob: Blob; moving?: Pic['media'] }) {
   const url = useMemo(() => URL.createObjectURL(blob), [blob])
   useEffect(() => () => URL.revokeObjectURL(url), [url])
-  return <>{<img src={url} alt="" />}{moving && <em className="thumb-badge">{moving.kind === 'gif' ? 'GIF' : `▶ ${fmtTime(moving.length)}`}</em>}</>
+  return <>{<img src={url} alt="" loading="lazy" decoding="async" />}{moving && <em className="thumb-badge">{moving.kind === 'gif' ? 'GIF' : `▶ ${fmtTime(moving.length)}`}</em>}</>
 }

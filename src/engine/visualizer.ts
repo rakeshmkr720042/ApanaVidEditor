@@ -1,4 +1,5 @@
 import type { MediaSource, WaveLayer } from '../types'
+import { TOO_BIG, decodeMonoLong, isLong } from '../lib/longaudio'
 
 /**
  * Audio visualizer for wave layers: the sound is analysed once (loudness in 48 frequency bands,
@@ -19,8 +20,15 @@ const BANDS = 48
 const RATE = 16000
 const FFT = 512
 
-/** Decodes a file's sound as mono at `rate` (Whisper and the visualizer both use 16 kHz). */
-export async function decodeMono(blob: Blob, rate = RATE): Promise<Float32Array | null> {
+/**
+ * Decodes a file's sound as mono at `rate` (Whisper and the visualizer both use 16 kHz).
+ * Pass the length when known: long recordings are then read piece by piece.
+ */
+export async function decodeMono(blob: Blob, rate = RATE, duration = 0, onProgress?: (p: number) => void): Promise<Float32Array | null> {
+  if (duration > 0 && isLong(duration, blob.size)) {
+    const pcm = await decodeMonoLong(blob, duration, rate, onProgress).catch((e: Error) => { if (e.message === TOO_BIG) throw e; return null })
+    if (pcm) return pcm
+  }
   try {
     const ctx = new OfflineAudioContext(1, 1, rate)
     const buf = await ctx.decodeAudioData(await blob.arrayBuffer())
@@ -129,7 +137,7 @@ export function waveData(src: MediaSource, onReady?: () => void): WaveData | nul
   let e = cache.get(src.id)
   if (!e) {
     const entry: { data: WaveData | null; ready: Promise<WaveData | null> } = { data: null, ready: Promise.resolve(null) }
-    entry.ready = decodeMono(src.file).then((pcm) => (pcm ? analyse(pcm) : null)).then((d) => { entry.data = d; return d }).catch(() => null)
+    entry.ready = decodeMono(src.file, RATE, src.duration).then((pcm) => (pcm ? analyse(pcm) : null)).then((d) => { entry.data = d; return d }).catch(() => null)
     cache.set(src.id, entry)
     e = entry
   }

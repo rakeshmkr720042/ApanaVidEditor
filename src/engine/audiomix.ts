@@ -3,6 +3,7 @@ import { clipSegments, layerSpeed, layoutClips } from '../model/timeline'
 import { decodeAudio } from '../lib/media'
 import { encodeWav } from './music'
 import { runFFmpeg, getFFmpeg } from '../lib/ffmpeg'
+import { LONG_SECS, decodeSpan, isLong } from '../lib/longaudio'
 
 export const MIX_RATE = 48000
 
@@ -30,23 +31,70 @@ function slice(buf: AudioBuffer, from: number, to: number) {
   return out
 }
 
-/** Mixes the whole project's sound (clips, picture-in-picture, music, voice, effects). */
+/**
+ * Reads stretches of a source's sound. Short files are unpacked once and sliced;
+ * long ones are read piece by piece with ffmpeg so the whole file never sits in memory.
+ */
+export class SoundReader {
+  private whole = new Map<string, Promise<AudioBuffer | null>>()
+  private sources: Record<string, MediaSource>
+  constructor(sources: Record<string, MediaSource>) { this.sources = sources }
+
+  long(id: string) {
+    const src = this.sources[id]
+    return !!src && src.kind !== 'image' && isLong(src.duration, src.file.size)
+  }
+
+  /** Sound of [from, to) in the source's own time, starting at `from`; null if silent or unreadable. */
+  async read(id: string, from: number, to: number, rate: number): Promise<AudioBuffer | null> {
+    const src = this.sources[id]
+    if (!src || src.kind === 'image' || to <= from) return null
+    if (this.long(id)) {
+      const ch = await decodeSpan(src.file, from, to - from, rate, 2).catch(() => null)
+      if (!ch || !ch[0].length) return null
+      const b = new AudioBuffer({ length: ch[0].length, numberOfChannels: 2, sampleRate: rate })
+      ch.forEach((d, i) => b.copyToChannel(d as Float32Array<ArrayBuffer>, i))
+      return b
+    }
+    if (!this.whole.has(id)) this.whole.set(id, decodeAudio(src.file))
+    const buf = await this.whole.get(id)!
+    if (!buf || from >= buf.duration) return null
+    return slice(buf, from, Math.min(to, buf.duration))
+  }
+}
+
+/** Gain automation from breakpoints, clipped to the window (Web Audio refuses negative times). */
+function automate(param: AudioParam, pts: [number, number][], from: number, to: number) {
+  const at = (t: number) => {
+    if (t <= pts[0][0]) return pts[0][1]
+    for (let i = 1; i < pts.length; i++) {
+      const [t1, v1] = pts[i], [t0, v0] = pts[i - 1]
+      if (t <= t1) return t1 > t0 ? v0 + ((v1 - v0) * (t - t0)) / (t1 - t0) : v1
+    }
+    return pts[pts.length - 1][1]
+  }
+  param.setValueAtTime(at(from), 0)
+  for (const [t, v] of pts) if (t > from && t < to) param.linearRampToValueAtTime(v, t - from)
+  param.linearRampToValueAtTime(at(to), to - from)
+}
+
+/**
+ * Mixes the project's sound (clips, picture-in-picture, music, voice, effects)
+ * between `from` and `to` on the timeline. The default is the whole timeline.
+ */
 export async function mixAudio(
   project: Project,
   sources: Record<string, MediaSource>,
   onProgress?: (p: number) => void,
+  win?: { from: number; to: number; rate?: number; channels?: number; reader?: SoundReader },
 ): Promise<AudioBuffer | null> {
   const { items, total } = layoutClips(project.clips)
   if (total <= 0) return null
-  const ctx = new OfflineAudioContext(2, Math.ceil(total * MIX_RATE), MIX_RATE)
-  const decoded = new Map<string, AudioBuffer | null>()
-  const getBuf = async (id: string) => {
-    if (!decoded.has(id)) {
-      const src = sources[id]
-      decoded.set(id, src && src.kind !== 'image' ? await decodeAudio(src.file) : null)
-    }
-    return decoded.get(id)!
-  }
+  const from = win?.from ?? 0, to = Math.min(total, win?.to ?? total)
+  if (to <= from) return null
+  const rate = win?.rate ?? MIX_RATE
+  const ctx = new OfflineAudioContext(win?.channels ?? 2, Math.ceil((to - from) * rate), rate)
+  const reader = win?.reader ?? new SoundReader(sources)
   let any = false
   const steps = items.length + project.layers.length
   let done = 0
@@ -55,12 +103,11 @@ export async function mixAudio(
     const c = it.clip
     onProgress?.(done++ / steps)
     if (c.volume <= 0) continue
-    const buf = await getBuf(c.sourceId)
-    if (!buf) continue
+    const s = it.start, e = it.start + it.dur
+    if (e <= from || s >= to) continue
     const g = ctx.createGain()
     g.connect(ctx.destination)
     // volume, fades and transition crossfades as gain automation (timeline time)
-    const s = it.start, e = it.start + it.dur
     const pts: [number, number][] = []
     const gainAt = (t: number) => {
       const local = t - s
@@ -73,17 +120,20 @@ export async function mixAudio(
     }
     for (const t of [s, s + c.fadeIn, s + it.transIn, e - c.fadeOut, e - it.transOut, e]) if (t >= s && t <= e) pts.push([t, gainAt(t)])
     pts.sort((a, b) => a[0] - b[0])
-    g.gain.setValueAtTime(pts[0][1], pts[0][0])
-    for (const [t, v] of pts.slice(1)) g.gain.linearRampToValueAtTime(v, t)
+    automate(g.gain, pts, from, to)
 
     for (const seg of clipSegments(c)) {
-      let part: AudioBuffer | null = slice(buf, seg.srcStart, seg.srcEnd)
-      if (Math.abs(seg.speed - 1) > 1e-3) part = await stretch(part, seg.speed)
+      // the part of this segment inside the window, in timeline and source time
+      const t0 = Math.max(from, s + seg.tStart), t1 = Math.min(to, s + seg.tEnd)
+      if (t1 <= t0) continue
+      const a = seg.srcStart + (t0 - s - seg.tStart) * seg.speed, b = seg.srcStart + (t1 - s - seg.tStart) * seg.speed
+      let part = await reader.read(c.sourceId, a, b, rate)
+      if (part && Math.abs(seg.speed - 1) > 1e-3) part = await stretch(part, seg.speed)
       if (!part) continue
       const node = ctx.createBufferSource()
       node.buffer = part
       node.connect(g)
-      node.start(s + seg.tStart, 0, seg.tEnd - seg.tStart)
+      node.start(t0 - from, 0, t1 - t0)
       any = true
     }
   }
@@ -91,31 +141,49 @@ export async function mixAudio(
   for (const l of project.layers) {
     onProgress?.(done++ / steps)
     if ((l.type !== 'audio' && l.type !== 'media') || l.volume <= 0) continue
-    const buf = await getBuf(l.sourceId)
-    if (!buf) continue
+    const t0 = Math.max(from, l.start), t1 = Math.min(to, l.end)
+    if (t1 <= t0) continue
     const len = l.end - l.start
     const g = ctx.createGain()
     g.connect(ctx.destination)
-    const fi = l.type === 'audio' ? l.fadeIn : 0, fo = l.type === 'audio' ? l.fadeOut : 0
-    g.gain.setValueAtTime(fi > 0 ? 0 : l.volume, l.start)
-    if (fi > 0) g.gain.linearRampToValueAtTime(l.volume, l.start + Math.min(fi, len))
-    if (fo > 0) { g.gain.setValueAtTime(l.volume, Math.max(l.start, l.end - fo)); g.gain.linearRampToValueAtTime(0, l.end) }
-    if (l.in >= buf.duration) continue
+    const fi = l.type === 'audio' ? Math.min(l.fadeIn, len) : 0, fo = l.type === 'audio' ? Math.min(l.fadeOut, len) : 0
+    const pts: [number, number][] = [[l.start, fi > 0 ? 0 : l.volume]]
+    if (fi > 0) pts.push([l.start + fi, l.volume])
+    if (fo > 0) pts.push([Math.max(l.start + fi, l.end - fo), l.volume], [l.end, 0])
+    automate(g.gain, pts, from, to)
     const sp = layerSpeed(l)
-    let part: AudioBuffer | null = buf
-    let from = l.in
-    if (Math.abs(sp - 1) > 1e-3) {
-      part = await stretch(slice(buf, l.in, Math.min(buf.duration, l.in + len * sp)), sp)
-      from = 0
-    }
+    const a = l.in + (t0 - l.start) * sp, b = l.in + (t1 - l.start) * sp
+    let part = await reader.read(l.sourceId, a, b, rate)
+    if (part && Math.abs(sp - 1) > 1e-3) part = await stretch(part, sp)
     if (!part) continue
     const node = ctx.createBufferSource()
     node.buffer = part
     node.connect(g)
-    node.start(l.start, from, Math.min(len, part.duration - from))
+    node.start(t0 - from, 0, Math.min(t1 - t0, part.duration))
     any = true
   }
   onProgress?.(1)
   if (!any) return null
   return ctx.startRendering()
+}
+
+/** True when the timeline is long enough that its sound should be mixed a piece at a time. */
+export const longMix = (project: Project) => layoutClips(project.clips).total > LONG_SECS
+
+/**
+ * The project's sound in pieces of `step` seconds, for long timelines. Each piece
+ * is handed over and dropped before the next is made, so memory holds one piece.
+ */
+export async function mixInPieces(
+  project: Project, sources: Record<string, MediaSource>, rate: number, channels: number,
+  onPiece: (buf: AudioBuffer | null, from: number, to: number) => Promise<void> | void, onProgress?: (p: number) => void, step = 120,
+) {
+  const { total } = layoutClips(project.clips)
+  const reader = new SoundReader(sources)
+  for (let from = 0; from < total; from += step) {
+    const to = Math.min(total, from + step)
+    onProgress?.(from / total)
+    await onPiece(await mixAudio(project, sources, undefined, { from, to, rate, channels, reader }), from, to)
+  }
+  onProgress?.(1)
 }

@@ -1,7 +1,9 @@
 import type { MediaSource, Project } from '../types'
 import type { Cue } from '../lib/srt'
 import type { AiRequest, AiResponse } from './ai.worker'
-import { mixAudio, stretch } from './audiomix'
+import { longMix, mixAudio, mixInPieces, stretch } from './audiomix'
+import { layoutClips } from '../model/timeline'
+import { TOO_BIG } from '../lib/longaudio'
 import { localAI, translateLine } from '../lib/localai'
 import { decodeAudio } from '../lib/media'
 import { cloneLines } from './voiceclone'
@@ -80,6 +82,19 @@ function call(req: NoId<AiRequest>, progress?: Progress, transfer: Transferable[
 
 /** The whole timeline's sound as 16 kHz mono, which is what Whisper listens to. */
 async function timelineAudio(project: Project, sources: Record<string, MediaSource>, onProgress?: (p: number) => void) {
+  if (longMix(project)) {
+    // mixed straight to 16 kHz mono a piece at a time: a full-quality mix of an hour would not fit in memory
+    let out: Float32Array
+    try { out = new Float32Array(Math.ceil(layoutClips(project.clips).total * 16000)) } catch { throw new Error(TOO_BIG) }
+    let any = false
+    await mixInPieces(project, sources, 16000, 1, (buf, from) => {
+      if (!buf) return
+      any = true
+      const at = Math.round(from * 16000), d = buf.getChannelData(0)
+      out.set(d.subarray(0, Math.max(0, Math.min(d.length, out.length - at))), at)
+    }, onProgress)
+    return any ? out : null
+  }
   const mix = await mixAudio(project, sources, onProgress)
   if (!mix) return null
   const ctx = new OfflineAudioContext(1, Math.ceil(mix.duration * 16000), 16000)
