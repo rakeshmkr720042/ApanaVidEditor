@@ -276,7 +276,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   // Delete with every caption selected removes them all, so check first
   const removeSel = () => {
     if (sel?.type === 'layer' && sel.all && !confirm(`${t('Delete all captions?')} (${ed.project.layers.filter(isSub).length})`)) return
-    ed.remove()
+    ed.remove(!snap)
   }
   const selClip = sel?.type === 'clip' ? ed.project.clips.find((c) => c.id === sel.id) ?? null : null
   const selStored = sel?.type === 'layer' ? ed.project.layers.find((l) => l.id === sel.id) ?? null : null
@@ -351,7 +351,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') }, disabled: ed.project.clips.at(-1)?.id === selClip.id },
       { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
-      { icon: 'trash', label: 'Delete', on: ed.remove },
+      { icon: 'trash', label: 'Delete', on: () => ed.remove(!snap) },
     ]
   } else if (selLayer) {
     const common: Tool[] = [

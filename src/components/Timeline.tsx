@@ -30,6 +30,8 @@ type Drag =
   | { kind: 'layer-trim'; id: string; side: 'in' | 'out'; x0: number; start0: number; end0: number; in0: number; speed: number }
   | { kind: 'layer-move'; id: string; x0: number; y0: number; start0: number; end0: number; moved: boolean }
   | { kind: 'reorder'; id: string; x: number; to: number }
+  // snap off: a main-video clip dragged to any time, leaving empty time behind
+  | { kind: 'clip-move'; id: string; x0: number; start0: number; dur: number; at: number; moved: boolean }
 
 const LAYER_COLORS: Record<Layer['type'], string> = { text: '#8b5cf6', sticker: '#f59e0b', media: '#14b8a6', blur: '#64748b', audio: '#22c55e', wave: '#0ea5e9' }
 
@@ -201,7 +203,16 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     const d = dragRef.current
     if (!d) return
     const dt = (e.clientX - (d.kind === 'reorder' ? 0 : d.x0)) / pps
-    if (d.kind === 'clip-trim') {
+    if (d.kind === 'clip-move') {
+      if (!d.moved && Math.abs(e.clientX - d.x0) < 6) return
+      if (snap) {
+        // snap on keeps the clips packed: dragging only changes the order
+        const it = layout.items.find((x) => x.clip.id === d.id)
+        setDrag({ kind: 'reorder', id: d.id, x: e.clientX, to: it?.index ?? 0 })
+        return
+      }
+      setDrag({ ...d, moved: true, at: Math.max(0, d.start0 + dt) })
+    } else if (d.kind === 'clip-trim') {
       const c = project.clips.find((x) => x.id === d.id)!
       const src = sources[c.sourceId]
       const maxOut = src.kind === 'image' ? IMAGE_DURATION : src.duration
@@ -266,6 +277,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     if (d.kind === 'clip-trim') { ed.end(); onTrimPreview(null, 0) }
     else if (d.kind === 'layer-trim' || (d.kind === 'layer-move' && d.moved)) { ed.settleLayer(d.id); ed.end() }
     else if (d.kind === 'reorder') ed.moveClip(d.id, d.to)
+    else if (d.kind === 'clip-move' && d.moved) ed.moveClipAt(d.id, d.at)
   }
 
   // ----- lanes for overlay layers
@@ -341,7 +353,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
               const src = sources[clip.sourceId]
               if (!src) return null
               const selected = sel?.type === 'clip' && sel.id === clip.id
-              const reordering = drag?.kind === 'reorder' && drag.id === clip.id
+              const reordering = (drag?.kind === 'reorder' || (drag?.kind === 'clip-move' && drag.moved)) && drag.id === clip.id
               const speed = clip.ramp ? (clip.out - clip.in) / clipDuration(clip) : clip.speed
               const isImg = src.kind === 'image'
               const thumbW = isImg ? 56 : (src.duration * pps) / speed / src.thumbs.length
@@ -358,11 +370,14 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                     const pid = e.pointerId
                     const target = e.currentTarget
                     clearTimeout(longPress.current)
+                    const move = { kind: 'clip-move' as const, id: clip.id, x0: x, start0: it.start, dur: it.dur, at: it.start }
+                    // a selected clip drags straight away (mouse too); otherwise a long press picks it up
+                    if (selected) { capture(e); setDrag({ ...move, moved: false }); return }
                     longPress.current = window.setTimeout(() => {
-                      if (project.clips.length < 2) return
+                      if (snap && project.clips.length < 2) return
                       target.setPointerCapture(pid)
                       navigator.vibrate?.(20)
-                      setDrag({ kind: 'reorder', id: clip.id, x, to: it.index })
+                      setDrag(snap ? { kind: 'reorder', id: clip.id, x, to: it.index } : { ...move, moved: true })
                     }, 450)
                   }}
                   onPointerMove={(e) => { if (!dragRef.current && Math.abs(e.movementX) + Math.abs(e.movementY) > 3) clearTimeout(longPress.current) }}
@@ -392,9 +407,17 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                 </div>
               )
             })}
+            {layout.items.map((it) => (it.clip.gap ?? 0) > 0 && (
+              <div key={'gap' + it.clip.id} className="tl-gap" style={{ left: (it.start - it.clip.gap!) * pps, width: it.clip.gap! * pps }}>
+                {!mainLocked && it.clip.gap! * pps > 22 && (
+                  <button onClick={(e) => { e.stopPropagation(); ed.closeGap(it.clip.id) }} aria-label="Close gap" title={tl('Close gap')}>✕</button>
+                )}
+              </div>
+            ))}
+            {drag?.kind === 'clip-move' && drag.moved && <div className="tl-clip-drop" style={{ left: drag.at * pps, width: drag.dur * pps }} />}
             {layout.items.slice(0, -1).map((it) => (
               // hidden next to the selected clip so its trim handles can be grabbed (the toolbar has Transition)
-              mainLocked || (sel?.type === 'clip' && (sel.id === it.clip.id || sel.id === layout.items[it.index + 1].clip.id)) ? null : <button
+              mainLocked || (layout.items[it.index + 1].clip.gap ?? 0) > 0 || (sel?.type === 'clip' && (sel.id === it.clip.id || sel.id === layout.items[it.index + 1].clip.id)) ? null : <button
                 key={'tr' + it.clip.id}
                 className={`tl-trans${it.clip.transition ? ' on' : ''}`}
                 style={{ left: (it.start + it.dur - it.transOut / 2) * pps }}
@@ -451,6 +474,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       </div>
       <div className="tl-playhead" />
       {drag?.kind === 'reorder' && <div className="tl-reorder-hint">Move to position {drag.to + 1}</div>}
+      {drag?.kind === 'clip-move' && drag.moved && <div className="tl-reorder-hint">{tl('Drop at')} {fmtTime(drag.at)}</div>}
       {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} />}
     </div>
   )

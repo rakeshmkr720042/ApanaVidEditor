@@ -45,7 +45,7 @@ const hi: Record<string, string> = {
   'Motion': 'मोशन', 'Preset': 'प्रीसेट', 'Custom (project frame)': 'अपनी सेटिंग (प्रोजेक्ट फ़्रेम)',
   'The video is reframed to': 'वीडियो का आकार बदलकर होगा', 'empty space uses the Format background.': 'खाली जगह में फ़ॉर्मेट वाला बैकग्राउंड आएगा।',
   'Project saved': 'प्रोजेक्ट सेव हो गया', 'Preparing project file…': 'प्रोजेक्ट फ़ाइल बन रही है…', 'Save project': 'प्रोजेक्ट सेव करें',
-  'Save as .avp file': '.avp फ़ाइल में सेव करें', 'Open project file (.avp)': 'प्रोजेक्ट फ़ाइल खोलें (.avp)', 'Magnetic snap': 'मैग्नेटिक स्नैप', 'Go to start': 'शुरुआत पर जाएँ', 'Go to end': 'अंत पर जाएँ',
+  'Save as .avp file': '.avp फ़ाइल में सेव करें', 'Open project file (.avp)': 'प्रोजेक्ट फ़ाइल खोलें (.avp)', 'Magnetic snap': 'मैग्नेटिक स्नैप', 'Close gap': 'खाली जगह हटाएँ', 'Drop at': 'यहाँ रखें:', 'Go to start': 'शुरुआत पर जाएँ', 'Go to end': 'अंत पर जाएँ',
   'Frame': 'फ़्रेम', 'Typewriter': 'टाइपराइटर', 'Bounce In': 'उछलकर आए', 'Slide In Left': 'बाएं से आए', 'Slide In Right': 'दाएं से आए',
   'Fade In': 'धीरे दिखे', 'Zoom In': 'ज़ूम होकर आए', 'None': 'कोई नहीं',
   'Slideshow': 'स्लाइडशो', 'Photo slideshow': 'फ़ोटो स्लाइडशो', 'Photo': 'फ़ोटो', 'Add photos': 'फ़ोटो जोड़ें',

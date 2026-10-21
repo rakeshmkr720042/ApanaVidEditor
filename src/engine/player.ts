@@ -23,8 +23,9 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     const { time, speed } = sourceAt(c, act.local)
     needs.push({ key: clipKey(c), source: src, time, rate: speed, volume: c.volume * g * fadeGain(act.local, act.item.dur, c.fadeIn, c.fadeOut) })
   }
-  if (lookahead > 0 && a) {
-    const next = items[a.item.index + (b ? 2 : 1)]
+  if (lookahead > 0) {
+    // in empty time (snap off) the next clip is the first one that starts later
+    const next = a ? items[a.item.index + (b ? 2 : 1)] : items.find((x) => x.start > t)
     if (next && next.start - t < lookahead && sources[next.clip.sourceId]) {
       needs.push({ key: clipKey(next.clip), source: sources[next.clip.sourceId], time: next.clip.in, rate: 1, volume: 0, preload: true })
     }

@@ -61,6 +61,7 @@ export interface Clip {
   transition: Transition | null // transition into the next clip
   kenBurns?: KenBurns | null // missing in projects saved before slideshows
   fromTemplate?: boolean // part of an intro/outro; never decides the "original" frame shape
+  gap?: number // seconds of empty (black) time before this clip, left when snap is off
 }
 
 export interface Box {

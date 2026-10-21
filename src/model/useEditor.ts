@@ -3,7 +3,7 @@ import type { AudioLayer, BlurLayer, Clip, Layer, MainTrack, MediaLayer, MediaSo
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
-import { clipSegments, defaultAdjust, layerSpeed, layoutClips, newClip, sourceAt } from './timeline'
+import { clipSegments, defaultAdjust, gapAt, insertClipsAt, layerSpeed, layoutClips, moveClipTo, newClip, removeClipKeepGap, sourceAt } from './timeline'
 import { applySlideshow, type SlideshowOptions } from './slideshow'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
@@ -160,6 +160,15 @@ export function useEditor(initial: Project) {
     const clips = visual.map((s) => ({ ...newClip(s, uid()), ...(s.kind === 'image' ? { out: photoDur } : {}), ...(patch?.crop ? { crop: patch.crop } : {}) }))
     let list = [...p.clips]
     let idx = mode === 'start' ? 0 : list.length
+    const gap = mode === 'playhead' ? gapAt(list, t) : null
+    if (gap) {
+      // the playhead is in empty time (snap off): the new media goes right there
+      list = insertClipsAt(list, clips, t)
+      const sel: Selection = { type: 'clip', id: clips[0].id }
+      h.set({ ...p, clips: list })
+      setSel(sel)
+      return { sel, start: layoutClips(list).items.find((x) => x.clip.id === clips[0].id)!.start, where: mode, cut: false }
+    }
     if (mode === 'playhead') {
       const { items } = layoutClips(list)
       const it = items.find((x) => t >= x.start && t < x.start + x.dur) ?? items[items.length - 1]
@@ -170,7 +179,7 @@ export function useEditor(initial: Project) {
       else if (it.dur - local < 0.25 || c.out - at < MIN_CLIP) idx = it.index + 1
       else {
         // split the clip under the playhead and put the new media in between
-        list = list.flatMap((x) => (x.id === c.id ? [{ ...c, out: at, transition: null, fadeOut: 0 }, { ...c, id: uid(), in: at, fadeIn: 0 }] : [x]))
+        list = list.flatMap((x) => (x.id === c.id ? [{ ...c, out: at, transition: null, fadeOut: 0 }, { ...c, id: uid(), in: at, fadeIn: 0, gap: undefined }] : [x]))
         idx = it.index + 1
       }
     }
@@ -409,10 +418,11 @@ export function useEditor(initial: Project) {
     addLayer(l)
   }, [addLayer])
 
-  const remove = useCallback(() => {
+  /** Deletes the selection. With `keepGap` (snap off) a deleted clip leaves empty time, so later clips stay put. */
+  const remove = useCallback((keepGap = false) => {
     const p = ref.current
     if (!sel) return
-    if (sel.type === 'clip') h.set({ ...p, clips: p.clips.filter((c) => c.id !== sel.id) })
+    if (sel.type === 'clip') h.set({ ...p, clips: keepGap ? removeClipKeepGap(p.clips, sel.id) : p.clips.filter((c) => c.id !== sel.id) })
     else if (sel.all) h.set({ ...p, layers: p.layers.filter((l) => !isSub(l)) })
     else h.set({ ...p, layers: p.layers.filter((l) => l.id !== sel.id) })
     setSel(null)
@@ -424,7 +434,7 @@ export function useEditor(initial: Project) {
     if (sel.type === 'clip') {
       const i = p.clips.findIndex((c) => c.id === sel.id)
       if (i < 0) return
-      const copy = { ...p.clips[i], id: uid() }
+      const copy = { ...p.clips[i], id: uid(), gap: undefined }
       h.set({ ...p, clips: [...p.clips.slice(0, i + 1), copy, ...p.clips.slice(i + 1)] })
       setSel({ type: 'clip', id: copy.id })
     } else {
@@ -468,7 +478,7 @@ export function useEditor(initial: Project) {
       if (at - c.in < MIN_CLIP || c.out - at < MIN_CLIP) return
       const avg = (c.out - c.in) / clipSegments(c).reduce((s, g) => s + g.tEnd - g.tStart, 0)
       const left = { ...c, out: at, ramp: null, speed: avg, transition: null }
-      const right = { ...c, id: uid(), in: at, ramp: null, speed: avg, fadeIn: 0 }
+      const right = { ...c, id: uid(), in: at, ramp: null, speed: avg, fadeIn: 0, gap: undefined }
       h.set({ ...p, clips: p.clips.flatMap((x) => (x.id === c.id ? [left, right] : [x])) })
       setSel({ type: 'clip', id: right.id })
       return
@@ -476,7 +486,7 @@ export function useEditor(initial: Project) {
     const at = c.in + local * c.speed
     if (at - c.in < MIN_CLIP || c.out - at < MIN_CLIP) return
     const left = { ...c, out: at, transition: null, fadeOut: 0 }
-    const right = { ...c, id: uid(), in: at, fadeIn: 0 }
+    const right = { ...c, id: uid(), in: at, fadeIn: 0, gap: undefined }
     h.set({ ...p, clips: p.clips.flatMap((x) => (x.id === c.id ? [left, right] : [x])) })
     setSel({ type: 'clip', id: right.id })
   }, [h, sel])
@@ -491,6 +501,18 @@ export function useEditor(initial: Project) {
     h.set({ ...p, clips })
   }, [h])
 
+  /** Snap off: the clip starts exactly at `at`, leaving empty time behind instead of closing up. */
+  const moveClipAt = useCallback((id: string, at: number) => {
+    const p = ref.current
+    h.set({ ...p, clips: moveClipTo(p.clips, id, at) })
+  }, [h])
+
+  /** Removes the empty time before a clip, pulling it and the clips after it forward. */
+  const closeGap = useCallback((id: string) => {
+    const p = ref.current
+    h.set({ ...p, clips: p.clips.map((c) => (c.id === id ? { ...c, gap: undefined } : c)) })
+  }, [h])
+
   const replaceProject = useCallback((p: Project) => h.set(p), [h])
 
   return {
@@ -501,7 +523,7 @@ export function useEditor(initial: Project) {
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
-    remove, duplicate, split, moveClip, replaceProject,
+    remove, duplicate, split, moveClip, moveClipAt, closeGap, replaceProject,
   }
 }
 
