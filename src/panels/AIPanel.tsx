@@ -16,21 +16,20 @@ import {
   translator, type Progress,
 } from '../engine/ai'
 import { modelStates, type ModelState } from '../engine/offline'
+import { fileBase, saveTextFiles } from '../lib/save'
 
-interface P { ed: Editor; onClose: () => void }
+interface P { ed: Editor; name: string; onClose: () => void }
 
 // remembered while the editor is open, so closing the panel loses nothing
-const memo = { tab: 'captions', model: ASR_MODELS[1].id, picked: false, spoken: 'auto', toEnglish: false, subLang: 'auto', target: 'hi', voice: 'hi', duck: 0.15, mine: false }
+const memo = { tab: 'captions', model: ASR_MODELS[1].id, picked: false, spoken: 'auto', toEnglish: false, subLang: 'auto', target: 'hi', voice: 'hi', duck: 0.15, mine: false,
+  targets: ['en', 'hi'] }
+
+/** One language of the "many languages" subtitle batch. */
+interface Made { code: string; cues?: Cue[]; error?: string }
 
 const DEVANAGARI = ['hi', 'mr', 'ne']
 
-function download(name: string, text: string) {
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
-  a.download = name
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-}
+const download = (name: string, text: string) => saveTextFiles([{ name, text }]).catch(() => {})
 
 const LangSelect = ({ value, onChange, codes, auto }: { value: string; onChange: (v: string) => void; codes?: string[]; auto?: boolean }) => (
   <select className="select" value={value} onChange={(e) => onChange(e.target.value)}>
@@ -44,7 +43,7 @@ const NetLine = ({ ok }: { ok: boolean }) => (
   <p className={`small ${ok ? 'ok-text' : 'muted'}`}>{ok ? `✓ ${t('Works offline on this device')}` : `⬇ ${t('Downloads once (needs internet), then works offline')}`}</p>
 )
 
-export function AIPanel({ ed, onClose }: P) {
+export function AIPanel({ ed, name, onClose }: P) {
   const [tab, setTab] = useState(memo.tab)
   const [, rerender] = useState(0)
   const set = (patch: Partial<typeof memo>) => { Object.assign(memo, patch); rerender((n) => n + 1) }
@@ -53,6 +52,7 @@ export function AIPanel({ ed, onClose }: P) {
   const [done, setDone] = useState<string | null>(null)
   const [email, setEmailState] = useState(getEmail())
   const [local, setLocal] = useState(() => (localAI() ? getLocalAI() : null))
+  const [made, setMade] = useState<Made[]>([])
   const playing = useRef<AudioBufferSourceNode | null>(null)
   useEffect(() => () => playing.current?.stop(), [])
   useEffect(() => { memo.tab = tab }, [tab])
@@ -193,14 +193,41 @@ export function AIPanel({ ed, onClose }: P) {
     return `${out.length} ${t('captions added. Edit any line in Subtitles.')}`
   })
 
+  // YouTube reads the language from its own menu, so "<video>.<code>.srt" just keeps the files easy to tell apart
+  const base = fileBase(name)
+  const srtName = (code: string) => `${base}.${code === 'auto' ? 'original' : code}.srt`
+
   const translate = (apply: boolean) => run(t('Translating…'), async () => {
     const out = await translateCues(cues, memo.subLang, memo.target, (p) => setBusy({ label: t('Translating…'), p }))
-    download(`subtitles.${memo.target}.srt`, toSrt(out))
+    download(srtName(memo.target), toSrt(out))
     if (apply) {
       replaceSubs(out, memo.target)
     }
     return apply ? `${t('Subtitles are now in')} ${langName(memo.target)}. ${t('The .srt file was downloaded too.')}` : t('Translated .srt downloaded.')
   })
+
+  /** Translates the subtitles into every picked language; one failing language does not stop the rest. */
+  const makeMany = () => run(t('Translating…'), async () => {
+    const codes = memo.targets.filter((c) => c !== memo.subLang)
+    const out: Made[] = []
+    setMade([])
+    for (const [i, code] of codes.entries()) {
+      const label = `${t('Translating…')} ${langName(code)} (${i + 1}/${codes.length})`
+      setBusy({ label, p: 0 })
+      try {
+        out.push({ code, cues: await translateCues(cues, memo.subLang, code, (p) => setBusy({ label, p })) })
+      } catch (e) {
+        out.push({ code, error: t((e as Error).message) })
+      }
+      setMade([...out])
+    }
+    const ok = out.filter((m) => m.cues).length
+    if (!ok) throw new Error(out[0]?.error ?? 'Translation failed')
+    return `${ok} ${t('.srt files ready. Check them below, then download.')}`
+  })
+
+  const saveMade = (list: Made[]) => saveTextFiles(list.filter((m) => m.cues).map((m) => ({ name: srtName(m.code), text: toSrt(m.cues!) })))
+    .catch((e) => setError((e as Error).message))
 
   const stopSample = () => { playing.current?.stop(); playing.current = null }
   const preview = () => run(t('Making a sample…'), async () => {
@@ -255,7 +282,7 @@ export function AIPanel({ ed, onClose }: P) {
           <Toggle label="Write captions in English" value={memo.toEnglish} onChange={(toEnglish) => set({ toEnglish })} />
           <div className="row">
             <button className="btn primary" disabled={!!busy || !total} onClick={generate}>{t('Generate captions')}</button>
-            <button className="btn" disabled={!!busy || !cues.length} onClick={() => download('subtitles.srt', toSrt(cues))}>{t('Download .srt')}</button>
+            <button className="btn" disabled={!!busy || !cues.length} onClick={() => download(srtName(memo.toEnglish ? 'en' : memo.subLang), toSrt(cues))}>{t('Download .srt')}</button>
           </div>
         </>
       )}
@@ -276,6 +303,51 @@ export function AIPanel({ ed, onClose }: P) {
           <div className="row">
             <button className="btn primary" disabled={!!busy || !cues.length} onClick={() => translate(true)}>{t('Translate subtitles')}</button>
             <button className="btn" disabled={!!busy || !cues.length} onClick={() => translate(false)}>{t('Only download .srt')}</button>
+          </div>
+          <div className="srt-many">
+            <span className="field-label">{t('YouTube subtitles: one .srt for each language')}</span>
+            <p className="muted small">{t('Pick languages. Each gets its own .srt with the same timing, and your video stays as it is. On YouTube Studio: Subtitles > Add language > Add > Upload file > With timing.')}</p>
+            <div className="chips wrap">
+              {memo.targets.map((c) => (
+                <button key={c} className={c === memo.subLang ? '' : 'on'} title={t('Remove')}
+                  onClick={() => set({ targets: memo.targets.filter((x) => x !== c) })}>{langName(c)} ✕</button>
+              ))}
+            </div>
+            <select className="select" value="" onChange={(e) => e.target.value && set({ targets: [...memo.targets, e.target.value] })}>
+              <option value="">+ {t('Add language')}</option>
+              {LANGUAGES.filter((l) => !memo.targets.includes(l.code)).map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+            </select>
+            {memo.subLang !== 'auto' && memo.targets.includes(memo.subLang) && (
+              <p className="muted small">{langName(memo.subLang)}: {t('this is the language of your subtitles, so it is skipped. Use Download .srt in Auto captions for it.')}</p>
+            )}
+            <div className="row">
+              <button className="btn primary" disabled={!!busy || !cues.length || !memo.targets.some((c) => c !== memo.subLang)} onClick={makeMany}>
+                {t('Make .srt files')} ({memo.targets.filter((c) => c !== memo.subLang).length})
+              </button>
+              {made.some((m) => m.cues) && <button className="btn" disabled={!!busy} onClick={() => saveMade(made)}>{t('Download all')}</button>}
+            </div>
+            {made.map((m) => (
+              <div key={m.code} className="srt-made">
+                <div className="row">
+                  <b>{langName(m.code)}</b>
+                  <span className="muted small">{srtName(m.code)}</span>
+                </div>
+                {m.error ? <p className="small warn">{m.error}</p> : (
+                  <>
+                    <ol className="srt-peek small">
+                      {m.cues!.slice(0, 3).map((c, i) => <li key={i}><span className="muted">{c.text === cues[i]?.text ? '' : `${cues[i]?.text} → `}</span>{c.text}</li>)}
+                    </ol>
+                    <div className="row">
+                      <button className="btn small" disabled={!!busy} onClick={() => saveMade([m])}>{t('Download .srt')}</button>
+                      <button className="btn small" disabled={!!busy} onClick={() => {
+                        if (!confirm(`${t('Show these subtitles in the video instead of the current ones?')} (${langName(m.code)})`)) return
+                        replaceSubs(m.cues!, m.code); setMade([]); setDone(`${t('Subtitles are now in')} ${langName(m.code)}.`)
+                      }}>{t('Use in video')}</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
           {route === 'online' && (
             <>

@@ -6,6 +6,7 @@ import { CaptionFrameEditor } from './CaptionFramePanel'
 import { ANIMS, FONTS, STICKERS, TEXT_PRESETS, ensureFont, prefetchFonts } from '../engine/text'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { parseSrt, toSrt } from '../lib/srt'
+import { fileBase, saveTextFiles } from '../lib/save'
 import { fmtTime, uid } from '../lib/format'
 import { subtitleStyle } from '../engine/text'
 import { WAVE_STYLES } from '../engine/visualizer'
@@ -231,7 +232,7 @@ export function WavePanel({ ed, layer, onClose }: P & { layer: WaveLayer }) {
   )
 }
 
-export function SubtitlePanel({ ed, t: time, onClose, onSeek, onSelectAll }: P & { t: number; onSeek: (t: number) => void; onSelectAll: () => void }) {
+export function SubtitlePanel({ ed, name, t: time, onClose, onSeek, onSelectAll }: P & { name: string; t: number; onSeek: (t: number) => void; onSelectAll: () => void }) {
   const file = useRef<HTMLInputElement>(null)
   const subs = ed.project.layers.filter((l): l is TextLayer => l.type === 'text' && l.subtitle).sort((a, b) => a.start - b.start)
   const importSrt = async (f: File) => {
@@ -245,11 +246,7 @@ export function SubtitlePanel({ ed, t: time, onClose, onSeek, onSelectAll }: P &
     ed.replaceProject({ ...p, layers: [...p.layers, ...layers] })
   }
   const exportSrt = () => {
-    const blob = new Blob([toSrt(subs.map((s) => ({ start: s.start, end: s.end, text: s.text })))], { type: 'text/plain' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'subtitles.srt'
-    a.click()
+    saveTextFiles([{ name: `${fileBase(name)}.srt`, text: toSrt(subs.map((s) => ({ start: s.start, end: s.end, text: s.text }))) }]).catch(() => {})
   }
   const applyStyleAll = () => {
     const first = subs.find((s) => ed.sel?.type === 'layer' && s.id === ed.sel.id) ?? subs[0]
