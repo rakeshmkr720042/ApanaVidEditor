@@ -9,6 +9,7 @@ import { getLang, setLang, t } from '../lib/i18n'
 import { Icon } from './Icon'
 import { LocalAISheet } from './LocalAISheet'
 import { OfflineSheet } from './OfflineSheet'
+import { CompressSheet } from './CompressSheet'
 import { localAI } from '../lib/localai'
 
 export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang: () => void }) {
@@ -20,6 +21,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const [aiSheet, setAiSheet] = useState(false)
+  const [compress, setCompress] = useState(false)
   const [aiOn, setAiOn] = useState(() => !!localAI())
 
   const openFile = async (f: File) => {
@@ -60,6 +62,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         <button className="btn wide" disabled={opening} onClick={() => fileInput.current?.click()}>
           <Icon name="folder" size={18} /> {opening ? t('Opening project…') : t('Open project file (.avp)')}
         </button>
+        <button className="btn wide" onClick={() => setCompress(true)} data-testid="home-compress">
+          <Icon name="compress" size={18} /> {t('Compress video')}
+        </button>
         <input ref={fileInput} type="file" accept=".avp,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
         {error && <p className="error-text">{error}</p>}
         <div className="offline-row">
@@ -85,6 +90,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         </div>
       </main>
       {netSheet && <OfflineSheet onClose={() => { setNetSheet(false); checkOffline() }} />}
+      {compress && <CompressSheet onClose={() => setCompress(false)} />}
       {aiSheet && <LocalAISheet onClose={() => { setAiSheet(false); setAiOn(!!localAI()) }} />}
     </div>
   )

@@ -575,3 +575,7 @@ input, textarea { font: inherit; color: inherit; }
 .net-badge { font-size: 12px; padding: 2px 8px; border-radius: 99px; white-space: nowrap; border: 1px solid; }
 .net-badge.ok { color: #7ee2a8; border-color: #2d5c41; }
 .net-badge.net { color: #ffcc66; border-color: #6b5520; }
+
+/* Compress video */
+.compress-estimate { margin: 14px 0 8px; font-size: 14px; line-height: 1.5; }
+.target-size input { width: 100%; margin-bottom: 8px; }
