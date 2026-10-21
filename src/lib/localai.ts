@@ -77,7 +77,7 @@ async function request<T>(url: string, path: string, body?: unknown, timeout = T
     res = await fetch(full, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined, signal: ctl.signal })
   } catch (e) {
     // a quick request that times out means the address doesn't answer at all
-    throw new Error((e as Error).name === 'AbortError' && timeout === TIMEOUT ? 'Local AI took too long to answer. Try a shorter text.' : reachHelp(url))
+    throw new Error((e as Error).name === 'AbortError' && timeout > 30_000 ? 'Local AI took too long to answer. Try a shorter text.' : reachHelp(url))
   } finally { clearTimeout(timer) }
   const data = await res.json().catch(() => null)
   if (!res.ok) throw new Error(errorOf(data, res.status))
@@ -101,12 +101,12 @@ export async function listModels(url: string): Promise<string[]> {
 export const pickModel = (models: string[]) => models.find((m) => /gemma/i.test(m)) ?? models[0] ?? ''
 
 /** One chat turn with the local model; returns its answer as plain text. */
-export async function ask(system: string, user: string, cfg = localAI()): Promise<string> {
+export async function ask(system: string, user: string, cfg = localAI(), timeout = TIMEOUT): Promise<string> {
   if (!cfg) throw new Error('Set up Local AI first (Home → Local AI)')
   const r = await request<{ message?: { content?: string } }>(cfg.url, '/api/chat', {
     model: cfg.model, stream: false, options: { temperature: 0.3 },
     messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-  })
+  }, timeout)
   return clean(r.message?.content ?? '')
 }
 
@@ -134,19 +134,36 @@ export async function keyPoints(text: string): Promise<string> {
   return out
 }
 
-/** One short key point for each part of a talk, to put on the cards of parts that have no picture. Empty where the model gave none. */
-export async function chapterPoints(texts: string[]): Promise<string[]> {
-  const out = await ask(
-    'For each numbered part of a talk, write its key point as a short heading of at most 8 words. '
-    + 'Reply with one line per part, like "3: the key point", and nothing else. Do not invent anything. ' + sameLanguage(texts.join(' ')),
-    texts.map((x, i) => `${i + 1}: ${x.replace(/\s+/g, ' ').slice(0, 500)}`).join('\n'),
-  )
+const POINTS_BATCH = 8 // parts per question, so each answer comes back in a minute or so on a laptop
+const POINTS_TIMEOUT = 2 * 60_000
+
+/**
+ * One short key point for each part of a talk, to put on the cards of parts that have no picture.
+ * Empty where the model gave none. The parts are asked about a few at a time, so a long talk
+ * shows progress; if the model is too slow or fails, the parts after that are left empty.
+ */
+export async function chapterPoints(texts: string[], progress?: (p: number) => void): Promise<{ points: string[]; failed: string | null }> {
   const res = texts.map(() => '')
-  for (const m of out.matchAll(/^\s*(\d+)\s*[:.)-]\s*(.+)$/gm)) {
-    const i = Number(m[1]) - 1
-    if (i >= 0 && i < texts.length && !res[i]) res[i] = m[2].trim().replace(/^["“'*]+|["”'*.]+$/g, '').slice(0, 80)
+  const lang = sameLanguage(texts.join(' '))
+  for (let from = 0; from < texts.length; from += POINTS_BATCH) {
+    progress?.(from / texts.length)
+    const part = texts.slice(from, from + POINTS_BATCH)
+    let out: string
+    try {
+      out = await ask(
+        'For each numbered part of a talk, write its key point as a short heading of at most 8 words. '
+        + 'Reply with one line per part, like "3: the key point", and nothing else. Do not invent anything. ' + lang,
+        part.map((x, i) => `${i + 1}: ${x.replace(/\s+/g, ' ').slice(0, 500)}`).join('\n'),
+        undefined, POINTS_TIMEOUT,
+      )
+    } catch (e) { return { points: res, failed: (e as Error).message } }
+    for (const m of out.matchAll(/^\s*(\d+)\s*[:.)-]\s*(.+)$/gm)) {
+      const i = Number(m[1]) - 1
+      if (i >= 0 && i < part.length && !res[from + i]) res[from + i] = m[2].trim().replace(/^["“'*]+|["”'*.]+$/g, '').slice(0, 80)
+    }
   }
-  return res
+  progress?.(1)
+  return { points: res, failed: null }
 }
 
 /**
