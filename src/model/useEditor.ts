@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BlurLayer, Clip, Layer, MainTrack, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AudioLayer, BlurLayer, Box, Clip, Layer, MainTrack, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -40,6 +40,9 @@ export type Placement = 'track' | 'playhead' | 'start' | 'end'
 
 /** What was added and where, so the editor can select it, jump to it and say so. */
 export interface Placed { sel: Selection; start: number; where: Placement; cut: boolean }
+
+/** A camera recording made together with a screen recording: shown as a bubble over it, from the same moment. */
+export interface CamBubble { src: MediaSource; box: Box; mask: MediaLayer['mask'] }
 
 /** Overlay scale that fills the frame edge to edge (fit, no cropping) for a source of aspect `ar`. */
 function fullFrameScale(p: Project, sources: Record<string, MediaSource>, ar: number) {
@@ -117,13 +120,23 @@ export function useEditor(initial: Project) {
    * The one rule for adding photos, videos and recordings: on a new track at the playhead (a full-frame overlay
    * above the main video), or into the main video at the playhead (splitting the clip there), start or end.
    * Several files go one after another. An empty project always gets them as its main video.
+   * A camera bubble recorded with a screen recording goes on its own row in front, starting with it (same undo step).
    */
-  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop']; dur?: number }): Placed | null => {
+  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop']; dur?: number; cam?: CamBubble | null }): Placed | null => {
     const photoDur = patch?.dur ?? 3
     const p = ref.current
     const visual = srcs.filter((s) => s.kind !== 'audio')
     if (!visual.length) return null
     const mode: Placement = p.clips.length ? where : 'end'
+    const bubble = (start: number, tot: number): MediaLayer[] => {
+      const cam = patch?.cam
+      if (!cam) return []
+      return [{
+        id: uid(), type: 'media', sourceId: cam.src.id, in: 0, start, end: Math.max(start + 0.5, Math.min(tot, start + cam.src.duration)),
+        box: { ...cam.box }, volume: 0, chroma: { enabled: false, color: '#00ff00', similarity: 0.35, smoothness: 0.08 }, mask: cam.mask,
+        border: 0, adjust: defaultAdjust(), filter: null, filterAmount: 1,
+      }]
+    }
     if (mode === 'track') {
       const tot = layoutClips(p.clips).total
       let at = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
@@ -152,7 +165,7 @@ export function useEditor(initial: Project) {
       const tr = free ? picked : newTrack('visual')
       const tracks = [...(p.tracks ?? [])]
       if (!free) tracks.splice(insertAt(tracks, 'visual', false), 0, tr)
-      h.set({ ...p, tracks, layers: [...p.layers, ...layers.map((l) => ({ ...l, track: tr.id }))] })
+      h.set({ ...p, tracks, layers: [...p.layers, ...layers.map((l) => ({ ...l, track: tr.id })), ...bubble(layers[0].start, tot)] })
       const sel: Selection = { type: 'layer', id: layers[0].id }
       setSel(sel)
       return { sel, start: layers[0].start, where: mode, cut }
@@ -175,8 +188,9 @@ export function useEditor(initial: Project) {
       }
     }
     list.splice(idx, 0, ...clips)
-    h.set({ ...p, clips: list })
-    const start = layoutClips(list).items[idx].start
+    const laid = layoutClips(list)
+    const start = laid.items[idx].start
+    h.set({ ...p, clips: list, layers: [...p.layers, ...bubble(start, laid.total)] })
     const sel: Selection = { type: 'clip', id: clips[0].id }
     setSel(sel)
     return { sel, start, where: mode, cut: false }
