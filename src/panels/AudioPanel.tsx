@@ -14,7 +14,12 @@ interface Props {
   onClose: () => void
   onRecordStart: () => void
   onRecordStop: () => void
+  /** The video pauses with the recording so the voice stays in step with it. */
+  onRecordPause: (paused: boolean) => void
+  startTab?: 'music' | 'sfx' | 'mine' | 'voice'
 }
+
+interface Rec { mr: MediaRecorder; stream: MediaStream; at: number; start: number; pausedAt: number; pausedFor: number; ctl: { discard: boolean } }
 
 const rendered = new Map<string, Promise<AudioBuffer>>()
 const render = (id: string, sfx: boolean) => {
@@ -23,23 +28,52 @@ const render = (id: string, sfx: boolean) => {
   return rendered.get(key)!
 }
 
-export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop }: Props) {
-  const [tab, setTab] = useState('music')
+export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onRecordPause, startTab = 'music' }: Props) {
+  const [tab, setTab] = useState<string>(startTab)
   const [busy, setBusy] = useState<string | null>(null)
   const [playing, setPlaying] = useState<string | null>(null)
   const node = useRef<AudioBufferSourceNode | null>(null)
   const file = useRef<HTMLInputElement>(null)
   const [mood, setMood] = useState('All')
-  const [rec, setRec] = useState<{ start: number; mr: MediaRecorder; at: number } | null>(null)
+  const [rec, setRec] = useState<Rec | null>(null)
   const [now, setNow] = useState(0)
+  const [level, setLevel] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const recRef = useRef<Rec | null>(null)
+  recRef.current = rec
 
-  useEffect(() => () => { node.current?.stop() }, [])
+  useEffect(() => () => {
+    node.current?.stop()
+    // panel closed mid-recording: keep what was said
+    const r = recRef.current
+    if (r && r.mr.state !== 'inactive') r.mr.stop()
+  }, [])
   useEffect(() => {
     if (!rec) return
     const i = setInterval(() => setNow(Date.now()), 200)
     return () => clearInterval(i)
   }, [rec])
+
+  // microphone level meter while recording
+  useEffect(() => {
+    if (!rec) return
+    const ctx = sharedAudioContext()
+    const an = ctx.createAnalyser()
+    an.fftSize = 1024
+    const srcNode = ctx.createMediaStreamSource(rec.stream)
+    srcNode.connect(an)
+    const buf = new Float32Array(an.fftSize)
+    let raf = 0
+    const tick = () => {
+      an.getFloatTimeDomainData(buf)
+      let peak = 0
+      for (const v of buf) peak = Math.max(peak, Math.abs(v))
+      setLevel((l) => Math.max(peak, l * 0.85))
+      raf = requestAnimationFrame(tick)
+    }
+    tick()
+    return () => { cancelAnimationFrame(raf); srcNode.disconnect(); setLevel(0) }
+  }, [rec?.stream]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stopPreview = () => { node.current?.stop(); node.current = null; setPlaying(null) }
 
@@ -86,30 +120,53 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop }: P
 
   const startRec = async () => {
     setError(null)
+    let stream: MediaStream
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
-      const mr = new MediaRecorder(stream)
-      const parts: Blob[] = []
-      const at = time
-      mr.ondataavailable = (e) => parts.push(e.data)
-      mr.onstop = async () => {
-        stream.getTracks().forEach((tr) => tr.stop())
-        onRecordStop()
-        const blob = new Blob(parts, { type: mr.mimeType || 'audio/webm' })
-        try {
-          const src = await loadSource(blob, `Voice ${new Date().toLocaleTimeString()}.${blob.type.includes('mp4') ? 'm4a' : 'webm'}`)
-          await add(src, 'voice', 'Voiceover', at)
-        } catch (e) { setError((e as Error).message) }
-      }
-      mr.start()
-      setRec({ start: Date.now(), mr, at })
-      setNow(Date.now())
-      onRecordStart()
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
     } catch {
       setError(t('Microphone permission is needed to record a voiceover.'))
+      return
+    }
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+    const mime = types.find((m) => MediaRecorder.isTypeSupported(m))
+    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+    const parts: Blob[] = []
+    const r: Rec = { mr, stream, at: time, start: Date.now(), pausedAt: 0, pausedFor: 0, ctl: { discard: false } }
+    mr.ondataavailable = (e) => { if (e.data.size) parts.push(e.data) }
+    mr.onstop = async () => {
+      stream.getTracks().forEach((tr) => tr.stop())
+      onRecordStop()
+      if (r.ctl.discard || !parts.length) return
+      const blob = new Blob(parts, { type: mr.mimeType || 'audio/webm' })
+      try {
+        const src = await loadSource(blob, `Voice ${new Date().toLocaleTimeString()}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'}`)
+        await add(src, 'voice', 'Voiceover', r.at)
+      } catch (e) { setError((e as Error).message) }
+    }
+    mr.start(1000)
+    setRec(r)
+    setNow(Date.now())
+    onRecordStart()
+  }
+  const stopRec = (discard = false) => {
+    if (!rec) return
+    rec.ctl.discard = discard
+    if (rec.mr.state !== 'inactive') rec.mr.stop()
+    setRec(null)
+  }
+  const togglePause = () => {
+    if (!rec) return
+    if (rec.mr.state === 'recording') {
+      rec.mr.pause()
+      setRec({ ...rec, pausedAt: Date.now() })
+      onRecordPause(true)
+    } else if (rec.mr.state === 'paused') {
+      rec.mr.resume()
+      setRec({ ...rec, pausedFor: rec.pausedFor + Date.now() - rec.pausedAt, pausedAt: 0 })
+      onRecordPause(false)
     }
   }
-  const stopRec = () => { rec?.mr.stop(); setRec(null) }
+  const recSecs = rec ? ((rec.pausedAt || now) - rec.start - rec.pausedFor) / 1000 : 0
 
   const moods = ['All', ...new Set(MUSIC.map((m) => m.mood))]
 
@@ -154,13 +211,21 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop }: P
         <div className="rec">
           {rec ? (
             <>
-              <div className="rec-time"><i className="rec-dot" /> {fmtTime((now - rec.start) / 1000)}</div>
-              <button className="btn primary wide" onClick={stopRec}>■ {t('Stop')}</button>
+              <div className={`rec-time${rec.pausedAt ? ' paused' : ''}`}><i className="rec-dot" /> {fmtTime(Math.max(0, recSecs))}</div>
+              <div className="mic-meter" aria-label={t('Microphone level')}><span style={{ width: `${Math.min(100, Math.sqrt(level) * 100)}%` }} className={level > 0.95 ? 'loud' : ''} /></div>
+              <p className="muted small">{rec.pausedAt ? t('Paused. The video waits too.')
+                : level < 0.02 ? t('Speak now… (no sound yet? check the microphone)') : `${t('Recording into a new audio track from')} ${fmtTime(rec.at)}`}</p>
+              <div className="row wide">
+                <button className="btn" onClick={() => stopRec(true)}>{t('Discard')}</button>
+                <button className="btn" onClick={togglePause}>{rec.pausedAt ? `▶ ${t('Resume')}` : `❚❚ ${t('Pause')}`}</button>
+                <button className="btn primary grow rec-stop" onClick={() => stopRec()}>■ {t('Stop & add')}</button>
+              </div>
             </>
           ) : (
             <>
               <button className="rec-btn" onClick={startRec} aria-label="Record"><span /></button>
               <p className="muted small">{t('Recording starts at the playhead and the video plays muted so you can talk over it.')}</p>
+              <p className="muted small">{t('Playhead')} {fmtTime(time)}</p>
             </>
           )}
         </div>

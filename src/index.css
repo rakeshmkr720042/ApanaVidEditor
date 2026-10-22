@@ -598,3 +598,12 @@ input, textarea { font: inherit; color: inherit; }
 .feedback-big img { max-width: 100%; max-height: 100%; object-fit: contain; }
 @media (max-width: 480px) { .home .top-actions .wide-only { display: none; } .home .brand { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
 @media (max-width: 400px) { .home .brand { font-size: 16px; gap: 6px; } .home .top-actions { gap: 2px; } }
+.cam-bubble { position: absolute; transform: translate(-50%, -50%); overflow: hidden; background: #222; box-shadow: 0 4px 18px rgba(0,0,0,.5); cursor: grab; touch-action: none; border: 2px solid rgba(255,255,255,.85); }
+.cam-bubble.circle { border-radius: 50%; }
+.cam-bubble.rounded { border-radius: 12%; }
+.cam-bubble video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.screen-rec .crop-area .cam-bubble video { background: #222; }
+.mic-meter { width: min(320px, 100%); height: 10px; border-radius: 5px; background: var(--panel-2); overflow: hidden; }
+.mic-meter span { display: block; height: 100%; background: linear-gradient(90deg, #34c759, #ffd60a 75%, #ff3b30); transition: width .08s linear; }
+.mic-meter span.loud { box-shadow: 0 0 6px #ff3b30; }
+.rec .row.wide { width: min(420px, 100%); }

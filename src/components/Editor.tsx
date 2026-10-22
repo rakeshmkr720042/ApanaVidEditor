@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
-import { isSub, useEditor, type Placed, type Placement } from '../model/useEditor'
+import { isSub, useEditor, type CamBubble, type Placed, type Placement } from '../model/useEditor'
 import { Player } from '../engine/player'
 import { activeAt } from '../model/timeline'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
@@ -24,7 +24,7 @@ import { WatermarkPanel } from '../panels/WatermarkPanel'
 import { PhotoPanel, SlideshowPanel } from '../panels/SlideshowPanel'
 import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
 import { TemplatesPanel } from '../panels/TemplatesPanel'
-import { ScreenRecorder } from './ScreenRecorder'
+import { ScreenRecorder, type CamTake } from './ScreenRecorder'
 import { PlaceSheet } from './PlaceSheet'
 import { FeedbackSheet } from './FeedbackSheet'
 import { playable } from '../model/tracks'
@@ -78,9 +78,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | null>(null)
-  const [screenRec, setScreenRec] = useState(false)
+  const [audioTab, setAudioTab] = useState<'music' | 'voice'>('music')
+  const [screenRec, setScreenRec] = useState<'screen' | 'camera' | null>(null)
   // new photos/videos/recordings waiting for the user to say where they go
-  const [pending, setPending] = useState<{ srcs: MediaSource[]; crop: Crop | null; what: string; dur?: number } | null>(null)
+  const [pending, setPending] = useState<{ srcs: MediaSource[]; crop: Crop | null; what: string; dur?: number; cam?: CamBubble | null } | null>(null)
   const mainInput = useRef<HTMLInputElement>(null)
   const overlayInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
@@ -182,10 +183,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   }
 
   /** Photos and videos for the main track: an empty project takes them as is, otherwise ask where. */
-  const addVisual = (srcs: MediaSource[], crop: Crop | null, what: string, dur?: number) => {
+  const addVisual = (srcs: MediaSource[], crop: Crop | null, what: string, dur?: number, cam?: CamBubble | null) => {
     if (!srcs.length) return
-    if (ed.project.clips.length === 0) announce(ed.place(srcs, 'end', time, { crop, dur }), what)
-    else { player?.pause(); setPending({ srcs, crop, what, dur }) }
+    if (ed.project.clips.length === 0) announce(ed.place(srcs, 'end', time, { crop, dur, cam }), what)
+    else { player?.pause(); setPending({ srcs, crop, what, dur, cam }) }
   }
 
   const importFiles = async (files: FileList | File[], target: 'main' | 'overlay' | 'slides') => {
@@ -228,18 +229,30 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     }
   }
 
-  /** A finished screen recording, cropped to the chosen area, goes where the user picks. */
-  const addRecording = async (file: File, crop: Crop | null) => {
+  /**
+   * A finished screen or camera recording, cropped to the chosen area, goes where the user picks.
+   * A camera bubble recorded with the screen follows it on its own row.
+   */
+  const addRecording = async (file: File, crop: Crop | null, take: CamTake | null) => {
     const src = await loadSource(file, file.name)
     ed.addSource(src)
     await saveMedia(src)
-    addVisual([src], crop, t('Screen recording'))
+    let cam: CamBubble | null = null
+    if (take) {
+      try {
+        const c = await loadSource(take.file, take.file.name)
+        ed.addSource(c)
+        await saveMedia(c)
+        cam = { src: c, box: take.box, mask: take.mask }
+      } catch (e) { setToast((e as Error).message) }
+    }
+    addVisual([src], crop, screenRec === 'camera' ? t('Camera recording') : cam ? t('Screen + camera recording') : t('Screen recording'), undefined, cam)
   }
 
   const placePending = (where: Placement) => {
     if (!pending) return
     setPending(null)
-    announce(ed.place(pending.srcs, where, time, { crop: pending.crop, dur: pending.dur }), pending.what)
+    announce(ed.place(pending.srcs, where, time, { crop: pending.crop, dur: pending.dur, cam: pending.cam }), pending.what)
   }
 
   /** Puts another photo or video in place of the selected one, keeping its time, size and look. */
@@ -411,7 +424,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'add', label: 'Add', on: () => mainInput.current?.click() },
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
-      { icon: 'music', label: 'Audio', on: () => setPanel('audio') },
+      { icon: 'music', label: 'Audio', on: () => { setAudioTab('music'); setPanel('audio') } },
+      { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'speed', label: 'Speed', on: () => openClipPanel('speed'), disabled: !targetClip },
       { icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers'), disabled: empty },
@@ -421,7 +435,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
       { icon: 'watermark', label: 'Watermark', on: () => setPanel('watermark'), disabled: empty },
       { icon: 'format', label: 'Format', on: () => setPanel('format') },
-      { icon: 'screen', label: 'Record screen', on: () => { player?.pause(); setScreenRec(true) } },
+      { icon: 'screen', label: 'Record screen', on: () => { player?.pause(); setScreenRec('screen') } },
+      { icon: 'camera', label: 'Record camera', on: () => { player?.pause(); setScreenRec('camera') } },
       { icon: 'template', label: 'Intro/Outro', on: () => { player?.pause(); setPanel('templates') } },
       { icon: 'image', label: 'Slideshow', on: () => setPanel('slideshow') },
       { icon: 'slides', label: 'Slides to video', on: () => { player?.pause(); setScenes('files') } },
@@ -467,9 +482,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'subtitles') panelView = <SubtitlePanel ed={ed} t={time} onClose={closePanel} onSeek={seek}
     onSelectAll={() => { const first = ed.project.layers.filter(isSub).sort((a, b) => a.start - b.start)[0]; if (first) { ed.setSel({ type: 'layer', id: first.id, all: true }); setPanel('text-style') } }} />
   else if (panel === 'audio') panelView = (
-    <AudioPanel ed={ed} time={time} onClose={closePanel}
+    <AudioPanel key={audioTab} ed={ed} time={time} onClose={closePanel} startTab={audioTab}
       onRecordStart={() => { if (player) { player.muted = true; player.play() } }}
-      onRecordStop={() => { if (player) { player.pause(); player.muted = false } }} />
+      onRecordStop={() => { if (player) { player.pause(); player.muted = false } }}
+      onRecordPause={(paused) => { if (paused) player?.pause(); else player?.play() }} />
   )
 
   return (
@@ -513,7 +529,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <button className="btn" onClick={() => setScenes('quiz')}><Icon name="quiz" size={18} /> {t('Quiz to video')}</button>
               <button className="btn" onClick={() => setScenes('data')}><Icon name="chart" size={18} /> {t('Data to video')}</button>
               <button className="btn" onClick={() => setScenes('article')}><Icon name="article" size={18} /> {t('Article to video')}</button>
-              <button className="btn" onClick={() => setScreenRec(true)}><Icon name="screen" size={18} /> {t('Record screen')}</button>
+              <button className="btn" onClick={() => setScreenRec('screen')}><Icon name="screen" size={18} /> {t('Record screen')}</button>
+              <button className="btn" onClick={() => setScreenRec('camera')}><Icon name="camera" size={18} /> {t('Record camera')}</button>
               <button className="btn" onClick={() => setPanel('templates')}><Icon name="template" size={18} /> {t('Intro/Outro')}</button>
             </div>
             <p className="muted">{t('Pick videos or photos from your phone. Everything stays on your device.')}</p>
@@ -578,7 +595,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
-      {screenRec && <ScreenRecorder onClose={() => setScreenRec(false)} onDone={addRecording} />}
+      {screenRec && <ScreenRecorder mode={screenRec} onClose={() => setScreenRec(null)} onDone={addRecording} />}
       {notesSheet && <FeedbackSheet where={`Editor: ${name}${panel ? ` › ${panel}` : ''}`} onClose={() => setNotesSheet(false)} />}
       {exporting && <ExportSheet project={output} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>
