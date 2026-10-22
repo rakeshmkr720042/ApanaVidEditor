@@ -7,6 +7,8 @@ import { saveMedia } from '../lib/db'
 import { fmtTime } from '../lib/format'
 import { Chips, Panel } from '../ui/kit'
 import { t } from '../lib/i18n'
+import { desktop } from '../lib/desktop'
+import { canRecordScreen } from '../lib/screenrec'
 
 interface Props {
   ed: Editor
@@ -16,10 +18,10 @@ interface Props {
   onRecordStop: () => void
   /** The video pauses with the recording so the voice stays in step with it. */
   onRecordPause: (paused: boolean) => void
-  startTab?: 'music' | 'sfx' | 'mine' | 'voice'
+  startTab?: 'music' | 'sfx' | 'mine' | 'voice' | 'system'
 }
 
-interface Rec { mr: MediaRecorder; stream: MediaStream; at: number; start: number; pausedAt: number; pausedFor: number; ctl: { discard: boolean } }
+interface Rec { mr: MediaRecorder; stream: MediaStream; system: boolean; at: number; start: number; pausedAt: number; pausedFor: number; ctl: { discard: boolean } }
 
 const rendered = new Map<string, Promise<AudioBuffer>>()
 const render = (id: string, sfx: boolean) => {
@@ -118,31 +120,59 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onR
     } catch (e) { setError((e as Error).message) }
   }
 
-  const startRec = async () => {
+  /** Sound of the computer (Windows app, Chrome / Edge): shared like a screen, only its sound is kept. */
+  const captureSystem = async () => {
+    // the Windows app asks which screen to share; any screen gives the whole computer's sound
+    const off = desktop?.onPickScreen?.((list) => desktop?.pickScreen?.((list.find((x) => x.screen) ?? list[0])?.id ?? null))
+    try {
+      const share = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: 320 }, height: { ideal: 180 }, frameRate: { ideal: 1 } },
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        systemAudio: 'include', selfBrowserSurface: 'include', monitorTypeSurfaces: 'include',
+      } as DisplayMediaStreamOptions)
+      if (!share.getAudioTracks().length) {
+        share.getTracks().forEach((tr) => tr.stop())
+        throw new Error(t('No sound was shared. Pick "Entire screen" and turn on "Share system audio" (or pick a tab and turn on "Share tab audio").'))
+      }
+      return share
+    } finally { off?.() }
+  }
+
+  const startRec = async (system = false) => {
     setError(null)
     let stream: MediaStream
+    let share: MediaStream | null = null
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
-    } catch {
-      setError(t('Microphone permission is needed to record a voiceover.'))
+      if (system) {
+        share = await captureSystem()
+        stream = new MediaStream(share.getAudioTracks())
+      } else stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+    } catch (e) {
+      const name = (e as Error).name
+      if (system) { if (name !== 'NotAllowedError' && name !== 'AbortError') setError((e as Error).message) }
+      else setError(t('Microphone permission is needed to record a voiceover.'))
       return
     }
     const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
     const mime = types.find((m) => MediaRecorder.isTypeSupported(m))
-    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+    const mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: system ? 192_000 : 128_000 })
     const parts: Blob[] = []
-    const r: Rec = { mr, stream, at: time, start: Date.now(), pausedAt: 0, pausedFor: 0, ctl: { discard: false } }
+    const r: Rec = { mr, stream, system, at: time, start: Date.now(), pausedAt: 0, pausedFor: 0, ctl: { discard: false } }
     mr.ondataavailable = (e) => { if (e.data.size) parts.push(e.data) }
     mr.onstop = async () => {
       stream.getTracks().forEach((tr) => tr.stop())
+      share?.getTracks().forEach((tr) => tr.stop())
       onRecordStop()
       if (r.ctl.discard || !parts.length) return
       const blob = new Blob(parts, { type: mr.mimeType || 'audio/webm' })
+      const name = system ? 'Computer sound' : 'Voice'
       try {
-        const src = await loadSource(blob, `Voice ${new Date().toLocaleTimeString()}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'}`)
-        await add(src, 'voice', 'Voiceover', r.at)
+        const src = await loadSource(blob, `${name} ${new Date().toLocaleTimeString()}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'}`)
+        await add(src, 'voice', system ? 'Computer sound' : 'Voiceover', r.at)
       } catch (e) { setError((e as Error).message) }
     }
+    // sharing stopped from the browser's own bar: keep what was recorded
+    share?.getTracks().forEach((tr) => tr.addEventListener('ended', () => { if (mr.state !== 'inactive') { mr.stop(); setRec(null) } }))
     mr.start(1000)
     setRec(r)
     setNow(Date.now())
@@ -172,7 +202,10 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onR
 
   return (
     <Panel title="Audio" onClose={() => { stopPreview(); if (rec) stopRec(); onClose() }} tall>
-      <Chips options={[{ value: 'music', label: 'Music' }, { value: 'sfx', label: 'Sound effects' }, { value: 'mine', label: 'My audio' }, { value: 'voice', label: 'Record voice' }]} value={tab} onChange={setTab} />
+      <Chips options={[
+        { value: 'mine', label: 'Upload audio file' }, { value: 'voice', label: '🎙 Record voice' }, { value: 'system', label: '🔊 Record computer sound' },
+        { value: 'music', label: 'Music' }, { value: 'sfx', label: 'Sound effects' },
+      ]} value={tab} onChange={(v) => { if (!rec) setTab(v) }} />
       {error && <p className="error-text">{error}</p>}
       {tab === 'music' && (
         <>
@@ -207,14 +240,14 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onR
           <input ref={file} type="file" accept="audio/*,video/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = '' }} />
         </>
       )}
-      {tab === 'voice' && (
+      {(tab === 'voice' || tab === 'system') && (
         <div className="rec">
           {rec ? (
             <>
               <div className={`rec-time${rec.pausedAt ? ' paused' : ''}`}><i className="rec-dot" /> {fmtTime(Math.max(0, recSecs))}</div>
               <div className="mic-meter" aria-label={t('Microphone level')}><span style={{ width: `${Math.min(100, Math.sqrt(level) * 100)}%` }} className={level > 0.95 ? 'loud' : ''} /></div>
               <p className="muted small">{rec.pausedAt ? t('Paused. The video waits too.')
-                : level < 0.02 ? t('Speak now… (no sound yet? check the microphone)') : `${t('Recording into a new audio track from')} ${fmtTime(rec.at)}`}</p>
+                : level < 0.02 ? t(rec.system ? 'Play something on your computer… (no sound yet? check that sound sharing is on)' : 'Speak now… (no sound yet? check the microphone)') : `${t('Recording into a new audio track from')} ${fmtTime(rec.at)}`}</p>
               <div className="row wide">
                 <button className="btn" onClick={() => stopRec(true)}>{t('Discard')}</button>
                 <button className="btn" onClick={togglePause}>{rec.pausedAt ? `▶ ${t('Resume')}` : `❚❚ ${t('Pause')}`}</button>
@@ -223,8 +256,16 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onR
             </>
           ) : (
             <>
-              <button className="rec-btn" onClick={startRec} aria-label="Record"><span /></button>
-              <p className="muted small">{t('Recording starts at the playhead and the video plays muted so you can talk over it.')}</p>
+              {tab === 'system' && !canRecordScreen() ? (
+                <p className="muted small">{t('Computer sound can be recorded in the Windows app or in Chrome / Edge on a computer. Android does not let apps record other apps\' sound: record with your phone\'s screen recorder and add it with Upload audio file.')}</p>
+              ) : (
+                <>
+                  <button className="rec-btn" onClick={() => startRec(tab === 'system')} aria-label="Record"><span /></button>
+                  <p className="muted small">{t(tab === 'system'
+                    ? 'Records the sound playing on your computer (YouTube, a call, a game…). In Chrome pick "Entire screen" and turn on "Share system audio". The video here plays muted.'
+                    : 'Recording starts at the playhead and the video plays muted so you can talk over it.')}</p>
+                </>
+              )}
               <p className="muted small">{t('Playhead')} {fmtTime(time)}</p>
             </>
           )}

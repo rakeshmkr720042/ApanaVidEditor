@@ -78,7 +78,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | null>(null)
-  const [audioTab, setAudioTab] = useState<'music' | 'voice'>('music')
+  const [audioTab, setAudioTab] = useState<'mine' | 'voice'>('mine')
   const [screenRec, setScreenRec] = useState<'screen' | 'camera' | null>(null)
   // new photos/videos/recordings waiting for the user to say where they go
   const [pending, setPending] = useState<{ srcs: MediaSource[]; crop: Crop | null; what: string; dur?: number; cam?: CamBubble | null } | null>(null)
@@ -424,7 +424,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'add', label: 'Add', on: () => mainInput.current?.click() },
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
-      { icon: 'music', label: 'Audio', on: () => { setAudioTab('music'); setPanel('audio') } },
+      { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
       { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'speed', label: 'Speed', on: () => openClipPanel('speed'), disabled: !targetClip },
@@ -566,6 +566,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           onTrimPreview={(id, st) => { if (!player) return; if (id) { player.pause(); player.previewSource(id, st) } else player.endPreviewSource() }}
           onTransition={(id) => { ed.setSel({ type: 'clip', id }); setTransitionFor(id); setPanel('transition') }}
           onAdd={() => mainInput.current?.click()}
+          onAudioTrack={() => { player?.pause(); setAudioTab('mine'); setPanel('audio') }}
           snap={snap}
         />
       )}

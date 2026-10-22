@@ -19,6 +19,8 @@ interface Props {
   onTrimPreview: (clipId: string | null, sourceTime: number) => void
   onTransition: (clipId: string) => void
   onAdd: () => void
+  /** A new audio row was made: offer what to put on it (file, voice, computer sound, music). */
+  onAudioTrack?: () => void
   snap: boolean
 }
 
@@ -44,7 +46,7 @@ function layerLabel(l: Layer) {
   }
 }
 
-export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, snap }: Props) {
+export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, snap }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const lastSet = useRef(-1)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -324,7 +326,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
             {addMenu && (
               <div className="tl-addmenu">
                 <button onClick={() => { ed.addTrack('visual'); setAddMenu(false) }}><Icon name="overlay" size={16} /> {tl('Video track')}</button>
-                <button onClick={() => { ed.addTrack('audio'); setAddMenu(false) }}><Icon name="music" size={16} /> {tl('Audio track')}</button>
+                <button onClick={() => { ed.addTrack('audio'); setAddMenu(false); onAudioTrack?.() }}><Icon name="music" size={16} /> {tl('Audio track')}</button>
               </div>
             )}
           </div>
