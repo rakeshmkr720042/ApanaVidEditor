@@ -339,6 +339,16 @@ const hi: Record<string, string> = {
   // overlay (picture-in-picture)
   'Add overlay': 'ओवरले जोड़ें', 'Size & opacity': 'साइज़ और पारदर्शिता', 'Full screen': 'पूरी स्क्रीन',
   'Top left': 'ऊपर बाएं', 'Top right': 'ऊपर दाएं', 'Bottom left': 'नीचे बाएं', 'Bottom right': 'नीचे दाएं',
+  // noise removal
+  'Remove noise': 'शोर हटाएं', 'Medium': 'मध्यम', 'Strong': 'तेज़', 'Voice (AI)': 'आवाज़ (AI)', 'Music & other sounds': 'म्यूज़िक और बाकी आवाज़ें',
+  'Keeps only speech: removes fans, traffic, crowd, keyboard, wind.': 'सिर्फ़ बोली रखता है: पंखा, ट्रैफ़िक, भीड़, कीबोर्ड, हवा का शोर हटाता है।',
+  'Turns down steady noise (hiss, fan, AC, room hum) and keeps music.': 'लगातार चलने वाला शोर (सनसनाहट, पंखा, AC) कम करता है और म्यूज़िक रखता है।',
+  'Electric hum': 'बिजली की भनभनाहट', '50 Hz (India)': '50 Hz (भारत)', 'Cut low rumble (wind, AC, traffic)': 'भारी गड़गड़ाहट काटें (हवा, AC, ट्रैफ़िक)',
+  'Quieter between words': 'शब्दों के बीच और शांत', 'Cleaning the sound…': 'आवाज़ साफ़ हो रही है…',
+  'Could not clean this sound. The original sound is used.': 'यह आवाज़ साफ़ नहीं हो पाई। असली आवाज़ ही चलेगी।',
+  'Listen': 'सुनें', 'Cleaned': 'साफ़', 'Original': 'असली', 'Apply to all clips': 'सब क्लिप पर लगाएं',
+  'Removes background noise from this sound. Your file is not changed; turn it off any time.': 'इस आवाज़ से पीछे का शोर हटाता है। आपकी फ़ाइल नहीं बदलती, कभी भी बंद कर सकते हैं।',
+  'Remove background noise': 'पीछे का शोर हटाएं',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

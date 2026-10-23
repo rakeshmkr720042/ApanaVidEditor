@@ -406,12 +406,12 @@ export function useEditor(initial: Project) {
     return l
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const addAudio = useCallback((t: number, src: MediaSource, kind: AudioLayer['kind'], label: string) => {
+  const addAudio = useCallback((t: number, src: MediaSource, kind: AudioLayer['kind'], label: string, extra?: Partial<AudioLayer>) => {
     const tot = total()
     const start = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
     const l: AudioLayer = {
       id: uid(), type: 'audio', sourceId: src.id, in: 0, start, end: Math.min(start + src.duration, tot > 0 ? tot : start + src.duration),
-      volume: kind === 'music' ? 0.6 : 1, fadeIn: kind === 'music' ? 1 : 0, fadeOut: kind === 'music' ? 2 : 0, label, kind,
+      volume: kind === 'music' ? 0.6 : 1, fadeIn: kind === 'music' ? 1 : 0, fadeOut: kind === 'music' ? 2 : 0, label, kind, ...extra,
     }
     addLayer(l)
     return l

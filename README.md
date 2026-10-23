@@ -16,6 +16,9 @@ blur or pixelate areas, picture-in-picture overlays with masks, borders and gree
 
 **Audio**: 18 royalty-free music tracks and 12 sound effects generated on the device (no downloads, no licences),
 import your own audio, record voice-over, per-clip and per-track volume and fade in/out, transition crossfades.
+**Remove noise** on a clip, overlay video or audio track: AI voice cleaner (RNNoise) or a steady-noise reducer that keeps
+music, Light/Medium/Strong, 50/60 Hz hum and low-rumble filters, a gate between words, and a Cleaned/Original switch.
+Works offline and never changes the file; voice recordings get it by default.
 
 **Text**: text overlays with 18 fonts (Latin and Hindi/Devanagari), styles, outline, background and in/out animations,
 subtitles with SRT import and export, stickers. One-tap motion titles: Typewriter, Bounce In, Slide In Left/Right, Fade In,
