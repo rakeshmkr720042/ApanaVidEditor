@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Editor } from '../model/useEditor'
-import type { MediaSource } from '../types'
+import type { AudioLayer, MediaSource } from '../types'
 import { encodeWav, MUSIC, renderSfx, renderTrack, SFX } from '../engine/music'
 import { loadSource, sharedAudioContext } from '../lib/media'
 import { saveMedia } from '../lib/db'
 import { fmtTime } from '../lib/format'
-import { Chips, Panel } from '../ui/kit'
+import { Chips, Panel, Toggle } from '../ui/kit'
+import { DEFAULT_DENOISE } from '../engine/denoise'
 import { t } from '../lib/i18n'
 import { desktop } from '../lib/desktop'
 import { canRecordScreen } from '../lib/screenrec'
@@ -22,6 +23,8 @@ interface Props {
 }
 
 interface Rec { mr: MediaRecorder; stream: MediaStream; system: boolean; at: number; start: number; pausedAt: number; pausedFor: number; ctl: { discard: boolean } }
+
+const recDenoise = () => { try { return localStorage.getItem('rec-denoise') !== 'off' } catch { return true } }
 
 const rendered = new Map<string, Promise<AudioBuffer>>()
 const render = (id: string, sfx: boolean) => {
@@ -43,6 +46,9 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onR
   const [error, setError] = useState<string | null>(null)
   const recRef = useRef<Rec | null>(null)
   recRef.current = rec
+  // mic recordings get background-noise removal unless it was switched off (remembered)
+  const [cleanRec, setCleanRec] = useState(recDenoise)
+  const toggleCleanRec = (v: boolean) => { setCleanRec(v); try { localStorage.setItem('rec-denoise', v ? 'on' : 'off') } catch { /* private mode */ } }
 
   useEffect(() => () => {
     node.current?.stop()
@@ -96,10 +102,10 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onR
     setPlaying(id)
   }
 
-  const add = async (src: MediaSource, kind: 'music' | 'sound' | 'voice', label: string, at = time) => {
+  const add = async (src: MediaSource, kind: 'music' | 'sound' | 'voice', label: string, at = time, extra?: Partial<AudioLayer>) => {
     ed.addSource(src)
     await saveMedia(src)
-    ed.addAudio(at, src, kind, label)
+    ed.addAudio(at, src, kind, label, extra)
   }
 
   const addGenerated = async (id: string, sfx: boolean, name: string) => {
@@ -168,7 +174,7 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onR
       const name = system ? 'Computer sound' : 'Voice'
       try {
         const src = await loadSource(blob, `${name} ${new Date().toLocaleTimeString()}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'}`)
-        await add(src, 'voice', system ? 'Computer sound' : 'Voiceover', r.at)
+        await add(src, 'voice', system ? 'Computer sound' : 'Voiceover', r.at, !system && recDenoise() ? { denoise: DEFAULT_DENOISE } : undefined)
       } catch (e) { setError((e as Error).message) }
     }
     // sharing stopped from the browser's own bar: keep what was recorded
@@ -264,6 +270,7 @@ export function AudioPanel({ ed, time, onClose, onRecordStart, onRecordStop, onR
                   <p className="muted small">{t(tab === 'system'
                     ? 'Records the sound playing on your computer (YouTube, a call, a game…). In Chrome pick "Entire screen" and turn on "Share system audio". The video here plays muted.'
                     : 'Recording starts at the playhead and the video plays muted so you can talk over it.')}</p>
+                  {tab === 'voice' && <Toggle label="Remove background noise" value={cleanRec} onChange={toggleCleanRec} />}
                 </>
               )}
               <p className="muted small">{t('Playhead')} {fmtTime(time)}</p>
