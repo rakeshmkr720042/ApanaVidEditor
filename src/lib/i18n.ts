@@ -372,6 +372,7 @@ const hi: Record<string, string> = {
   'Top left': 'ऊपर बाएं', 'Top right': 'ऊपर दाएं', 'Bottom left': 'नीचे बाएं', 'Bottom right': 'नीचे दाएं',
   // noise removal
   'Remove noise': 'शोर हटाएं', 'Medium': 'मध्यम', 'Strong': 'तेज़', 'Voice (AI)': 'आवाज़ (AI)', 'Music & other sounds': 'म्यूज़िक और बाकी आवाज़ें',
+  'Detach audio': 'ऑडियो अलग करें', 'No sound to detach: the video is muted (volume 0) or its track is locked': 'अलग करने को आवाज़ नहीं: वीडियो म्यूट है (वॉल्यूम 0) या उसका ट्रैक लॉक है', 'Audio detached to its own audio track': 'ऑडियो अलग होकर अपने ऑडियो ट्रैक पर आ गया', 'The video is now silent; Undo puts it back.': 'वीडियो अब बिना आवाज़ का है; Undo से वापस हो जाएगा।',
   'Keeps only speech: removes fans, traffic, crowd, keyboard, wind.': 'सिर्फ़ बोली रखता है: पंखा, ट्रैफ़िक, भीड़, कीबोर्ड, हवा का शोर हटाता है।',
   'Turns down steady noise (hiss, fan, AC, room hum) and keeps music.': 'लगातार चलने वाला शोर (सनसनाहट, पंखा, AC) कम करता है और म्यूज़िक रखता है।',
   'Electric hum': 'बिजली की भनभनाहट', '50 Hz (India)': '50 Hz (भारत)', 'Cut low rumble (wind, AC, traffic)': 'भारी गड़गड़ाहट काटें (हवा, AC, ट्रैफ़िक)',
