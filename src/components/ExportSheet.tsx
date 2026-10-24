@@ -7,10 +7,11 @@ import { resetFFmpeg } from '../lib/ffmpeg'
 import { isNative, saveNative } from '../lib/save'
 import { layoutClips } from '../model/timeline'
 import { fmtTime } from '../lib/format'
-import { Chips, Slider, Toggle } from '../ui/kit'
+import { Chips, Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { youTubeMode } from '../lib/youtube'
 import { YouTubeSheet } from './YouTubeSheet'
+import { CompressSheet } from './CompressSheet'
 
 interface Props {
   project: Project
@@ -70,6 +71,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [youtube, setYoutube] = useState<Result | null>(null)
+  const [compress, setCompress] = useState<Result | null>(null)
   const abort = useRef<AbortController | null>(null)
 
   useEffect(() => () => results.forEach((r) => URL.revokeObjectURL(r.url)), [results])
@@ -151,6 +153,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
     <div className="sheet-backdrop" onClick={running ? undefined : onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} disabled={!!running} />
         {running ? (
           <>
             <h2>{running.n > 1 ? `${running.i + 1}/${running.n} · ` : ''}{t(running.label)}</h2>
@@ -236,6 +239,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
                   <button className="btn primary" onClick={() => save(r)}>{t('Save')}</button>
                   {canShare && <button className="btn" onClick={() => share(r)}>{t('Share')}</button>}
                   {r.cover && <button className="btn" onClick={() => saveCover(r)}>{t('Cover')}</button>}
+                  {r.blob.type === 'video/mp4' || r.blob.type === 'video/quicktime' || r.blob.type === 'video/webm' ? <button className="btn" onClick={() => setCompress(r)}>{t('Compress')}</button> : null}
                   {youTubeMode() && r.blob.type.startsWith('video') && <button className="btn" onClick={() => setYoutube(r)}>YouTube</button>}
                 </div>
               </div>
@@ -244,6 +248,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
         )}
         {toast && <p className="muted small">{toast}</p>}
         {!running && <button className="btn wide ghost" onClick={onClose}>{t('Close')}</button>}
+        {compress && <CompressSheet file={new File([compress.blob], compress.file, { type: compress.blob.type })} onClose={() => setCompress(null)} />}
         {youtube && <YouTubeSheet blob={youtube.blob} cover={youtube.cover} title={name} onClose={() => setYoutube(null)} />}
       </div>
     </div>

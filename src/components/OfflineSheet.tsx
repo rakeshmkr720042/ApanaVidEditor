@@ -7,6 +7,7 @@ import { storageEstimate } from '../lib/db'
 import { localAI } from '../lib/localai'
 import { voiceCloneSpace } from '../engine/voiceclone'
 import { t } from '../lib/i18n'
+import { SheetClose } from '../ui/kit'
 
 interface Model { id: string; kind: ModelKind; label: string; size: string }
 
@@ -86,6 +87,7 @@ export function OfflineSheet({ onClose }: { onClose: () => void }) {
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet offline-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} disabled={!!busy} />
         <h2>{t('Offline & online')}</h2>
         <p className={`small ${online ? 'ok-text' : 'warn'}`}>{online ? t('You are online.') : t('You are offline. Everything marked ✓ still works.')}</p>
 

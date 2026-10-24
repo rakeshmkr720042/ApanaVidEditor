@@ -1,11 +1,11 @@
 import type { Editor } from '../model/useEditor'
 import { trackName } from '../model/tracks'
-import { Slider, Toggle } from '../ui/kit'
+import { Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { Icon } from './Icon'
 
 /** Everything for one track row: name, show, sound, lock, volume, order and delete. */
-export function TrackSheet({ ed, id, onClose }: { ed: Editor; id: string; onClose: () => void }) {
+export function TrackSheet({ ed, id, onClose, onSelectAll }: { ed: Editor; id: string; onClose: () => void; onSelectAll?: (firstId: string) => void }) {
   const tracks = ed.project.tracks ?? []
   const tr = tracks.find((x) => x.id === id)
   if (!tr) return null
@@ -27,6 +27,7 @@ export function TrackSheet({ ed, id, onClose }: { ed: Editor; id: string; onClos
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet track-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} />
         <h2>{name} <button className="link" onClick={rename}>{t('Rename')}</button></h2>
         <p className="muted small">{items.length} {t('items')} · {tr.kind === 'audio' ? t('Audio track') : t('Video track')}</p>
         {tr.kind === 'visual' && <Toggle label="Show on video" value={!tr.hidden} onChange={(v) => ed.updateTrack(id, { hidden: !v })} />}
@@ -35,6 +36,11 @@ export function TrackSheet({ ed, id, onClose }: { ed: Editor; id: string; onClos
         {sound && (
           <Slider label="Track volume" value={tr.volume ?? 1} min={0} max={2} step={0.05} format={(v) => `${Math.round(v * 100)}%`}
             onStart={ed.begin} onEnd={ed.end} onChange={(v) => ed.updateTrack(id, { volume: v })} />
+        )}
+        {onSelectAll && (
+          <button className="btn wide" disabled={!items.length || tr.locked} onClick={() => { const first = [...items].sort((a, b) => a.start - b.start)[0]; onClose(); onSelectAll(first.id) }}>
+            <Icon name="selectAll" size={18} /> {t('Select everything on this track')} ({items.length})
+          </button>
         )}
         <div className="track-actions">
           <button className="btn" disabled={pos <= 0} onClick={() => ed.moveTrack(id, -1)}><Icon name="up" size={18} /> {t('Move up')}</button>

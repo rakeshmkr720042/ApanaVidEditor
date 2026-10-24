@@ -5,6 +5,7 @@ import {
 } from '../lib/feedback'
 import { t } from '../lib/i18n'
 import { Icon } from './Icon'
+import { SheetClose } from '../ui/kit'
 
 type Show = 'open' | 'done' | 'all'
 
@@ -65,6 +66,7 @@ export function FeedbackSheet({ where, onClose }: { where?: string; onClose: (op
     <div className="sheet-backdrop" onClick={close}>
       <div className="sheet feedback" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={close} />
         <h2>{t('Testing notes')}</h2>
         <p className="muted small">{t('Found a problem or want something new? Write it here while you test, so it is not forgotten. Notes stay on this device until you send them.')}</p>
 
