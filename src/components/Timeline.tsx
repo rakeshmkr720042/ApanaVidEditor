@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Clip, Layer } from '../types'
 import { MIN_CLIP } from '../types'
-import type { Editor } from '../model/useEditor'
+import type { Editor, Selection } from '../model/useEditor'
 import { clipDuration, IMAGE_DURATION, layerSpeed } from '../model/timeline'
 import { trackKind, trackName } from '../model/tracks'
 import { keysOf } from '../model/keyframes'
@@ -22,16 +22,21 @@ interface Props {
   /** A new audio row was made: offer what to put on it (file, voice, computer sound, music). */
   onAudioTrack?: () => void
   snap: boolean
+  /** Swap is waiting for a second item: taps pick it instead of selecting. */
+  picking?: Selection
+  onPicked?: (s: NonNullable<Selection>) => void
 }
 
 const SNAP_PX = 10
+const EDGE_PX = 48 // dragging a clip this close to the timeline's side scrolls it
 const LANE = 34 // height of one track row
 
 type Drag =
   | { kind: 'clip-trim'; id: string; side: 'in' | 'out'; x0: number; in0: number; out0: number; speed: number }
   | { kind: 'layer-trim'; id: string; side: 'in' | 'out'; x0: number; start0: number; end0: number; in0: number; speed: number }
   | { kind: 'layer-move'; id: string; x0: number; y0: number; start0: number; end0: number; moved: boolean }
-  | { kind: 'reorder'; id: string; x: number; to: number }
+  // slot: the gap the clip is over (k = before clip k); to: its new index once taken out
+  | { kind: 'reorder'; id: string; x0: number; x: number; y: number; slot: number; to: number; moved: boolean }
 
 const LAYER_COLORS: Record<Layer['type'], string> = { text: '#8b5cf6', sticker: '#f59e0b', media: '#14b8a6', blur: '#64748b', audio: '#22c55e', wave: '#0ea5e9' }
 
@@ -46,7 +51,7 @@ function layerLabel(l: Layer) {
   }
 }
 
-export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, snap }: Props) {
+export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, snap, picking, onPicked }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const lastSet = useRef(-1)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -190,6 +195,41 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     if (pointers.current.size < 2) pinch.current = null
   }
 
+  // ----- main track reorder: the gap under the pointer, and scrolling while held near a side
+  const slotAt = (clientX: number) => {
+    const track = scroller.current!.querySelector('.tl-track') as HTMLElement
+    const x = clientX - track.getBoundingClientRect().left
+    let k = 0
+    for (const it of layout.items) if (x > (it.start + it.dur / 2) * pps) k = it.index + 1
+    return k
+  }
+  const toOf = (id: string, slot: number) => {
+    const from = project.clips.findIndex((c) => c.id === id)
+    return slot > from ? slot - 1 : slot
+  }
+  const edge = useRef(0)
+  const reordering = drag?.kind === 'reorder' && drag.moved
+  useEffect(() => {
+    if (!reordering) return
+    const id = setInterval(() => {
+      const d = dragRef.current
+      if (!edge.current || d?.kind !== 'reorder') return
+      scroller.current!.scrollLeft += edge.current * 14
+      const slot = slotAt(d.x)
+      if (slot !== d.slot) setDrag({ ...d, slot, to: toOf(d.id, slot) })
+    }, 30)
+    return () => { clearInterval(id); edge.current = 0 }
+  }, [reordering]) // eslint-disable-line react-hooks/exhaustive-deps
+  // a finger that held still for the long press must not start scrolling the timeline when it moves
+  useEffect(() => {
+    const stop = (e: TouchEvent) => {
+      const d = dragRef.current
+      if (e.cancelable && (d?.kind === 'reorder' || (d?.kind === 'layer-move' && d.moved))) e.preventDefault()
+    }
+    window.addEventListener('touchmove', stop, { passive: false })
+    return () => window.removeEventListener('touchmove', stop)
+  }, [])
+
   const capture = (e: React.PointerEvent) => { e.stopPropagation(); (e.currentTarget as Element).setPointerCapture(e.pointerId) }
 
   // ----- main track trimming
@@ -202,7 +242,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
   const onMove = (e: React.PointerEvent) => {
     const d = dragRef.current
     if (!d) return
-    const dt = (e.clientX - (d.kind === 'reorder' ? 0 : d.x0)) / pps
+    const dt = (e.clientX - d.x0) / pps
     if (d.kind === 'clip-trim') {
       const c = project.clips.find((x) => x.id === d.id)!
       const src = sources[c.sourceId]
@@ -249,13 +289,12 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       const track = row && row.kind === trackKind(l) && !row.locked ? row.id : l.track
       ed.updateLayer(d.id, { start, end: start + len, track })
     } else if (d.kind === 'reorder') {
-      const track = scroller.current!.querySelector('.tl-track') as HTMLElement
-      const x = e.clientX - track.getBoundingClientRect().left
-      let to = 0
-      for (const it of layout.items) if (x > (it.start + it.dur / 2) * pps) to = it.index + 1
-      const from = project.clips.findIndex((c) => c.id === d.id)
-      if (to > from) to -= 1
-      setDrag({ ...d, x: e.clientX, to })
+      if (!d.moved && Math.abs(e.clientX - d.x0) < 6) return
+      const slot = slotAt(e.clientX)
+      setDrag({ ...d, moved: true, x: e.clientX, y: e.clientY, slot, to: toOf(d.id, slot) })
+      const r = scroller.current!.getBoundingClientRect()
+      const left = (scroller.current!.querySelector('.tl-heads') as HTMLElement | null)?.getBoundingClientRect().right ?? r.left
+      edge.current = e.clientX < left + EDGE_PX ? -1 : e.clientX > r.right - EDGE_PX ? 1 : 0
     }
   }
 
@@ -267,7 +306,14 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     setSnapLine(null)
     if (d.kind === 'clip-trim') { ed.end(); onTrimPreview(null, 0) }
     else if (d.kind === 'layer-trim' || (d.kind === 'layer-move' && d.moved)) { ed.settleLayer(d.id); ed.end() }
-    else if (d.kind === 'reorder') ed.moveClip(d.id, d.to)
+    else if (d.kind === 'reorder' && d.moved) {
+      // land on the moved clip's new start (the timeline may have scrolled while dragging)
+      const at = ed.moveClip(d.id, d.to)
+      const el = scroller.current!
+      el.scrollLeft = (at ?? t) * pps
+      lastSet.current = el.scrollLeft
+      if (at !== null) onScrub(at)
+    }
   }
 
   // ----- lanes for overlay layers
@@ -279,7 +325,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
 
   return (
     <div
-      className="timeline"
+      className={`timeline${picking ? ' picking' : ''}`}
       onPointerDown={onPointerDownWrap}
       onPointerMove={(e) => { onPointerMoveWrap(e); onMove(e) }}
       onPointerUp={(e) => { onPointerUpWrap(e); onUp() }}
@@ -343,7 +389,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
               const src = sources[clip.sourceId]
               if (!src) return null
               const selected = sel?.type === 'clip' && sel.id === clip.id
-              const reordering = drag?.kind === 'reorder' && drag.id === clip.id
+              const reordering = drag?.kind === 'reorder' && drag.moved && drag.id === clip.id
               const speed = clip.ramp ? (clip.out - clip.in) / clipDuration(clip) : clip.speed
               const isImg = src.kind === 'image'
               const thumbW = isImg ? 56 : (src.duration * pps) / speed / src.thumbs.length
@@ -353,18 +399,26 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                   key={clip.id}
                   className={`tl-clip${selected ? ' selected' : ''}${reordering ? ' ghost' : ''}${mainLocked ? ' locked' : ''}`}
                   style={{ left: it.start * pps + shift, width: it.dur * pps }}
-                  onClick={(e) => { e.stopPropagation(); if (!mainLocked) ed.setSel({ type: 'clip', id: clip.id }) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (picking) onPicked?.({ type: 'clip', id: clip.id })
+                    else if (!mainLocked) ed.setSel({ type: 'clip', id: clip.id })
+                  }}
                   onPointerDown={(e) => {
-                    if (pointers.current.size > 1 || mainLocked) return
-                    const x = e.clientX
+                    if (pointers.current.size > 1 || mainLocked || picking || project.clips.length < 2) return
+                    const x = e.clientX, y = e.clientY
+                    const start: Drag = { kind: 'reorder', id: clip.id, x0: x, x, y, slot: it.index, to: it.index, moved: false }
+                    // the selected clip moves as soon as it is dragged (finger or mouse)
+                    if (selected) { capture(e); setDrag(start); return }
+                    // any other clip: hold it, then drag
                     const pid = e.pointerId
                     const target = e.currentTarget
                     clearTimeout(longPress.current)
                     longPress.current = window.setTimeout(() => {
-                      if (project.clips.length < 2) return
                       target.setPointerCapture(pid)
                       navigator.vibrate?.(20)
-                      setDrag({ kind: 'reorder', id: clip.id, x, to: it.index })
+                      ed.setSel({ type: 'clip', id: clip.id })
+                      setDrag({ ...start, moved: true })
                     }, 450)
                   }}
                   onPointerMove={(e) => { if (!dragRef.current && Math.abs(e.movementX) + Math.abs(e.movementY) > 3) clearTimeout(longPress.current) }}
@@ -406,6 +460,9 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                 {it.clip.transition ? '⧖' : '⇄'}
               </button>
             ))}
+            {drag?.kind === 'reorder' && drag.moved && (
+              <div className="tl-drop" style={{ left: (layout.items[drag.slot]?.start ?? total) * pps }} />
+            )}
             <button className="tl-add" style={{ left: width + 16 }} onClick={(e) => { e.stopPropagation(); onAdd() }} aria-label="Add media">+</button>
           </div>
           <div className="tl-lanes" ref={lanesRef} style={{ height: tracks.length * LANE }}>
@@ -422,9 +479,13 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                   key={l.id}
                   className={`tl-layer${selected ? ' selected' : ''}${group ? ' group' : ''}${locked ? ' locked' : ''}${row?.hidden ? ' hidden' : ''}`}
                   style={{ left: l.start * pps, width: Math.max(4, (l.end - l.start) * pps), top: lane * LANE + 3, background: LAYER_COLORS[l.type] }}
-                  onClick={(e) => { e.stopPropagation(); if (!locked) ed.setSel({ type: 'layer', id: l.id }) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (picking) onPicked?.({ type: 'layer', id: l.id })
+                    else if (!locked) ed.setSel({ type: 'layer', id: l.id })
+                  }}
                   onPointerDown={(e) => {
-                    if (!selected || locked || pointers.current.size > 1) return
+                    if (!selected || locked || picking || pointers.current.size > 1) return
                     capture(e)
                     setDrag({ kind: 'layer-move', id: l.id, x0: e.clientX, y0: e.clientY, start0: l.start, end0: l.end, moved: false })
                   }}
@@ -452,7 +513,17 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
         <div className="tl-pad" />
       </div>
       <div className="tl-playhead" />
-      {drag?.kind === 'reorder' && <div className="tl-reorder-hint">Move to position {drag.to + 1}</div>}
+      {drag?.kind === 'reorder' && drag.moved && (() => {
+        const c = project.clips.find((x) => x.id === drag.id)
+        const src = c && sources[c.sourceId]
+        return <>
+          <div className="tl-reorder-hint">{tl('Move to position')} {drag.to + 1} / {project.clips.length}</div>
+          <div className="tl-drag-ghost" style={{ left: drag.x, top: drag.y }}>
+            {src?.thumbs[0] && <img src={src.thumbs[0]} alt="" draggable={false} />}
+            <b>{drag.to + 1}</b>
+          </div>
+        </>
+      })()}
       {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} />}
     </div>
   )

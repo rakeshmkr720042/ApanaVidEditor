@@ -15,7 +15,7 @@ export function lastPlacement(): Placement {
 
 const OPTIONS: { value: Placement; icon: IconName; label: string; hint: string }[] = [
   { value: 'track', icon: 'overlay', label: 'Track at the playhead', hint: 'Shows over the main video, full frame, on the track you picked (or a new one). Drag, trim or Replace it any time.' },
-  { value: 'playhead', icon: 'split', label: 'Main video at the playhead', hint: 'The clip under the playhead is split and this goes in between.' },
+  { value: 'playhead', icon: 'split', label: 'Main video at the playhead', hint: 'The clip under the playhead is split and this goes in between. On the line between two clips, it goes between them (no split).' },
   { value: 'start', icon: 'toStart', label: 'Main video at the start', hint: 'Plays before everything else.' },
   { value: 'end', icon: 'toEnd', label: 'Main video at the end', hint: 'Plays after everything else.' },
 ]

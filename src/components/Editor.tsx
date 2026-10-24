@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
-import { isSub, useEditor, type CamBubble, type Placed, type Placement } from '../model/useEditor'
+import { isSub, useEditor, type CamBubble, type Placed, type Placement, type Selection } from '../model/useEditor'
 import { Player } from '../engine/player'
 import { activeAt } from '../model/timeline'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
@@ -31,6 +31,7 @@ import { FeedbackSheet } from './FeedbackSheet'
 import { playable } from '../model/tracks'
 import { atTime } from '../model/keyframes'
 import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../panels/LayerTools'
+import { ClipOrderPanel, type OrderMode } from '../panels/ClipOrderPanel'
 
 const SKIP = 5 // seconds jumped by fast backward / forward
 const RATES = [1, 1.5, 2, 4, 0.5]
@@ -59,7 +60,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
   | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'order' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -87,6 +88,13 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const overlayInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const replaceInput = useRef<HTMLInputElement>(null)
+  // new photos/videos picked to go into the main video between two clips, at this position
+  const insertInput = useRef<HTMLInputElement>(null)
+  const insertAt = useRef(0)
+  const pickInsert = (at: number) => { insertAt.current = at; insertInput.current?.click() }
+  const [orderMode, setOrderMode] = useState<OrderMode>('move')
+  // Swap: the clip or track item waiting for the user to tap the one to trade places with
+  const [swapFrom, setSwapFrom] = useState<Selection>(null)
   const slideOpts = useRef<SlideshowOptions>(defaultSlideshow())
   const pickPhotos = (o: SlideshowOptions) => { slideOpts.current = o; photoInput.current?.click() }
 
@@ -190,7 +198,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     else { player?.pause(); setPending({ srcs, crop, what, dur, cam }) }
   }
 
-  const importFiles = async (files: FileList | File[], target: 'main' | 'overlay' | 'slides') => {
+  const importFiles = async (files: FileList | File[], target: 'main' | 'overlay' | 'slides' | 'insert') => {
     const list = [...files]
     if (!list.length) return
     setImporting((n) => n + list.length)
@@ -198,7 +206,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     for (const f of list) {
       try {
         const src = await loadSource(f, f.name)
-        if (src.kind === 'audio' && target === 'main') {
+        if (src.kind === 'audio' && (target === 'main' || target === 'insert')) {
           ed.addSource(src); await saveMedia(src)
           const a = ed.addAudio(time, src, 'music', f.name.replace(/\.[^.]+$/, ''))
           setToast(`${t('Audio')} ${t('added')} ${t('on a new track at')} ${fmtTime(a.start)}`)
@@ -224,6 +232,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         setToast(`${photos.length} ${t('photos added to the slideshow in the main video')}`)
       }
     } else if (target === 'main') addVisual(added, null, describe(added))
+    else if (target === 'insert') {
+      const placed = ed.place(added, 'playhead', time, { at: insertAt.current })
+      announce(placed, describe(added))
+      if (placed) setToast(`${describe(added)} ${t('added')} ${t('between clips')} ${insertAt.current} ${t('and')} ${insertAt.current + 1} (${fmtTime(placed.start)})`)
+    }
     else for (const s of added) {
       const l = ed.addOverlay(time, s)
       announce({ sel: { type: 'layer', id: l.id }, start: l.start, where: 'track', cut: false }, t('Overlay'))
@@ -289,6 +302,21 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   })
 
   const sel = ed.sel
+
+  /** Second tap of Swap: trades places with the clip or track item tapped. */
+  const swapWith = (target: NonNullable<Selection>) => {
+    const from = swapFrom
+    setSwapFrom(null)
+    if (!from || target.id === from.id) return
+    if (from.type === 'clip' && target.type === 'clip') {
+      const at = ed.swapClips(from.id, target.id)
+      if (at !== null) { seek(at); setToast(t('Clips swapped')) }
+    } else if (from.type === 'layer' && target.type === 'layer') {
+      if (ed.swapLayers(from.id, target.id)) setToast(t('Swapped'))
+      else setToast(t('Pick an item of the same kind (video/photo/text with each other, audio with audio)'))
+    } else setToast(t('A main-video clip can only swap with another main-video clip'))
+    ed.setSel(from)
+  }
   // Delete with every caption selected removes them all, so check first
   const removeSel = () => {
     if (sel?.type === 'layer' && sel.all && !confirm(`${t('Delete all captions?')} (${ed.project.layers.filter(isSub).length})`)) return
@@ -362,6 +390,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     tools = [
       // a video/photo on top of this one (picture-in-picture), at the playhead
       { icon: 'overlay', label: 'Add overlay', on: () => overlayInput.current?.click() },
+      { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); setPanel('order') }, disabled: ed.project.clips.length < 2 },
+      { icon: 'swap', label: 'Swap', on: () => { setPanel(null); setSwapFrom({ type: 'clip', id: selClip.id }) }, disabled: ed.project.clips.length < 2, active: swapFrom?.id === selClip.id },
+      { icon: 'insert', label: 'Insert after', on: () => pickInsert(ed.project.clips.findIndex((c) => c.id === selClip.id) + 1) },
       ...(photo ? [{ icon: 'image', label: 'Photo', on: () => setPanel('photo') } as Tool] : []),
       { icon: 'replace', label: 'Replace', on: () => replaceInput.current?.click() },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
@@ -379,6 +410,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   } else if (selLayer) {
     const common: Tool[] = [
       ...(selLayer.type !== 'audio' ? [{ icon: 'layers', label: 'Layer order', on: () => setPanel('arrange') } as Tool] : []),
+      { icon: 'swap', label: 'Swap', on: () => { setPanel(null); setSwapFrom({ type: 'layer', id: selLayer.id }) }, active: swapFrom?.id === selLayer.id },
       ...('box' in selLayer ? [{ icon: 'keyframe', label: 'Keyframes', on: () => setPanel('keys'), active: !!selLayer.keys?.length } as Tool] : []),
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
@@ -420,7 +452,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     }[selLayer.type]
     // an overlay's own tools come first, then where it sits (order, keyframes), then the rest
     tools = selLayer.type === 'media'
-      ? [...specific.slice(0, 4), ...common.slice(0, 2), ...specific.slice(4), ...common.slice(2)]
+      ? [...specific.slice(0, 4), ...common.slice(0, 3), ...specific.slice(4), ...common.slice(3)]
       : [...capsAll, ...specific, ...common]
   } else {
     // everyday editing first (Add, Overlay, Text...), the "... to video" makers after, so Overlay is never off-screen
@@ -428,6 +460,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'add', label: 'Add', on: () => mainInput.current?.click() },
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
+      { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); openClipPanel('order') }, disabled: !targetClip || ed.project.clips.length < 2 },
       { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
       { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
@@ -474,6 +507,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     panelView = <TextPanel key={panel} ed={ed} layer={selLayer} onClose={closePanel} startTab={panel === 'text' ? 'edit' : panel === 'text-style' ? 'style' : 'anim'} />
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
   else if ((panel === 'overlay' || panel === 'chroma') && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} chroma={panel === 'chroma'} onClose={closePanel} />
+  else if (panel === 'order' && selClip) panelView = (
+    <ClipOrderPanel key={orderMode} ed={ed} clip={selClip} start={orderMode} onPick={(id) => ed.setSel({ type: 'clip', id })}
+      onSeek={seek} onInsert={pickInsert} onClose={closePanel} />
+  )
   else if (panel === 'arrange' && selLayer) panelView = <ArrangePanel ed={ed} layer={selLayer} onToast={setToast} onClose={closePanel} />
   else if (panel === 'keys' && selLayer) panelView = <KeyframePanel ed={ed} layer={selLayer} time={time} onSeek={seek} onClose={closePanel} />
   else if (panel === 'media-anim' && selLayer?.type === 'media') panelView = <MediaAnimPanel ed={ed} layer={selLayer} onClose={closePanel} />
@@ -574,7 +611,15 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           onAdd={() => mainInput.current?.click()}
           onAudioTrack={() => { player?.pause(); setAudioTab('mine'); setPanel('audio') }}
           snap={snap}
+          picking={swapFrom} onPicked={swapWith}
         />
+      )}
+      {swapFrom && (
+        <div className="swap-bar">
+          <Icon name="swap" size={18} />
+          <span>{t(swapFrom.type === 'clip' ? 'Tap the clip to swap with' : 'Tap the item to swap with')}</span>
+          <button className="btn small" onClick={() => setSwapFrom(null)}>{t('Cancel')}</button>
+        </div>
       )}
 
       <nav className="tools" onWheel={toolsWheel}>
@@ -598,6 +643,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       <input ref={mainInput} type="file" accept="video/*,image/*,audio/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'main'); e.target.value = '' }} />
       <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'slides'); e.target.value = '' }} />
       <input ref={replaceInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) replaceWith(f); e.target.value = '' }} />
+      <input ref={insertInput} type="file" accept="video/*,image/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'insert'); e.target.value = '' }} />
       <input ref={overlayInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'overlay'); e.target.value = '' }} />
 
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}

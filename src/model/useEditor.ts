@@ -120,9 +120,10 @@ export function useEditor(initial: Project) {
    * The one rule for adding photos, videos and recordings: on a new track at the playhead (a full-frame overlay
    * above the main video), or into the main video at the playhead (splitting the clip there), start or end.
    * Several files go one after another. An empty project always gets them as its main video.
+   * `at` puts them into the main video between clips at that position instead of at the playhead (no split).
    * A camera bubble recorded with a screen recording goes on its own row in front, starting with it (same undo step).
    */
-  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop']; dur?: number; cam?: CamBubble | null }): Placed | null => {
+  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop']; dur?: number; cam?: CamBubble | null; at?: number }): Placed | null => {
     const photoDur = patch?.dur ?? 3
     const p = ref.current
     const visual = srcs.filter((s) => s.kind !== 'audio')
@@ -173,7 +174,8 @@ export function useEditor(initial: Project) {
     const clips = visual.map((s) => ({ ...newClip(s, uid()), ...(s.kind === 'image' ? { out: photoDur } : {}), ...(patch?.crop ? { crop: patch.crop } : {}) }))
     let list = [...p.clips]
     let idx = mode === 'start' ? 0 : list.length
-    if (mode === 'playhead') {
+    if (mode === 'playhead' && patch?.at !== undefined) idx = Math.max(0, Math.min(list.length, patch.at))
+    else if (mode === 'playhead') {
       const { items } = layoutClips(list)
       const it = items.find((x) => t >= x.start && t < x.start + x.dur) ?? items[items.length - 1]
       const local = t - it.start
@@ -495,14 +497,57 @@ export function useEditor(initial: Project) {
     setSel({ type: 'clip', id: right.id })
   }, [h, sel])
 
-  const moveClip = useCallback((id: string, to: number) => {
+  /** Moves a main-video clip to position `to` (counted after taking it out). Returns its new start time. */
+  const moveClip = useCallback((id: string, to: number): number | null => {
     const p = ref.current
     const from = p.clips.findIndex((c) => c.id === id)
-    if (from < 0 || from === to) return
+    if (from < 0 || p.main?.locked) return null
+    to = Math.max(0, Math.min(p.clips.length - 1, to))
+    if (from === to) return null
     const clips = [...p.clips]
     const [c] = clips.splice(from, 1)
-    clips.splice(Math.max(0, Math.min(clips.length, to)), 0, c)
+    clips.splice(to, 0, c)
     h.set({ ...p, clips })
+    return layoutClips(clips).items[to].start
+  }, [h])
+
+  /** Swaps two main-video clips (each keeps its own trim, look and transition). Returns the new start of `a`. */
+  const swapClips = useCallback((a: string, b: string): number | null => {
+    const p = ref.current
+    const i = p.clips.findIndex((c) => c.id === a)
+    const j = p.clips.findIndex((c) => c.id === b)
+    if (i < 0 || j < 0 || i === j || p.main?.locked) return null
+    const clips = [...p.clips]
+    ;[clips[i], clips[j]] = [clips[j], clips[i]]
+    h.set({ ...p, clips })
+    return layoutClips(clips).items[j].start
+  }, [h])
+
+  /**
+   * Swaps two track items of the same kind. One after the other on a row: they trade places in that stretch
+   * and keep the space between them. Otherwise each takes the other's start time and row.
+   */
+  const swapLayers = useCallback((a: string, b: string): boolean => {
+    const p = ref.current
+    const A = p.layers.find((l) => l.id === a)
+    const B = p.layers.find((l) => l.id === b)
+    if (!A || !B || A === B || trackKind(A) !== trackKind(B)) return false
+    const locked = (l: Layer) => !!p.tracks?.find((x) => x.id === l.track)?.locked
+    if (locked(A) || locked(B)) return false
+    const len = (l: Layer) => l.end - l.start
+    const moved = new Map<string, Partial<Layer>>()
+    const [x, y] = A.start <= B.start ? [A, B] : [B, A]
+    if (x.track === y.track && x.end <= y.start + 1e-6) {
+      const gap = y.start - x.end
+      const yEnd = x.start + len(y)
+      moved.set(y.id, { start: x.start, end: yEnd })
+      moved.set(x.id, { start: yEnd + gap, end: yEnd + gap + len(x) })
+    } else {
+      moved.set(A.id, { start: B.start, end: B.start + len(A), track: B.track })
+      moved.set(B.id, { start: A.start, end: A.start + len(B), track: A.track })
+    }
+    h.set({ ...p, layers: p.layers.map((l) => (moved.has(l.id) ? ({ ...l, ...moved.get(l.id) } as Layer) : l)) })
+    return true
   }, [h])
 
   const replaceProject = useCallback((p: Project) => h.set(p), [h])
@@ -515,7 +560,7 @@ export function useEditor(initial: Project) {
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
-    remove, duplicate, split, moveClip, replaceProject,
+    remove, duplicate, split, moveClip, swapClips, swapLayers, replaceProject,
   }
 }
 

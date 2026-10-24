@@ -160,7 +160,41 @@ input, textarea { font: inherit; color: inherit; }
 .tl-lhandle.in { left: -12px; border-radius: 5px 0 0 5px; }
 .tl-lhandle.out { right: -12px; border-radius: 0 5px 5px 0; }
 .tl-playhead { position: absolute; left: 50%; top: 16px; bottom: 4px; width: 2px; margin-left: -1px; background: #fff; border-radius: 1px; pointer-events: none; box-shadow: 0 0 4px rgba(0,0,0,.6); z-index: 5; }
-.tl-reorder-hint { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); background: var(--accent); padding: 4px 10px; border-radius: 99px; font-size: 12px; }
+.tl-reorder-hint { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); background: var(--accent); padding: 4px 10px; border-radius: 99px; font-size: 12px; z-index: 6; white-space: nowrap; pointer-events: none; }
+.tl-clip.selected { touch-action: none; cursor: grab; }
+.tl-drop { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--sel); border-radius: 2px; z-index: 6; box-shadow: 0 0 6px rgba(0,0,0,.6); pointer-events: none; }
+.tl-drag-ghost {
+  position: fixed; z-index: 40; width: 64px; height: 40px; transform: translate(-50%, -125%); border-radius: 6px; overflow: hidden;
+  outline: 2px solid var(--sel); background: #333; box-shadow: 0 4px 14px rgba(0,0,0,.6); pointer-events: none;
+}
+.tl-drag-ghost img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tl-drag-ghost b { position: absolute; right: 2px; bottom: 2px; font-size: 11px; background: var(--sel); color: #000; padding: 0 5px; border-radius: 4px; }
+.timeline.picking .tl-clip, .timeline.picking .tl-layer { cursor: copy; outline-color: rgba(255, 204, 51, .55); }
+.swap-bar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--sel); color: #000; font-size: 13px; font-weight: 600;
+}
+.swap-bar span { flex: 1; }
+.swap-bar .btn { color: inherit; border-color: rgba(0,0,0,.35); background: transparent; }
+
+/* ---------- move / swap / insert clips */
+.co-arrows { flex-wrap: wrap; gap: 6px; }
+.co-grid { display: flex; flex-wrap: wrap; align-items: center; row-gap: 8px; max-height: 34dvh; overflow-y: auto; padding: 2px; }
+.co-card {
+  position: relative; width: 72px; height: 48px; padding: 0; border-radius: 6px; overflow: hidden; border: 0; background: #333;
+  outline: 2px solid transparent; outline-offset: -2px; flex: 0 0 auto;
+}
+.co-card img, .co-blank { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.co-card b { position: absolute; left: 3px; top: 2px; font-size: 11px; background: rgba(0,0,0,.65); color: #fff; padding: 0 5px; border-radius: 4px; }
+.co-card small { position: absolute; right: 3px; bottom: 2px; font-size: 10px; background: rgba(0,0,0,.65); color: #fff; padding: 0 4px; border-radius: 4px; }
+.co-card.on { outline-color: var(--sel); }
+.co-card.on b { background: var(--sel); color: #000; }
+.co-card.target { outline-color: rgba(255, 204, 51, .45); }
+.co-slot {
+  flex: 0 0 auto; width: 26px; height: 40px; margin: 0 2px; padding: 0; border-radius: 6px; border: 1px dashed var(--accent);
+  background: transparent; color: var(--accent); font-size: 16px; font-weight: 700; line-height: 1;
+}
+.co-slot.add { border-style: solid; background: var(--accent); color: #fff; font-size: 20px; }
+.co-slot.none { border: 0; width: 8px; margin: 0; }
 
 .tools { display: flex; gap: 2px; padding: 6px 4px 8px; overflow-x: auto; scrollbar-width: none; min-height: 64px; }
 .tools::-webkit-scrollbar { display: none; }
