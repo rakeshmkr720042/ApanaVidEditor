@@ -99,6 +99,7 @@ export interface Clip {
   denoise?: Denoise | null // background-noise removal, missing = off
   chroma?: ChromaKey | null // green screen, missing = off
   backdrop?: Backdrop | null // shows through the green screen, missing = the project background
+  gap?: number // seconds of empty (black) time before this clip, left when snap is off
 }
 
 export interface Box {

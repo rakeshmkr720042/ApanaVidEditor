@@ -62,7 +62,7 @@ export interface LaidClip {
 export function transitionLength(clips: Clip[], i: number) {
   const c = clips[i]
   const next = clips[i + 1]
-  if (!c?.transition || !next) return 0
+  if (!c?.transition || !next || (next.gap ?? 0) > 0) return 0
   return Math.max(0, Math.min(c.transition.duration, clipDuration(c) / 2, clipDuration(next) / 2))
 }
 
@@ -73,11 +73,77 @@ export function layoutClips(clips: Clip[]): { items: LaidClip[]; total: number }
   clips.forEach((clip, index) => {
     const dur = clipDuration(clip)
     const transOut = transitionLength(clips, index)
+    t += clip.gap ?? 0
     items.push({ clip, index, start: t - prevOut, dur, transIn: prevOut, transOut })
     t = t - prevOut + dur
     prevOut = transOut
   })
   return { items, total: Math.max(0, t) }
+}
+
+const GAP_EPS = 0.01
+
+/** Sets each clip's gap so it starts at starts[i] (or right after the clip before it, when that is later). */
+function withStarts(list: Clip[], starts: number[]): Clip[] {
+  const out: Clip[] = []
+  let end = 0
+  list.forEach((c, i) => {
+    const gap = starts[i] > end + GAP_EPS ? starts[i] - end : 0
+    const next: Clip = { ...c, gap }
+    if (!gap) delete next.gap
+    out.push(next)
+    end = layoutClips(out).total
+  })
+  return out
+}
+
+/**
+ * Puts `ins` into the main video so the first one starts at time `at`, keeping every other clip where it is
+ * unless it has to move back to make room. Landing on a clip puts them before it (first half) or after it.
+ */
+export function insertClipsAt(clips: Clip[], ins: Clip[], at: number): Clip[] {
+  const { items } = layoutClips(clips)
+  at = Math.max(0, at)
+  let idx = items.findIndex((it) => at < it.start + it.dur / 2)
+  if (idx < 0) idx = items.length
+  const prevEnd = idx > 0 ? items[idx - 1].start + items[idx - 1].dur : 0
+  let s = Math.max(at, prevEnd)
+  if (idx < items.length && s > items[idx].start) s = Math.max(prevEnd, items[idx].start)
+  const list = items.map((it) => it.clip)
+  const starts = items.map((it) => it.start)
+  const insStarts: number[] = []
+  let need = s
+  for (const c of ins) { insStarts.push(need); need += clipDuration(c) }
+  for (let j = idx; j < items.length; j++) {
+    if (starts[j] < need - GAP_EPS) starts[j] = need
+    need = starts[j] + items[j].dur
+  }
+  list.splice(idx, 0, ...ins)
+  starts.splice(idx, 0, ...insStarts)
+  return withStarts(list, starts)
+}
+
+/** Snap off: moves a main-video clip so it starts at `at`; its old place stays empty instead of closing up. */
+export function moveClipTo(clips: Clip[], id: string, at: number): Clip[] {
+  const c = clips.find((x) => x.id === id)
+  if (!c) return clips
+  return insertClipsAt(removeClipKeepGap(clips, id), [c], at)
+}
+
+/** Takes a clip out of the main video and leaves empty time where it was, so the clips after it stay put. */
+export function removeClipKeepGap(clips: Clip[], id: string): Clip[] {
+  const rest = layoutClips(clips).items.filter((it) => it.clip.id !== id)
+  return withStarts(rest.map((it) => it.clip), rest.map((it) => it.start))
+}
+
+/** The empty time before `at`, if `at` falls in one: the clip after it and where the gap starts. */
+export function gapAt(clips: Clip[], at: number): { index: number; from: number } | null {
+  const { items } = layoutClips(clips)
+  for (const it of items) {
+    const gap = it.clip.gap ?? 0
+    if (gap > 0 && at >= it.start - gap - 1e-6 && at < it.start) return { index: it.index, from: it.start - gap }
+  }
+  return null
 }
 
 export function projectDuration(p: Project) {
@@ -94,6 +160,7 @@ export function activeAt(items: LaidClip[], t: number): { a: Active | null; b: A
     const it = items[i]
     const end = it.start + it.dur
     if (t < end || i === items.length - 1) {
+      if (t < it.start - 1e-6) return { a: null, b: null, progress: 0 } // empty time before this clip
       const local = Math.max(0, Math.min(it.dur - 1e-4, t - it.start))
       const next = items[i + 1]
       if (next && it.transOut > 0 && t >= end - it.transOut) {
