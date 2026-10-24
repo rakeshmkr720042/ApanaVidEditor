@@ -642,3 +642,12 @@ input, textarea { font: inherit; color: inherit; }
 .mic-meter span { display: block; height: 100%; background: linear-gradient(90deg, #34c759, #ffd60a 75%, #ff3b30); transition: width .08s linear; }
 .mic-meter span.loud { box-shadow: 0 0 6px #ff3b30; }
 .rec .row.wide { width: min(420px, 100%); }
+
+/* green screen panel: the keyed picture over a checkerboard; tap it to pick the screen colour */
+.gs-preview { display: grid; gap: 6px; justify-items: center; }
+.gs-canvas {
+  width: 100%; max-height: 32vh; object-fit: contain; border-radius: 8px; cursor: crosshair; touch-action: none;
+  background: repeating-conic-gradient(#9a9a9a 0% 25%, #d8d8d8 0% 50%) 50% / 16px 16px;
+}
+.gs-status { margin: 0; }
+.gs-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

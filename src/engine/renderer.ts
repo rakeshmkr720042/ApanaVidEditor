@@ -1,9 +1,11 @@
-import type { BlendMode, BlurLayer, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
+import type { Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
 import { activeAt, type LaidClip } from '../model/timeline'
 import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
+import { toChroma } from './chromakey'
+import { defaultAdjust } from '../model/timeline'
 import { animState, drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
 import { drawWave, waveData, waveReady, waveSize } from './visualizer'
 import { drawUserWatermark, watermarkCenter, watermarkSize, watermarkVisible } from './watermark'
@@ -32,6 +34,11 @@ export const BLEND_OPS: Record<BlendMode, GlobalCompositeOperation> = {
 
 export const clipKey = (c: { id: string }) => `c:${c.id}`
 export const layerKey = (l: { id: string }) => `l:${l.id}`
+/** Frame key of the photo/video behind a green screen clip or layer. */
+export const backdropKey = (o: { id: string }) => `g:${o.id}`
+
+const keyOn = (k: ChromaKey | null | undefined): k is ChromaKey => !!k?.enabled
+const NEUTRAL = colorParams(defaultAdjust(), null, 1)
 
 function makeCanvas(w = 2, h = 2): Canvas {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h)
@@ -67,6 +74,7 @@ export class Renderer {
   readonly canvas: Canvas
   private ctx: Ctx
   private frames: [Canvas, Canvas]
+  private comps: [Canvas, Canvas] // green screen clips: backdrop + keyed picture
   private grader: Grader | null
   private layerGrader: Grader | null = null
   private scratch = makeCanvas()
@@ -80,6 +88,7 @@ export class Renderer {
     this.canvas = canvas ?? makeCanvas()
     this.ctx = ctx2d(this.canvas)
     this.frames = [makeCanvas(), makeCanvas()]
+    this.comps = [makeCanvas(), makeCanvas()]
     this.grader = Grader.create(makeCanvas())
   }
 
@@ -89,7 +98,7 @@ export class Renderer {
     if (this.W === w && this.H === h) return
     this.W = w; this.H = h
     this.canvas.width = w; this.canvas.height = h
-    for (const f of this.frames) { f.width = w; f.height = h }
+    for (const f of [...this.frames, ...this.comps]) { f.width = w; f.height = h }
     this.grader?.resize(w, h)
   }
 
@@ -104,25 +113,26 @@ export class Renderer {
 
     const { a, b, progress } = activeAt(inp.items, inp.t)
     if (a) {
-      const fa = this.drawClipFrame(0, a.item.clip, inp, a.local / a.item.dur)
-      const pa = colorParams(a.item.clip.adjust, a.item.clip.filter, a.item.clip.filterAmount)
+      // a green screen clip comes back already keyed over its backdrop (and graded), so it needs no grade here
+      const ka = this.clipImage(0, a.item.clip, inp, a.local / a.item.dur, seed)
       if (b && a.item.clip.transition) {
-        const fb = this.drawClipFrame(1, b.item.clip, inp, b.local / b.item.dur)
-        const pb = colorParams(b.item.clip.adjust, b.item.clip.filter, b.item.clip.filterAmount)
+        const kb = this.clipImage(1, b.item.clip, inp, b.local / b.item.dur, seed)
         if (this.grader) {
-          this.grader.drawTransition(fa, pa, fb, pb, a.item.clip.transition.type, progress, seed)
+          this.grader.drawTransition(ka.img, ka.p, kb.img, kb.p, a.item.clip.transition.type, progress, seed)
           ctx.drawImage(this.grader.canvas, 0, 0)
         } else {
-          this.draw2dGraded(fa, pa)
+          this.draw2dGraded(ka.img, ka.p)
           ctx.globalAlpha = progress
-          this.draw2dGraded(fb, pb)
+          this.draw2dGraded(kb.img, kb.p)
           ctx.globalAlpha = 1
         }
+      } else if (ka.done) {
+        ctx.drawImage(ka.img, 0, 0)
       } else if (this.grader) {
-        this.grader.drawGraded(fa, pa, seed)
+        this.grader.drawGraded(ka.img, ka.p, seed)
         ctx.drawImage(this.grader.canvas, 0, 0)
       } else {
-        this.draw2dGraded(fa, pa)
+        this.draw2dGraded(ka.img, ka.p)
       }
     }
 
@@ -186,8 +196,48 @@ export class Renderer {
     return { ...watermarkCenter(wm, t, W, H, w, h), w, h }
   }
 
-  /** Draws a clip (crop, rotate, flip, fit/fill, background) into frames[i]. */
-  private drawClipFrame(i: number, clip: Clip, inp: RenderInput, progress: number): Canvas {
+  /**
+   * A main-video clip ready to show: its frame and colour settings, or, with green screen on, its backdrop with
+   * the keyed and graded picture on top (`done`: nothing left to grade).
+   */
+  private clipImage(i: number, clip: Clip, inp: RenderInput, progress: number, seed: number): { img: Canvas; p: ColorParams; done: boolean } {
+    const p = colorParams(clip.adjust, clip.filter, clip.filterAmount)
+    const keyed = keyOn(clip.chroma) && !!this.grader
+    const fr = this.drawClipFrame(i, clip, inp, progress, keyed)
+    if (!keyed) return { img: fr, p, done: false }
+    const out = this.comps[i]
+    const c = ctx2d(out)
+    c.setTransform(1, 0, 0, 1, 0, 0)
+    c.globalAlpha = 1
+    const bg = inp.project.settings.background
+    c.fillStyle = bg === 'white' ? '#fff' : bg === 'black' || bg === 'blur' ? '#000' : bg
+    c.fillRect(0, 0, this.W, this.H)
+    if (clip.backdrop) this.drawBackdrop(c, clip.backdrop, backdropKey(clip), inp)
+    this.grader!.drawGraded(fr, p, seed, toChroma(clip.chroma!))
+    c.drawImage(this.grader!.canvas, 0, 0)
+    return { img: out, p: NEUTRAL, done: true }
+  }
+
+  /** A green screen's backdrop over the whole frame: a colour, or a photo/video filling (or fitting) it. */
+  private drawBackdrop(c: Ctx, b: Backdrop, key: string, inp: RenderInput) {
+    const { W, H } = this
+    if (b.kind === 'color') {
+      c.fillStyle = b.color
+      c.fillRect(0, 0, W, H)
+      return
+    }
+    const f = inp.frame(key)
+    if (!f || !f.width) return
+    const s = b.fit === 'fit' ? Math.min(W / f.width, H / f.height) : Math.max(W / f.width, H / f.height)
+    const dw = f.width * s, dh = f.height * s
+    c.save()
+    if (b.blur) c.filter = `blur(${(b.blur * Math.min(W, H) * 0.02).toFixed(1)}px)`
+    c.drawImage(f.image, (W - dw) / 2, (H - dh) / 2, dw, dh)
+    c.restore()
+  }
+
+  /** Draws a clip (crop, rotate, flip, fit/fill, background) into frames[i]; `clear` leaves the empty parts see-through. */
+  private drawClipFrame(i: number, clip: Clip, inp: RenderInput, progress: number, clear = false): Canvas {
     const out = this.frames[i]
     const c = ctx2d(out)
     const { W, H } = this
@@ -195,10 +245,11 @@ export class Renderer {
     c.setTransform(1, 0, 0, 1, 0, 0)
     c.globalAlpha = 1
     c.fillStyle = bg === 'blur' ? '#000' : bg === 'white' ? '#fff' : bg === 'black' ? '#000' : bg
-    c.fillRect(0, 0, W, H)
+    if (clear) c.clearRect(0, 0, W, H)
+    else c.fillRect(0, 0, W, H)
     const f = inp.frame(clipKey(clip))
     if (!f) return out
-    if (bg === 'blur' && clip.fit === 'fit') {
+    if (bg === 'blur' && clip.fit === 'fit' && !clear) {
       const s = this.bgSmall
       const sc = ctx2d(s)
       s.width = 48; s.height = Math.max(8, Math.round((48 * H) / W))
@@ -306,14 +357,20 @@ export class Renderer {
         const s = ctx2d(sc)
         s.clearRect(0, 0, gw, gh)
         s.drawImage(f.image, sx, sy, sw, sh, 0, 0, gw, gh)
-        const key = l.chroma.enabled ? hexRgb(l.chroma.color) : null
-        this.layerGrader.drawGraded(sc, p, seed, key ? { color: key, similarity: l.chroma.similarity, smoothness: l.chroma.smoothness } : undefined)
+        this.layerGrader.drawGraded(sc, p, seed, l.chroma.enabled ? toChroma(l.chroma) : undefined)
         img = this.layerGrader.canvas
         sx = 0; sy = 0; sw = gw; sh = gh
       }
     }
     const a = animState({ start: l.start, end: l.end, animIn: l.animIn ?? 'none', animOut: l.animOut ?? 'none' }, inp.t)
     if (a.alpha <= 0.001 || a.scale <= 0.001) return
+    if (l.chroma.enabled && l.backdrop) {
+      // the backdrop fills the frame under the keyed layer, fading in and out with it
+      ctx.save()
+      ctx.globalAlpha = a.alpha
+      this.drawBackdrop(ctx, l.backdrop, backdropKey(l), inp)
+      ctx.restore()
+    }
     ctx.save()
     ctx.globalAlpha = l.box.opacity * a.alpha
     ctx.globalCompositeOperation = BLEND_OPS[l.blend ?? 'normal']
@@ -399,9 +456,4 @@ async function decodeImage(src: MediaSource): Promise<CanvasImageSource> {
     await img.decode()
     return img
   }
-}
-
-function hexRgb(h: string): [number, number, number] {
-  const n = parseInt(h.replace('#', '').slice(0, 6), 16)
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]
 }

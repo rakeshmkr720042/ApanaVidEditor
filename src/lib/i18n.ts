@@ -359,6 +359,21 @@ const hi: Record<string, string> = {
   'Listen': 'सुनें', 'Cleaned': 'साफ़', 'Original': 'असली', 'Apply to all clips': 'सब क्लिप पर लगाएं',
   'Removes background noise from this sound. Your file is not changed; turn it off any time.': 'इस आवाज़ से पीछे का शोर हटाता है। आपकी फ़ाइल नहीं बदलती, कभी भी बंद कर सकते हैं।',
   'Remove background noise': 'पीछे का शोर हटाएं',
+  'Looking at the video…': 'वीडियो देख रहे हैं…', 'Could not read this video. Pick the screen colour below.': 'यह वीडियो पढ़ नहीं पाए। नीचे स्क्रीन का रंग चुनें।',
+  'Green screen found and removed ✓': 'ग्रीन स्क्रीन मिली और हटा दी ✓', 'Blue screen found and removed ✓': 'ब्लू स्क्रीन मिली और हटा दी ✓',
+  'Screen colour found and removed ✓': 'स्क्रीन का रंग मिला और हटा दिया ✓', 'Settings tuned for this video ✓': 'इस वीडियो के हिसाब से सेटिंग हो गई ✓',
+  'No green or blue screen found. Tap the background in the picture to pick its colour.': 'हरी या नीली स्क्रीन नहीं मिली। तस्वीर में बैकग्राउंड पर टैप करके उसका रंग चुनें।',
+  'Colour picked from the picture': 'तस्वीर से रंग चुन लिया', 'Remove the green screen': 'ग्रीन स्क्रीन हटाएं',
+  'See-through': 'आर-पार', 'With background': 'बैकग्राउंड के साथ',
+  'Tap the background in the picture to pick its exact colour.': 'सही रंग चुनने के लिए तस्वीर में बैकग्राउंड पर टैप करें।',
+  'Screen colour': 'स्क्रीन का रंग', 'Strength': 'ताकत', 'Edge softness': 'किनारे की नरमी', 'Remove green edge': 'हरा किनारा हटाएं',
+  'Remove blue edge': 'नीला किनारा हटाएं', 'Edge shrink': 'किनारा अंदर करें', 'Photo / video': 'फ़ोटो / वीडियो', 'Colour': 'रंग',
+  'Fill screen': 'पूरी स्क्रीन भरें', 'Fit whole picture': 'पूरी तस्वीर दिखाएं', 'Background blur': 'बैकग्राउंड ब्लर',
+  'Background starts at': 'बैकग्राउंड यहाँ से शुरू', 'Missing file': 'फ़ाइल नहीं मिली',
+  'The background video plays silently and starts again if it is shorter than this clip.': 'बैकग्राउंड वीडियो बिना आवाज़ चलता है, और क्लिप से छोटा हो तो फिर से शुरू हो जाता है।',
+  'The background stays with this clip when you move, split or trim it.': 'क्लिप को हिलाने, काटने या छोटा करने पर बैकग्राउंड उसी के साथ रहता है।',
+  'The background fills the screen behind this layer and moves with it.': 'बैकग्राउंड इस लेयर के पीछे पूरी स्क्रीन भरता है और उसके साथ चलता है।',
+  'Background photo added behind the person': 'व्यक्ति के पीछे बैकग्राउंड फ़ोटो लग गई', 'Background video added behind the person': 'व्यक्ति के पीछे बैकग्राउंड वीडियो लग गया'
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

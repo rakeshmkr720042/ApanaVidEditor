@@ -9,6 +9,7 @@ import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
 import { outputSize } from '../engine/renderer'
 import { insertAt, newTrack, overlaps, trackKind, withTracks } from './tracks'
+import { defaultChroma } from '../engine/chromakey'
 import { atTime, hasBox, keyIndexAt, keyedPatch, splitKeys, withKey } from './keyframes'
 
 /** Where to move a layer among the rows: in front of or behind the layers it overlaps, one step or all the way. */
@@ -134,7 +135,7 @@ export function useEditor(initial: Project) {
       if (!cam) return []
       return [{
         id: uid(), type: 'media', sourceId: cam.src.id, in: 0, start, end: Math.max(start + 0.5, Math.min(tot, start + cam.src.duration)),
-        box: { ...cam.box }, volume: 0, chroma: { enabled: false, color: '#00ff00', similarity: 0.35, smoothness: 0.08 }, mask: cam.mask,
+        box: { ...cam.box }, volume: 0, chroma: defaultChroma(), mask: cam.mask,
         border: 0, adjust: defaultAdjust(), filter: null, filterAmount: 1,
       }]
     }
@@ -154,7 +155,7 @@ export function useEditor(initial: Project) {
         layers.push({
           id: uid(), type: 'media', sourceId: src.id, in: 0, start: at, end: Math.max(at + 0.5, end),
           box: { ...centerBox(), scale: fullFrameScale(p, all, ar) },
-          volume: 1, chroma: { enabled: false, color: '#00ff00', similarity: 0.35, smoothness: 0.08 }, mask: 'none', border: 0,
+          volume: 1, chroma: defaultChroma(), mask: 'none', border: 0,
           adjust: defaultAdjust(), filter: null, filterAmount: 1, crop: c,
         })
         at = end
@@ -401,7 +402,7 @@ export function useEditor(initial: Project) {
     const dur = src.kind === 'image' ? 3 : src.duration
     const l: MediaLayer = {
       id: uid(), type: 'media', sourceId: src.id, in: 0, ...span(t, dur), box: { ...centerBox(), x: 0.7, y: 0.3, scale: 0.8 },
-      volume: 1, chroma: { enabled: false, color: '#00ff00', similarity: 0.35, smoothness: 0.08 }, mask: 'none', border: 0,
+      volume: 1, chroma: defaultChroma(), mask: 'none', border: 0,
       adjust: defaultAdjust(), filter: null, filterAmount: 1,
     }
     addLayer(l)

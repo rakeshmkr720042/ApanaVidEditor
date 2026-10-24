@@ -21,12 +21,22 @@ uniform vec4 u_duoD; // dark rgb, amount
 uniform vec3 u_duoL;
 uniform vec4 u_key; // key rgb, enabled
 uniform vec2 u_keyP; // similarity, smoothness
+uniform vec2 u_keyQ; // spill, shrink radius in texels
 uniform float u_seed;
 uniform float u_ratio;
 
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 float rnd(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 vec2 chroma(vec3 c) { return vec2(dot(c, vec3(-0.169, -0.331, 0.5)), dot(c, vec3(0.5, -0.419, -0.081))); }
+// 0 = screen colour, 1 = keep. Compared with the key at the pixel's own saturation (down to 70%), so
+// darker, shadowed parts of the screen still go. Same maths as keyDistance() in chromakey.ts.
+float keyMask(vec3 c) {
+  vec2 kc = chroma(u_key.rgb);
+  vec2 cc = chroma(c);
+  float kl = max(length(kc), 1e-4);
+  float d = distance(cc, kc * clamp(length(cc) / kl, 0.7, 1.0));
+  return smoothstep(u_keyP.x, u_keyP.x + max(u_keyP.y, 0.001), d);
+}
 
 void main() {
   vec4 src = texture2D(u_tex, v_uv);
@@ -39,12 +49,25 @@ void main() {
     c += (c - n * 0.25) * sharpen * 2.0;
   }
   if (u_key.w > 0.5) {
-    float d = distance(chroma(c), chroma(u_key.rgb));
-    float a = smoothstep(u_keyP.x, u_keyP.x + max(u_keyP.y, 0.001), d);
+    // matte from the centre and 8 neighbours: the min eats into the edge (shrink), the mean smooths jaggies
+    float a0 = keyMask(c);
+    vec2 r = u_texel * max(u_keyQ.y, 1.0);
+    float n0 = keyMask(texture2D(u_tex, v_uv + vec2(r.x, 0.0)).rgb), n1 = keyMask(texture2D(u_tex, v_uv - vec2(r.x, 0.0)).rgb);
+    float n2 = keyMask(texture2D(u_tex, v_uv + vec2(0.0, r.y)).rgb), n3 = keyMask(texture2D(u_tex, v_uv - vec2(0.0, r.y)).rgb);
+    float n4 = keyMask(texture2D(u_tex, v_uv + r * 0.7071).rgb), n5 = keyMask(texture2D(u_tex, v_uv - r * 0.7071).rgb);
+    float n6 = keyMask(texture2D(u_tex, v_uv + vec2(r.x, -r.y) * 0.7071).rgb), n7 = keyMask(texture2D(u_tex, v_uv + vec2(-r.x, r.y) * 0.7071).rgb);
+    float lo = min(min(min(n0, n1), min(n2, n3)), min(min(n4, n5), min(n6, n7)));
+    float mean = (a0 + n0 + n1 + n2 + n3 + n4 + n5 + n6 + n7) / 9.0;
+    float a = u_keyQ.y > 0.0 ? min(a0, lo) : mix(a0, mean, 0.5);
     alpha *= a;
-    // spill suppression: pull the key colour out of semi-transparent edges
-    float spill = 1.0 - a;
-    c = mix(c, vec3(luma(c)), spill * 0.6);
+    // spill: take the screen colour's tint out (most at the see-through edges), keeping brightness
+    vec2 kc = chroma(u_key.rgb);
+    vec2 kd = kc / max(length(kc), 1e-4);
+    vec2 cc = chroma(c);
+    float along = max(dot(cc, kd), 0.0);
+    cc -= kd * along * clamp(u_keyQ.x * (0.6 + 0.8 * (1.0 - a)), 0.0, 1.0);
+    float y = luma(c);
+    c = clamp(vec3(y + 1.402 * cc.y, y - 0.344 * cc.x - 0.714 * cc.y, y + 1.772 * cc.x), 0.0, 1.0);
   }
   c *= pow(2.0, u_a.x);
   c += u_a.y * 0.3;
@@ -96,7 +119,7 @@ vec4 to(vec2 uv) { return (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0)
 vec4 transition(vec2 uv, float p, float ratio) { ${body} }
 void main() { gl_FragColor = transition(v_uv, clamp(u_p, 0.0, 1.0), u_ratio); }`
 
-export interface Chroma { color: [number, number, number]; similarity: number; smoothness: number }
+export interface Chroma { color: [number, number, number]; similarity: number; smoothness: number; spill?: number; shrink?: number }
 
 type GL = WebGLRenderingContext
 
@@ -212,6 +235,8 @@ export class Grader {
     gl.uniform3f(u('u_duoL'), ...p.duoLight)
     gl.uniform4f(u('u_key'), ...(chroma?.color ?? [0, 1, 0]), chroma ? 1 : 0)
     gl.uniform2f(u('u_keyP'), chroma?.similarity ?? 0, chroma?.smoothness ?? 0)
+    // shrink 1 = 6 px at 1080p, the same share of the picture at any size
+    gl.uniform2f(u('u_keyQ'), chroma?.spill ?? 0.5, ((chroma?.shrink ?? 0) * Math.min(this.w, this.h)) / 180)
     gl.uniform1f(u('u_seed'), seed)
     gl.uniform1f(u('u_ratio'), this.w / this.h)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)

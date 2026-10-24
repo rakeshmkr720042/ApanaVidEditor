@@ -5,6 +5,7 @@ import { mixAudio } from './audiomix'
 import { sleep, stayAwake } from './background'
 import { openReader, type FrameReader } from './frames'
 import { encodeWav } from './music'
+import { backdropSource } from './chromakey'
 import { mediaNeeds } from './player'
 import { outputSize, Renderer, type FrameImage } from './renderer'
 import { ensureFont } from './text'
@@ -87,8 +88,9 @@ export function motionShare(project: Project, sources: Record<string, MediaSourc
   const { items, total } = layoutClips(project.clips)
   if (total <= 0) return 1
   const spans: [number, number][] = []
-  for (const it of items) if (sources[it.clip.sourceId]?.kind === 'video') spans.push([it.start, it.start + it.dur])
-  for (const l of project.layers) if (l.type === 'media' && sources[l.sourceId]?.kind === 'video') spans.push([l.start, l.end])
+  const isMoving = (o: { sourceId: string } & Parameters<typeof backdropSource>[0]) => sources[o.sourceId]?.kind === 'video' || backdropSource(o, sources)?.kind === 'video'
+  for (const it of items) if (isMoving(it.clip)) spans.push([it.start, it.start + it.dur])
+  for (const l of project.layers) if (l.type === 'media' && isMoving(l)) spans.push([l.start, l.end])
   spans.sort((a, b) => a[0] - b[0])
   let moving = 0, end = 0
   for (const [a, b] of spans) {
