@@ -2,7 +2,9 @@ import type { MediaLayer, MediaSource, Project } from '../types'
 import { activeAt, layerSpeed, layoutClips, sourceAt, type LaidClip } from '../model/timeline'
 import { backdropKey, clipKey, layerKey, outputSize, Renderer, type FrameImage } from './renderer'
 import { backdropSource, backdropTime } from './chromakey'
-import { onCleanChange, prepareCleanSounds, previewSource } from './denoise'
+import { onCleanChange, prepareCleanSounds, previewSource, soundJob } from './denoise'
+import { duckCurve, duckGain, onDuckChange } from './duck'
+import { reversedIn } from './soundfx'
 
 interface Need { key: string; source: MediaSource; time: number; rate: number; volume: number; preload?: boolean }
 
@@ -24,8 +26,9 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     if (!src) continue
     const { time, speed } = sourceAt(c, act.local)
     const volume = c.volume * g * fadeGain(act.local, act.item.dur, c.fadeIn, c.fadeOut)
-    // with noise removal the picture plays silent and the cleaned sound plays next to it
-    const clean = previewSource(c.sourceId, c.denoise)
+    // with noise removal or sound effects the picture plays silent and the cleaned sound plays next to it
+    const job = soundJob(c)
+    const clean = job ? previewSource(c.sourceId, job.dn, job.fx) : null
     needs.push({ key: clipKey(c), source: src, time, rate: speed, volume: clean ? 0 : volume })
     if (clean) needs.push({ key: clipKey(c) + '~clean', source: clean, time, rate: speed, volume })
     const bd = backdropSource(c, sources)
@@ -48,10 +51,16 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     const soon = lookahead > 0 && l.start > t && l.start - t < lookahead
     if (!active && !soon) continue
     const local = Math.max(0, t - l.start)
-    const vol = l.type === 'audio' ? l.volume * fadeGain(local, l.end - l.start, l.fadeIn, l.fadeOut) : l.volume
+    const vol = l.type === 'audio' ? l.volume * fadeGain(local, l.end - l.start, l.fadeIn, l.fadeOut) * duckGain(l, t) : l.volume
     const sp = layerSpeed(l)
-    const clean = previewSource(l.sourceId, l.denoise)
-    const time = l.in + local * sp
+    const job = soundJob(l)
+    const clean = job ? previewSource(l.sourceId, job.dn, job.fx) : null
+    let time = l.in + local * sp
+    if (l.type === 'audio' && job?.fx?.reverse) {
+      // the made sound is the whole file backwards: play the matching stretch of it; silent until it is ready
+      if (!clean) continue
+      time = reversedIn(l, src) + local * sp
+    }
     if (clean && l.type === 'audio') {
       needs.push({ key: layerKey(l), source: clean, time, rate: sp, volume: active ? vol : 0, preload: !active })
       continue
@@ -96,8 +105,11 @@ export class Player {
     this.previewShort = previewShort
     // a cleaned sound became ready (or "hear original" was switched): swap the sound now
     this.offClean = onCleanChange(() => this.sync())
+    // the auto-lowering curve for music is ready
+    this.offDuck = onDuckChange(() => this.sync())
   }
   private offClean: () => void
+  private offDuck: () => void
 
   setProject(project: Project, sources: Record<string, MediaSource>) {
     this.project = project
@@ -106,6 +118,7 @@ export class Player {
     this.items = items
     this.total = total
     prepareCleanSounds(project, sources)
+    void duckCurve(project, sources)
     const { w, h } = outputSize(project, sources, this.previewShort)
     this.renderer.resize(w, h)
     if (this.t > total) this.t = total
@@ -283,6 +296,7 @@ export class Player {
 
   destroy() {
     this.offClean()
+    this.offDuck()
     this.pause()
     for (const el of this.els.values()) { el.removeAttribute('src'); el.load() }
     this.els.clear()

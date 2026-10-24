@@ -243,7 +243,7 @@ export function NoisePanel({ ed, target, onClose }: P & { target: Cleanable }) {
     else ed.updateLayer<MediaLayer | AudioLayer>(target.layer.id, { denoise: next })
   }
   const patch = (p: Partial<Denoise>) => set({ ...(d ?? DEFAULT_DENOISE), ...p })
-  const st = d ? cleanState(item.sourceId, d) : undefined
+  const st = d ? cleanState(item.sourceId, d, item.fx) : undefined
   const withSound = target.kind === 'clip' ? ed.project.clips.filter((c) => hasSound(ed.sources[c.sourceId])) : []
   return (
     <Panel title="Remove noise" onClose={onClose}>

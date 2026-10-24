@@ -1,10 +1,13 @@
-import type { Denoise, MediaSource, Project } from '../types'
+import type { AudioFx, Denoise, MediaSource, Project } from '../types'
 import { clipSegments, layerSpeed, layoutClips } from '../model/timeline'
 import { decodeAudio } from '../lib/media'
 import { encodeWav } from './music'
 import { runFFmpeg, getFFmpeg } from '../lib/ffmpeg'
 import { LONG_SECS, decodeSpan, isLong } from '../lib/longaudio'
-import { cleanSound, denoiseKey } from './denoise'
+import { cleanSound, denoiseKey, soundJob } from './denoise'
+import { duckCurve, duckGainFrom, FPS, isDucked } from './duck'
+import { fadeGain } from './player'
+import { reversedIn } from './soundfx'
 
 export const MIX_RATE = 48000
 
@@ -47,19 +50,19 @@ export class SoundReader {
     return !!src && src.kind !== 'image' && isLong(src.duration, src.file.size)
   }
 
-  /** The file to read: the source itself, or its cleaned sound when noise removal is on for it. */
-  private file(src: MediaSource, dn?: Denoise | null): Promise<Blob | null> {
-    if (!dn) return Promise.resolve(src.file)
-    const key = denoiseKey(src.id, dn)
-    if (!this.cleaned.has(key)) this.cleaned.set(key, cleanSound(src, dn).then((b) => b ?? src.file).catch(() => src.file))
+  /** The file to read: the source itself, or its cleaned sound when noise removal or sound effects are on for it. */
+  private file(src: MediaSource, job?: { dn: Denoise | null; fx: AudioFx | null } | null): Promise<Blob | null> {
+    if (!job) return Promise.resolve(src.file)
+    const key = denoiseKey(src.id, job.dn, job.fx)
+    if (!this.cleaned.has(key)) this.cleaned.set(key, cleanSound(src, job.dn, job.fx).then((b) => b ?? src.file).catch(() => src.file))
     return this.cleaned.get(key)!
   }
 
   /** Sound of [from, to) in the source's own time, starting at `from`; null if silent or unreadable. */
-  async read(id: string, from: number, to: number, rate: number, dn?: Denoise | null): Promise<AudioBuffer | null> {
+  async read(id: string, from: number, to: number, rate: number, job?: { dn: Denoise | null; fx: AudioFx | null } | null): Promise<AudioBuffer | null> {
     const src = this.sources[id]
     if (!src || src.kind === 'image' || !src.hasAudio || to <= from) return null
-    const file = await this.file(src, dn)
+    const file = await this.file(src, job)
     if (!file) return null
     if (this.long(id)) {
       const ch = await decodeSpan(file, from, to - from, rate, 2).catch(() => null)
@@ -68,7 +71,7 @@ export class SoundReader {
       ch.forEach((d, i) => b.copyToChannel(d as Float32Array<ArrayBuffer>, i))
       return b
     }
-    const key = dn ? denoiseKey(id, dn) : id
+    const key = job ? denoiseKey(id, job.dn, job.fx) : id
     if (!this.whole.has(key)) this.whole.set(key, decodeAudio(file))
     const buf = await this.whole.get(key)!
     if (!buf || from >= buf.duration) return null
@@ -109,6 +112,8 @@ export async function mixAudio(
   const ctx = new OfflineAudioContext(win?.channels ?? 2, Math.ceil((to - from) * rate), rate)
   const reader = win?.reader ?? new SoundReader(sources)
   let any = false
+  // music set to lower itself under voices
+  const duck = project.layers.some(isDucked) ? await duckCurve(project, sources) : null
   const steps = items.length + project.layers.length
   let done = 0
 
@@ -140,7 +145,7 @@ export async function mixAudio(
       const t0 = Math.max(from, s + seg.tStart), t1 = Math.min(to, s + seg.tEnd)
       if (t1 <= t0) continue
       const a = seg.srcStart + (t0 - s - seg.tStart) * seg.speed, b = seg.srcStart + (t1 - s - seg.tStart) * seg.speed
-      let part = await reader.read(c.sourceId, a, b, rate, c.denoise)
+      let part = await reader.read(c.sourceId, a, b, rate, soundJob(c))
       if (part && Math.abs(seg.speed - 1) > 1e-3) part = await stretch(part, seg.speed)
       if (!part) continue
       const node = ctx.createBufferSource()
@@ -160,13 +165,22 @@ export async function mixAudio(
     const g = ctx.createGain()
     g.connect(ctx.destination)
     const fi = l.type === 'audio' ? Math.min(l.fadeIn, len) : 0, fo = l.type === 'audio' ? Math.min(l.fadeOut, len) : 0
-    const pts: [number, number][] = [[l.start, fi > 0 ? 0 : l.volume]]
+    let pts: [number, number][] = [[l.start, fi > 0 ? 0 : l.volume]]
     if (fi > 0) pts.push([l.start + fi, l.volume])
     if (fo > 0) pts.push([Math.max(l.start + fi, l.end - fo), l.volume], [l.end, 0])
+    if (duck && isDucked(l)) {
+      // volume, fades and the auto-lowering together, one point per curve step inside the window
+      pts = []
+      const gain = (t: number) => l.volume * fadeGain(t - l.start, len, fi, fo) * duckGainFrom(duck, l, t)
+      for (let f = Math.floor(t0 * FPS); f <= Math.ceil(t1 * FPS); f++) pts.push([f / FPS, gain(f / FPS)])
+    }
     automate(g.gain, pts, from, to)
     const sp = layerSpeed(l)
-    const a = l.in + (t0 - l.start) * sp, b = l.in + (t1 - l.start) * sp
-    let part = await reader.read(l.sourceId, a, b, rate, l.denoise)
+    const job = soundJob(l)
+    // a sound played backwards is read from its reversed copy
+    const lin = l.type === 'audio' && job?.fx?.reverse && sources[l.sourceId] ? reversedIn(l, sources[l.sourceId]) : l.in
+    const a = lin + (t0 - l.start) * sp, b = lin + (t1 - l.start) * sp
+    let part = await reader.read(l.sourceId, a, b, rate, job)
     if (part && Math.abs(sp - 1) > 1e-3) part = await stretch(part, sp)
     if (!part) continue
     const node = ctx.createBufferSource()

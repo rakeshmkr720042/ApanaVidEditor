@@ -35,7 +35,7 @@ export function selectedIds(p: Project, sel: Selection): string[] {
 }
 
 // what a change to one item of a group passes on to the others: its look and sound, never its place or content
-const BULK = new Set(['speed', 'ramp', 'volume', 'fadeIn', 'fadeOut', 'denoise', 'filter', 'filterAmount', 'adjust', 'fit', 'transition',
+const BULK = new Set(['speed', 'ramp', 'volume', 'fadeIn', 'fadeOut', 'denoise', 'fx', 'duck', 'filter', 'filterAmount', 'adjust', 'fit', 'transition',
   'chroma', 'blend', 'mask', 'border', 'animIn', 'animOut', 'flipH', 'flipV', 'style', 'strength', 'shape', 'mode', 'color', 'color2'])
 function bulkPatch<T extends object>(patch: Partial<T>, sound: boolean): Partial<T> {
   const out: Record<string, unknown> = {}
@@ -43,7 +43,7 @@ function bulkPatch<T extends object>(patch: Partial<T>, sound: boolean): Partial
     // a new speed on a track item comes with its new length
     if (BULK.has(k) || (k === 'end' && 'speed' in patch)) out[k] = v
   }
-  if (!sound) delete out.denoise
+  if (!sound) { delete out.denoise; delete out.fx; delete out.duck }
   return out as Partial<T>
 }
 
@@ -337,6 +337,7 @@ export function useEditor(initial: Project) {
           speed: s.speed, volume: c.volume, label: label(c.sourceId), kind: 'sound',
           fadeIn: i === 0 ? Math.max(c.fadeIn, it.transIn) : 0, fadeOut: i === segs.length - 1 ? Math.max(c.fadeOut, it.transOut) : 0,
           ...(c.denoise ? { denoise: { ...c.denoise } } : {}),
+          ...(c.fx ? { fx: { ...c.fx } } : {}),
         })
       })
       silenced.add(c.id)
@@ -347,6 +348,7 @@ export function useEditor(initial: Project) {
         id: uid(), type: 'audio', sourceId: l.sourceId, in: l.in, start: l.start, end: l.end, speed: layerSpeed(l),
         volume: l.volume, label: label(l.sourceId), kind: 'sound', fadeIn: 0, fadeOut: 0,
         ...(l.denoise ? { denoise: { ...l.denoise } } : {}),
+        ...(l.fx ? { fx: { ...l.fx } } : {}),
       })
       silenced.add(l.id)
     }

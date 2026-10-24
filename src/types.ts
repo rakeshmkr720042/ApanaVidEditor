@@ -52,6 +52,30 @@ export interface Denoise {
   gate: boolean // quieten what is left between words
 }
 
+export type VoiceFx = 'none' | 'deep' | 'child' | 'chipmunk' | 'monster' | 'robot' | 'alien' | 'telephone' | 'radio' | 'megaphone'
+
+/**
+ * Sound effects for a clip's or layer's sound: equalizer, voice changer, pitch, compressor, echo and reverb,
+ * loudness, stereo. Worked out with Remove noise, once per source and setting (src/engine/soundfx.ts),
+ * and used by the preview and the export alike. Missing fields are "off".
+ */
+export interface AudioFx {
+  bass: number // dB, -12..12 (low shelf 120 Hz)
+  mid: number // dB, -12..12 (peak 1.5 kHz)
+  treble: number // dB, -12..12 (high shelf 6 kHz)
+  voice: VoiceFx
+  pitch: number // semitones, -12..12, the speed stays the same
+  compress: 0 | 1 | 2 | 3 // even out loud and quiet parts: off, light, medium, strong
+  echo: number // 0..1
+  reverb: number // 0..1
+  room: 'room' | 'hall' | 'cave'
+  loudness: number | null // target loudness in LUFS (-14 YouTube…), null = as it is
+  limiter: boolean // stop peaks from clipping
+  channels: 'stereo' | 'mono' | 'left' | 'right' | 'swap'
+  pan: number // -1 left .. 1 right
+  reverse?: boolean // sounds on a track only: play backwards
+}
+
 /**
  * Green screen (chroma key): makes one colour of the picture see-through. Spill and shrink are missing in
  * projects saved before they existed (then 0.5 and 0).
@@ -97,6 +121,7 @@ export interface Clip {
   kenBurns?: KenBurns | null // missing in projects saved before slideshows
   fromTemplate?: boolean // part of an intro/outro; never decides the "original" frame shape
   denoise?: Denoise | null // background-noise removal, missing = off
+  fx?: AudioFx | null // sound effects, missing = off
   chroma?: ChromaKey | null // green screen, missing = off
   backdrop?: Backdrop | null // shows through the green screen, missing = the project background
   gap?: number // seconds of empty (black) time before this clip, left when snap is off
@@ -196,6 +221,7 @@ export interface MediaLayer extends LayerBase, Keyed {
   animIn?: TextAnim // missing = none
   animOut?: TextAnim
   denoise?: Denoise | null
+  fx?: AudioFx | null
 }
 
 export interface BlurLayer extends LayerBase {
@@ -217,6 +243,8 @@ export interface AudioLayer extends LayerBase {
   kind: 'music' | 'sound' | 'voice'
   speed?: number // playback speed, missing = 1
   denoise?: Denoise | null
+  fx?: AudioFx | null
+  duck?: number | null // 0..1: volume while someone speaks (other sounds lower it automatically), missing = off
 }
 
 export type WaveStyle = 'bars' | 'line' | 'circle'
