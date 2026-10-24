@@ -24,6 +24,7 @@ const paths = {
   adjust: 'M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z',
   crop: 'M17 15h2V7a2 2 0 0 0-2-2H9v2h8v8zM7 17V1H5v4H1v2h4v10a2 2 0 0 0 2 2h10v4h2v-4h4v-2H7z',
   transition: 'M4 5h7v14H4zM13 5l7 7-7 7z',
+  detach: 'M3 2h18v9H3zm2 2v5h14V4zM3 17h2v3H3zm4-2h2v7H7zm4 1h2v5h-2zm4-3h2v9h-2zm4 3h2v3h-2z',
   music: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z',
   text: 'M5 4v3h5.5v12h3V7H19V4z',
   ai: 'M10 2l1.9 5.1L17 9l-5.1 1.9L10 16l-1.9-5.1L3 9l5.1-1.9zM18 12l1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1zM5 16l.8 2.2L8 19l-2.2.8L5 22l-.8-2.2L2 19l2.2-.8z',

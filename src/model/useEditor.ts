@@ -9,7 +9,7 @@ import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
 import { outputSize } from '../engine/renderer'
 import { hasSound } from '../engine/denoise'
-import { insertAt, newTrack, overlaps, trackKind, withTracks } from './tracks'
+import { insertAt, isLocked, newTrack, overlaps, trackKind, withTracks } from './tracks'
 import { defaultChroma } from '../engine/chromakey'
 import { atTime, hasBox, keyIndexAt, keyedPatch, splitKeys, withKey } from './keyframes'
 
@@ -307,6 +307,64 @@ export function useEditor(initial: Project) {
     h.set({ ...p, layers: [...p.layers, fits ? { ...l, track: tr.id } : l] })
     setSel({ type: 'layer', id: l.id })
   }, [h, track])
+
+  /**
+   * Takes the sound out of videos (main-video clips or video overlays) and puts it on an audio row as its own
+   * items, lined up with the picture (same start, trim, speed, volume, fades and noise removal). The videos go
+   * silent so the sound is not heard twice. Items without sound (photos, muted videos) are skipped.
+   * Returns the new audio items (empty when nothing had sound).
+   */
+  const detachAudio = useCallback((ids: string[]): AudioLayer[] => {
+    const p = ref.current
+    const want = new Set(ids)
+    const src = (id: string) => sourcesRef.current[id]
+    const label = (id: string) => src(id)?.name.replace(/\.[^.]+$/, '') || 'Video sound'
+    const made: AudioLayer[] = []
+    const silenced = new Set<string>()
+    for (const it of layoutClips(p.clips).items) {
+      const c = it.clip
+      if (!want.has(c.id) || p.main?.locked || c.volume <= 0 || !hasSound(src(c.sourceId))) continue
+      // a speed ramp becomes one piece per constant-speed step; a transition becomes a fade, like the mix does
+      const segs = clipSegments(c).reduce<ReturnType<typeof clipSegments>>((out, s) => {
+        const last = out[out.length - 1]
+        if (last && last.speed === s.speed) out[out.length - 1] = { ...last, srcEnd: s.srcEnd, tEnd: s.tEnd }
+        else out.push(s)
+        return out
+      }, [])
+      segs.forEach((s, i) => {
+        made.push({
+          id: uid(), type: 'audio', sourceId: c.sourceId, in: s.srcStart, start: it.start + s.tStart, end: it.start + s.tEnd,
+          speed: s.speed, volume: c.volume, label: label(c.sourceId), kind: 'sound',
+          fadeIn: i === 0 ? Math.max(c.fadeIn, it.transIn) : 0, fadeOut: i === segs.length - 1 ? Math.max(c.fadeOut, it.transOut) : 0,
+          ...(c.denoise ? { denoise: { ...c.denoise } } : {}),
+        })
+      })
+      silenced.add(c.id)
+    }
+    for (const l of p.layers) {
+      if (!want.has(l.id) || l.type !== 'media' || l.volume <= 0 || !hasSound(src(l.sourceId)) || isLocked(p, l)) continue
+      made.push({
+        id: uid(), type: 'audio', sourceId: l.sourceId, in: l.in, start: l.start, end: l.end, speed: layerSpeed(l),
+        volume: l.volume, label: label(l.sourceId), kind: 'sound', fadeIn: 0, fadeOut: 0,
+        ...(l.denoise ? { denoise: { ...l.denoise } } : {}),
+      })
+      silenced.add(l.id)
+    }
+    if (!made.length) return []
+    // all of it on one audio row: the first one with room for every piece, else a new row at the bottom
+    const tracks = [...(p.tracks ?? [])]
+    const free = tracks.find((tr) => tr.kind === 'audio' && !tr.locked && !p.layers.some((x) => x.track === tr.id && made.some((m) => overlaps(x, m))))
+    const tr = free ?? newTrack('audio')
+    if (!free) tracks.splice(insertAt(tracks, 'audio', false), 0, tr)
+    h.set({
+      ...p,
+      tracks,
+      clips: p.clips.map((c) => (silenced.has(c.id) ? { ...c, volume: 0 } : c)),
+      layers: [...p.layers.map((l) => (silenced.has(l.id) ? { ...l, volume: 0 } as Layer : l)), ...made.map((m) => ({ ...m, track: tr.id }))],
+    })
+    setSel({ type: 'layer', id: made[0].id })
+    return made
+  }, [h])
 
   // ----- track rows
   const addTrack = useCallback((kind: Track['kind']) => {
@@ -637,7 +695,7 @@ export function useEditor(initial: Project) {
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
     addSource, place, replaceMedia, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
-    addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
+    addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
     remove, duplicate, split, moveClip, moveClipAt, closeGap, swapClips, swapLayers, replaceProject,
