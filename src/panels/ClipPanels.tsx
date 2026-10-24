@@ -47,9 +47,10 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
 
 /** Speed of a video or sound on its own track (no speed ramps there). */
 export function LayerSpeedPanel({ ed, layer, onClose }: P & { layer: MediaLayer | AudioLayer }) {
-  const src = ed.sources[layer.sourceId]
   // the layer keeps the same part of the video, so it gets shorter when faster and longer when slower
+  // (worked out for each item, as a selected row changes them all)
   const set = (s: number) => ed.updateLayer<MediaLayer | AudioLayer>(layer.id, (l) => {
+    const src = ed.sources[l.sourceId]
     const len = ((l.end - l.start) * (l.speed ?? 1)) / s
     const room = src ? (src.duration - l.in) / s : Infinity
     return { speed: s, end: l.start + Math.max(0.2, Math.min(room, len)) }

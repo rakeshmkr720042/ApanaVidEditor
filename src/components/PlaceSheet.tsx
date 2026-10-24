@@ -2,6 +2,7 @@ import type { Placement } from '../model/useEditor'
 import { fmtTime } from '../lib/format'
 import { t } from '../lib/i18n'
 import { Icon, type IconName } from './Icon'
+import { SheetClose } from '../ui/kit'
 
 const LAST = 'placement'
 
@@ -31,6 +32,7 @@ export function PlaceSheet({ what, time, onPick, onClose }: { what: string; time
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet place-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} />
         <h2>{t('Where should it go?')}</h2>
         <p className="muted small">{what} · {t('Playhead')} {fmtTime(time)}</p>
         {OPTIONS.map((o) => (

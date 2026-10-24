@@ -3,7 +3,7 @@ import { desktop } from '../lib/desktop'
 import {
   getYouTube, isSignedIn, setYouTube, signIn, signOut, uploadVideo, UploadCancelled, webRedirectUri, youTubeMode, type Privacy,
 } from '../lib/youtube'
-import { Chips, Toggle } from '../ui/kit'
+import { Chips, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 
 interface Props { blob: Blob; cover: Blob | null; title: string; onClose: () => void }
@@ -68,6 +68,7 @@ export function YouTubeSheet({ blob, cover, title: initial, onClose }: Props) {
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet youtube" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} disabled={!!busy} />
         <h2>{t('Upload to YouTube')} <span className="muted small">{(blob.size / 1048576).toFixed(1)} MB</span></h2>
         {!mode ? (
           <p className="muted small">{t('YouTube upload works in the Windows app and on the website. On the phone, use Share and pick the YouTube app.')}</p>

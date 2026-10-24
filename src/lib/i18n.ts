@@ -359,6 +359,10 @@ const hi: Record<string, string> = {
   'Listen': 'सुनें', 'Cleaned': 'साफ़', 'Original': 'असली', 'Apply to all clips': 'सब क्लिप पर लगाएं',
   'Removes background noise from this sound. Your file is not changed; turn it off any time.': 'इस आवाज़ से पीछे का शोर हटाता है। आपकी फ़ाइल नहीं बदलती, कभी भी बंद कर सकते हैं।',
   'Remove background noise': 'पीछे का शोर हटाएं',
+  'Select all': 'सब चुनें', 'One clip': 'एक क्लिप', 'One item': 'एक आइटम', 'clips selected': 'क्लिप चुनी गईं', 'captions selected': 'कैप्शन चुने गए',
+  'items on this track selected': 'आइटम इस ट्रैक पर चुने गए', 'clips selected. Speed, volume, filters and Delete now change all of them.': 'क्लिप चुनी गईं। स्पीड, आवाज़, फ़िल्टर और डिलीट अब सब पर लगेंगे।',
+  'Delete all clips?': 'सारी क्लिप हटाएं?', 'Delete everything on this track?': 'इस ट्रैक पर सब कुछ हटाएं?', 'Select all clips': 'सारी क्लिप चुनें',
+  'Select everything on this track': 'इस ट्रैक पर सब चुनें',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()
