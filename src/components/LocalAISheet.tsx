@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core'
 import { DEFAULT_URL, getLocalAI, listModels, pickModel, setLocalAI } from '../lib/localai'
 import { isDesktop } from '../lib/desktop'
 import { getVoiceClone, setVoiceClone, testSpace } from '../engine/voiceclone'
-import { Toggle } from '../ui/kit'
+import { Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 
 /** Settings for Local AI: the address of the user's Ollama server and which model to use. */
@@ -44,6 +44,7 @@ export function LocalAISheet({ onClose }: { onClose: () => void }) {
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet local-ai" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} disabled={!!busy} />
         <h2>{t('Local AI')}</h2>
         <p className="muted small">{t('Use an AI model running on your own computer with Ollama (for example Gemma). It can shorten text into key points, write quiz questions, and translate subtitles. Nothing is sent to the internet.')}</p>
         <Toggle label="Use Local AI" value={c.on} onChange={(on) => save({ on })} />

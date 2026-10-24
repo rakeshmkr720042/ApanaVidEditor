@@ -8,16 +8,43 @@ import { applySlideshow, type SlideshowOptions } from './slideshow'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
 import { outputSize } from '../engine/renderer'
+import { hasSound } from '../engine/denoise'
 import { insertAt, newTrack, overlaps, trackKind, withTracks } from './tracks'
 import { atTime, hasBox, keyIndexAt, keyedPatch, splitKeys, withKey } from './keyframes'
 
 /** Where to move a layer among the rows: in front of or behind the layers it overlaps, one step or all the way. */
 export type Arrange = 'front' | 'forward' | 'backward' | 'back'
 
-/** `all` on a subtitle selects every subtitle together (style, animation and delete apply to all of them). */
-export type Selection = { type: 'clip'; id: string } | { type: 'layer'; id: string; all?: boolean } | null
+/**
+ * `all` picks a group around the item `id`: every clip of the main video, every item on the layer's row,
+ * or for a subtitle every subtitle. Changes from the tool panels and Delete apply to the whole group.
+ */
+export type Selection = { type: 'clip'; id: string; all?: boolean } | { type: 'layer'; id: string; all?: boolean } | null
 
 export const isSub = (l: Layer): l is TextLayer => l.type === 'text' && l.subtitle
+
+/** Ids of everything the selection covers (just the item unless `all`). */
+export function selectedIds(p: Project, sel: Selection): string[] {
+  if (!sel) return []
+  if (!sel.all) return [sel.id]
+  if (sel.type === 'clip') return p.clips.map((c) => c.id)
+  const l = p.layers.find((x) => x.id === sel.id)
+  if (!l) return []
+  return p.layers.filter(isSub(l) ? isSub : (x) => x.track === l.track).map((x) => x.id)
+}
+
+// what a change to one item of a group passes on to the others: its look and sound, never its place or content
+const BULK = new Set(['speed', 'ramp', 'volume', 'fadeIn', 'fadeOut', 'denoise', 'filter', 'filterAmount', 'adjust', 'fit', 'transition',
+  'chroma', 'blend', 'mask', 'border', 'animIn', 'animOut', 'flipH', 'flipV', 'style', 'strength', 'shape', 'mode', 'color', 'color2'])
+function bulkPatch<T extends object>(patch: Partial<T>, sound: boolean): Partial<T> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(patch)) {
+    // a new speed on a track item comes with its new length
+    if (BULK.has(k) || (k === 'end' && 'speed' in patch)) out[k] = v
+  }
+  if (!sound) delete out.denoise
+  return out as Partial<T>
+}
 
 export const emptyProject = (): Project => ({ clips: [], layers: [], settings: { aspect: 'original', background: 'black', fps: 30 } })
 
@@ -66,6 +93,16 @@ export function useEditor(initial: Project) {
   const sourcesRef = useRef(sources)
   sourcesRef.current = sources
   const [sel, setSel] = useState<Selection>(null)
+  const selRef = useRef(sel)
+  selRef.current = sel
+  /** The other members of the selected group when `id` is the item the group was picked from. */
+  const groupOf = (id: string) => {
+    const s = selRef.current
+    if (!s?.all || s.id !== id) return null
+    const ids = new Set(selectedIds(ref.current, s))
+    ids.delete(id)
+    return ids
+  }
   /** The row picked in the track headers: new text, stickers, overlays and audio go there when it has room. */
   const [track, setTrack] = useState<string | null>(null)
 
@@ -85,20 +122,37 @@ export function useEditor(initial: Project) {
     setSources(sourcesRef.current)
   }, [])
 
+  /** Changes a clip; with all clips selected the look and sound part of the change goes to every clip. */
   const updateClip = useCallback((id: string, patch: Partial<Clip> | ((c: Clip) => Partial<Clip>)) => {
     const p = ref.current
-    commit({ ...p, clips: p.clips.map((c) => (c.id === id ? { ...c, ...(typeof patch === 'function' ? patch(c) : patch) } : c)) })
-  }, [commit])
+    const group = groupOf(id)
+    const of = (c: Clip) => (typeof patch === 'function' ? patch(c) : patch)
+    commit({ ...p, clips: p.clips.map((c) => (c.id === id ? { ...c, ...of(c) } : group?.has(c.id) ? { ...c, ...bulkPatch(of(c), hasSound(sourcesRef.current[c.sourceId])) } : c)) })
+  }, [commit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateAllClips = useCallback((patch: (c: Clip) => Partial<Clip>) => {
     const p = ref.current
     commit({ ...p, clips: p.clips.map((c) => ({ ...c, ...patch(c) })) })
   }, [commit])
 
+  /**
+   * Changes a layer. With its row selected, the look and sound part of the change also goes to the items of the
+   * same kind on that row (subtitle groups are handled by the text tools themselves).
+   */
   const updateLayer = useCallback(<L extends Layer>(id: string, patch: Partial<L> | ((l: L) => Partial<L>)) => {
     const p = ref.current
-    commit({ ...p, layers: p.layers.map((l) => (l.id === id ? ({ ...l, ...keyedPatch(l, typeof patch === 'function' ? patch(l as L) : patch, now.current) } as Layer) : l)) })
-  }, [commit])
+    const of = (l: Layer) => (typeof patch === 'function' ? patch(l as L) : patch)
+    const anchor = p.layers.find((l) => l.id === id)
+    const group = anchor && !isSub(anchor) ? groupOf(id) : null
+    const sound = (l: Layer) => (l.type === 'media' || l.type === 'audio') && hasSound(sourcesRef.current[l.sourceId])
+    commit({
+      ...p, layers: p.layers.map((l) => {
+        if (l.id === id) return { ...l, ...keyedPatch(l, of(l), now.current) } as Layer
+        if (group?.has(l.id) && l.type === anchor!.type) return { ...l, ...bulkPatch(of(l), sound(l)) } as Layer
+        return l
+      }),
+    })
+  }, [commit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Patches every layer that matches, as one edit (e.g. the frame of all subtitles). */
   const updateLayers = useCallback((match: (l: Layer) => boolean, patch: (l: Layer) => Partial<Layer>) => {
@@ -428,9 +482,9 @@ export function useEditor(initial: Project) {
   const remove = useCallback(() => {
     const p = ref.current
     if (!sel) return
-    if (sel.type === 'clip') h.set({ ...p, clips: p.clips.filter((c) => c.id !== sel.id) })
-    else if (sel.all) h.set({ ...p, layers: p.layers.filter((l) => !isSub(l)) })
-    else h.set({ ...p, layers: p.layers.filter((l) => l.id !== sel.id) })
+    const ids = new Set(selectedIds(p, sel))
+    if (sel.type === 'clip') h.set({ ...p, clips: p.clips.filter((c) => !ids.has(c.id)) })
+    else h.set({ ...p, layers: p.layers.filter((l) => !ids.has(l.id)) })
     setSel(null)
   }, [h, sel])
 

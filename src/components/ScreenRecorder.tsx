@@ -3,6 +3,7 @@ import type { Box, Crop, MediaLayer } from '../types'
 import { Chips, Slider, Toggle } from '../ui/kit'
 import { Icon } from './Icon'
 import { t } from '../lib/i18n'
+import { useBack } from '../lib/back'
 import { fmtTime } from '../lib/format'
 import { desktop, type ScreenSource } from '../lib/desktop'
 import {
@@ -354,6 +355,8 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
   const shownSources = pickList.length ? pickList : sources
   const available = cameraOnly ? canRecordCamera() : canRecordScreen()
 
+  // Back must not throw away a recording in progress: Stop or ✕ do that on purpose
+  useBack(true, () => { if (phase !== 'recording' && phase !== 'saving') cancel() })
   return (
     <div className="modal screen-rec">
       <div className="modal-head">

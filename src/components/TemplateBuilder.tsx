@@ -4,6 +4,7 @@ import type { TemplateRecord } from '../lib/db'
 import { Chips, ColorRow, Slider } from '../ui/kit'
 import { Icon } from './Icon'
 import { t } from '../lib/i18n'
+import { useBack } from '../lib/back'
 import { uid } from '../lib/format'
 import { loadSource } from '../lib/media'
 import { layoutClips } from '../model/timeline'
@@ -136,6 +137,7 @@ export function TemplateBuilder({ project, sources, kind: kind0, editing, onClos
     </div>
   )
 
+  useBack(true, () => { if (!busy) onClose() })
   return (
     <div className="modal tpl-builder">
       <div className="modal-head">

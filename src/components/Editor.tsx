@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
-import { isSub, useEditor, type CamBubble, type Placed, type Placement, type Selection } from '../model/useEditor'
+import { isSub, selectedIds, useEditor, type CamBubble, type Placed, type Placement, type Selection } from '../model/useEditor'
 import { Player } from '../engine/player'
 import { activeAt } from '../model/timeline'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
@@ -32,6 +32,7 @@ import { playable } from '../model/tracks'
 import { atTime } from '../model/keyframes'
 import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../panels/LayerTools'
 import { ClipOrderPanel, type OrderMode } from '../panels/ClipOrderPanel'
+import { BACK, useBack } from '../lib/back'
 
 const SKIP = 5 // seconds jumped by fast backward / forward
 const RATES = [1, 1.5, 2, 4, 0.5]
@@ -317,11 +318,30 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     } else setToast(t('A main-video clip can only swap with another main-video clip'))
     ed.setSel(from)
   }
-  // Delete with every caption selected removes them all, so check first
+  // several items picked together: every clip of the main video, every item on a row, or every caption
+  const group = useMemo(() => (sel?.all ? selectedIds(ed.project, sel) : null), [sel, ed.project])
+  const groupCaps = sel?.type === 'layer' && !!sel.all && (() => { const l = ed.project.layers.find((x) => x.id === sel.id); return !!l && isSub(l) })()
+  const groupText = !group ? '' : sel?.type === 'clip' ? `${group.length} ${t('clips selected')}` : groupCaps ? `${group.length} ${t('captions selected')}` : `${group.length} ${t('items on this track selected')}`
+  /** Picks every clip of the main video, starting from the selected one (or the one under the playhead). */
+  const selectAllClips = () => {
+    const id = (sel?.type === 'clip' ? sel.id : null) ?? targetClip?.id ?? ed.project.clips[0]?.id
+    if (!id || ed.project.main?.locked) return
+    setPanel(null)
+    ed.setSel({ type: 'clip', id, all: true })
+    setToast(`${ed.project.clips.length} ${t('clips selected. Speed, volume, filters and Delete now change all of them.')}`)
+  }
+  const selectRow = (id: string) => {
+    setPanel(null)
+    ed.setSel({ type: 'layer', id, all: true })
+  }
+  const selectOne = () => { if (sel) ed.setSel({ type: sel.type, id: sel.id } as Selection) }
+  // Delete with several items selected removes them all, so check first
   const removeSel = () => {
-    if (sel?.type === 'layer' && sel.all && !confirm(`${t('Delete all captions?')} (${ed.project.layers.filter(isSub).length})`)) return
+    if (group && group.length > 1 && !confirm(`${t(groupCaps ? 'Delete all captions?' : sel?.type === 'clip' ? 'Delete all clips?' : 'Delete everything on this track?')} (${group.length})`)) return
     ed.remove()
   }
+  // the phone's Back button (and Esc) first closes a panel, then lets go of the selection
+  useBack(!!sel, () => { setPanel(null); setSwapFrom(null); ed.setSel(null) }, BACK.selection)
   const selClip = sel?.type === 'clip' ? ed.project.clips.find((c) => c.id === sel.id) ?? null : null
   const selStored = sel?.type === 'layer' ? ed.project.layers.find((l) => l.id === sel.id) ?? null : null
   // panels show (and change) a keyframed layer as it is at the playhead
@@ -385,9 +405,24 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   // ---- toolbar for the current selection
   type Tool = { icon: IconName; label: string; on: () => void; disabled?: boolean; active?: boolean }
   let tools: Tool[]
-  if (selClip) {
+  if (selClip && group) {
+    // the same change for every clip: look and sound tools only
+    const sound = ed.project.clips.some((c) => hasSound(ed.sources[c.sourceId]))
+    tools = [
+      { icon: 'selectAll', label: 'One clip', on: selectOne, active: true },
+      { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
+      { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
+      ...(sound ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool] : []),
+      { icon: 'filter', label: 'Filters', on: () => setPanel('filters') },
+      { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') },
+      { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') } },
+      { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateAllClips(() => ({ fit: selClip.fit === 'fit' ? 'fill' : 'fit' })) },
+      { icon: 'trash', label: 'Delete', on: removeSel },
+    ]
+  } else if (selClip) {
     const photo = ed.sources[selClip.sourceId]?.kind === 'image'
     tools = [
+      { icon: 'selectAll', label: 'Select all', on: selectAllClips },
       // a video/photo on top of this one (picture-in-picture), at the playhead
       { icon: 'overlay', label: 'Add overlay', on: () => overlayInput.current?.click() },
       { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); setPanel('order') }, disabled: ed.project.clips.length < 2 },
@@ -405,11 +440,43 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') }, disabled: ed.project.clips.at(-1)?.id === selClip.id },
       { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
-      { icon: 'trash', label: 'Delete', on: ed.remove },
+      { icon: 'trash', label: 'Delete', on: removeSel },
+    ]
+  } else if (selLayer && group && !groupCaps) {
+    // every item on the row: tools that change the look or sound of all items of this kind there
+    const media = selLayer.type === 'media'
+    const looks: Tool[] = {
+      text: [
+        { icon: 'adjust', label: 'Style', on: () => setPanel('text-style') } as Tool,
+        { icon: 'anim', label: 'Animation', on: () => setPanel('text-anim') } as Tool,
+      ],
+      sticker: [],
+      media: [
+        { icon: 'anim', label: 'Animation', on: () => setPanel('media-anim') } as Tool,
+        { icon: 'blend', label: 'Blend', on: () => setPanel('blend') } as Tool,
+        ...(media && ed.sources[selLayer.sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
+        ...(media && hasSound(ed.sources[selLayer.sourceId]) ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool] : []),
+        { icon: 'filter', label: 'Filters', on: () => setPanel('filters') } as Tool,
+        { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') } as Tool,
+      ],
+      blur: [{ icon: 'blur', label: 'Blur', on: () => setPanel('blur') } as Tool],
+      audio: [
+        { icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool,
+        { icon: 'volume', label: 'Volume', on: () => setPanel('volume') } as Tool,
+        { icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool,
+      ],
+      wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
+    }[selLayer.type]
+    tools = [
+      { icon: 'selectAll', label: 'One item', on: selectOne, active: true },
+      // a row with different kinds of items: the look tools change the ones like the picked item
+      ...looks,
+      { icon: 'trash', label: 'Delete', on: removeSel },
     ]
   } else if (selLayer) {
     const common: Tool[] = [
       ...(selLayer.type !== 'audio' ? [{ icon: 'layers', label: 'Layer order', on: () => setPanel('arrange') } as Tool] : []),
+      ...(!isSub(selLayer) ? [{ icon: 'selectAll', label: 'Select all', on: () => selectRow(selLayer.id) } as Tool] : []),
       { icon: 'swap', label: 'Swap', on: () => { setPanel(null); setSwapFrom({ type: 'layer', id: selLayer.id }) }, active: swapFrom?.id === selLayer.id },
       ...('box' in selLayer ? [{ icon: 'keyframe', label: 'Keyframes', on: () => setPanel('keys'), active: !!selLayer.keys?.length } as Tool] : []),
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
@@ -461,6 +528,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); openClipPanel('order') }, disabled: !targetClip || ed.project.clips.length < 2 },
+      { icon: 'selectAll', label: 'Select all', on: selectAllClips, disabled: empty || !!ed.project.main?.locked },
       { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
       { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
@@ -610,9 +678,17 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           onTransition={(id) => { ed.setSel({ type: 'clip', id }); setTransitionFor(id); setPanel('transition') }}
           onAdd={() => mainInput.current?.click()}
           onAudioTrack={() => { player?.pause(); setAudioTab('mine'); setPanel('audio') }}
+          onSelectAll={selectAllClips} onSelectRow={selectRow}
           snap={snap}
           picking={swapFrom} onPicked={swapWith}
         />
+      )}
+      {group && !swapFrom && (
+        <div className="swap-bar group-bar">
+          <Icon name="selectAll" size={18} />
+          <span>{groupText}</span>
+          <button className="btn small" onClick={selectOne}>{t(sel?.type === 'clip' ? 'One clip' : 'One item')}</button>
+        </div>
       )}
       {swapFrom && (
         <div className="swap-bar">

@@ -642,3 +642,14 @@ input, textarea { font: inherit; color: inherit; }
 .mic-meter span { display: block; height: 100%; background: linear-gradient(90deg, #34c759, #ffd60a 75%, #ff3b30); transition: width .08s linear; }
 .mic-meter span.loud { box-shadow: 0 0 6px #ff3b30; }
 .rec .row.wide { width: min(420px, 100%); }
+
+/* back arrow in tool panels, ✕ on sheets: always a way out (Back button and Esc too) */
+.panel-head .panel-back { margin-left: -8px; flex: none; }
+.panel-head .panel-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet { position: relative; }
+.sheet-x { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.sheet h2 { padding-right: 36px; }
+
+/* several clips / items picked together */
+.tl-clip.group { outline-color: var(--sel); }
+.tl-head > button.on { color: var(--accent); }

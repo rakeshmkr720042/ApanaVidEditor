@@ -4,6 +4,7 @@ import type { Editor } from '../model/useEditor'
 import { Chips } from '../ui/kit'
 import { Icon } from './Icon'
 import { t } from '../lib/i18n'
+import { useBack } from '../lib/back'
 
 /** Crops a main-video clip, or an overlay video/photo (`layer`; it turns with its box, so no Rotate here). */
 interface Props { ed: Editor; clip?: Clip; layer?: MediaLayer; source: MediaSource; time: number; onClose: () => void }
@@ -93,6 +94,7 @@ export function CropEditor({ ed, clip, layer, source, time, onClose }: Props) {
     onClose()
   }
 
+  useBack(true, onClose)
   return (
     <div className="modal">
       <div className="modal-head">
