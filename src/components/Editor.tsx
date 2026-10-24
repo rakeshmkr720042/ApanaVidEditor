@@ -190,6 +190,14 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     setToast(`${what} ${t('added')} ${where}${placed.cut ? `. ${t('It stops where the main video ends.')}` : ''}`)
   }
 
+  /** Moves the sound of these videos to an audio row and says where it went (or why nothing happened). */
+  const detach = (ids: string[]) => {
+    player?.pause()
+    const made = ed.detachAudio(ids)
+    if (!made.length) { setToast(t('No sound to detach: the video is muted (volume 0) or its track is locked')); return }
+    setToast(`${t('Audio detached to its own audio track')} (${fmtTime(made[0].start)}). ${t('The video is now silent; Undo puts it back.')}`)
+  }
+
   const describe = (srcs: MediaSource[]) => {
     if (srcs.length > 1) return `${srcs.length} ${t('files')}`
     return srcs[0].kind === 'image' ? t('Photo') : t('Video')
@@ -416,6 +424,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
       ...(sound ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool, { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx') } as Tool] : []),
+      ...(sound ? [{ icon: 'detach', label: 'Detach audio', on: () => detach(ed.project.clips.map((c) => c.id)) } as Tool] : []),
       { icon: 'filter', label: 'Filters', on: () => setPanel('filters') },
       { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') } },
@@ -438,6 +447,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
+      // the clip's sound as its own item on an audio row (the clip goes silent)
+      ...(hasSound(ed.sources[selClip.sourceId]) ? [{ icon: 'detach', label: 'Detach audio', on: () => detach([selClip.id]) } as Tool] : []),
       ...(hasSound(ed.sources[selClip.sourceId]) ? [
         { icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise'), active: !!selClip.denoise } as Tool,
         { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx'), active: !isNeutralFx(selClip.fx) } as Tool,
@@ -464,6 +475,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'blend', label: 'Blend', on: () => setPanel('blend') } as Tool,
         ...(media && ed.sources[selLayer.sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
         ...(media && hasSound(ed.sources[selLayer.sourceId]) ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool, { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx') } as Tool] : []),
+        ...(media && hasSound(ed.sources[selLayer.sourceId]) ? [{ icon: 'detach', label: 'Detach audio', on: () => detach(selectedIds(ed.project, sel)) } as Tool] : []),
         { icon: 'filter', label: 'Filters', on: () => setPanel('filters') } as Tool,
         { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') } as Tool,
       ],
@@ -512,6 +524,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'blend', label: 'Blend', on: () => setPanel('blend') } as Tool,
         { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!(selLayer as MediaLayer).chroma?.enabled } as Tool,
         ...(ed.sources[(selLayer as MediaLayer).sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
+        ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [{ icon: 'detach', label: 'Detach audio', on: () => detach([selLayer.id]) } as Tool] : []),
         ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [
           { icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise'), active: !!(selLayer as MediaLayer).denoise } as Tool,
           { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx'), active: !isNeutralFx((selLayer as MediaLayer).fx) } as Tool,
