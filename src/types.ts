@@ -40,6 +40,18 @@ export interface Transition { type: string; duration: number }
 /** Slow pan/zoom over a clip, mostly for photos in a slideshow. */
 export type KenBurns = 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down'
 
+/**
+ * Background-noise removal for a clip's or layer's sound. The cleaned sound is worked out once per
+ * source and setting (src/engine/denoise.ts) and used by the preview and the export; the file stays as it was.
+ */
+export interface Denoise {
+  level: 'light' | 'medium' | 'strong'
+  kind: 'voice' | 'any' // voice: AI speech cleaner (RNNoise); any: steady-noise reducer that keeps music
+  hum: 0 | 50 | 60 // electric hum to notch out (with its overtones)
+  rumble: boolean // cut wind, traffic and AC rumble under 80 Hz
+  gate: boolean // quieten what is left between words
+}
+
 export interface Clip {
   id: string
   sourceId: string
@@ -61,6 +73,7 @@ export interface Clip {
   transition: Transition | null // transition into the next clip
   kenBurns?: KenBurns | null // missing in projects saved before slideshows
   fromTemplate?: boolean // part of an intro/outro; never decides the "original" frame shape
+  denoise?: Denoise | null // background-noise removal, missing = off
   gap?: number // seconds of empty (black) time before this clip, left when snap is off
 }
 
@@ -156,6 +169,7 @@ export interface MediaLayer extends LayerBase, Keyed {
   blend?: BlendMode // missing = normal
   animIn?: TextAnim // missing = none
   animOut?: TextAnim
+  denoise?: Denoise | null
 }
 
 export interface BlurLayer extends LayerBase {
@@ -176,6 +190,7 @@ export interface AudioLayer extends LayerBase {
   label: string
   kind: 'music' | 'sound' | 'voice'
   speed?: number // playback speed, missing = 1
+  denoise?: Denoise | null
 }
 
 export type WaveStyle = 'bars' | 'line' | 'circle'

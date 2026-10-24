@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BlurLayer, Clip, Layer, MainTrack, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AudioLayer, BlurLayer, Box, Clip, Layer, MainTrack, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -8,16 +8,43 @@ import { applySlideshow, type SlideshowOptions } from './slideshow'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
 import { outputSize } from '../engine/renderer'
+import { hasSound } from '../engine/denoise'
 import { insertAt, newTrack, overlaps, trackKind, withTracks } from './tracks'
 import { atTime, hasBox, keyIndexAt, keyedPatch, splitKeys, withKey } from './keyframes'
 
 /** Where to move a layer among the rows: in front of or behind the layers it overlaps, one step or all the way. */
 export type Arrange = 'front' | 'forward' | 'backward' | 'back'
 
-/** `all` on a subtitle selects every subtitle together (style, animation and delete apply to all of them). */
-export type Selection = { type: 'clip'; id: string } | { type: 'layer'; id: string; all?: boolean } | null
+/**
+ * `all` picks a group around the item `id`: every clip of the main video, every item on the layer's row,
+ * or for a subtitle every subtitle. Changes from the tool panels and Delete apply to the whole group.
+ */
+export type Selection = { type: 'clip'; id: string; all?: boolean } | { type: 'layer'; id: string; all?: boolean } | null
 
 export const isSub = (l: Layer): l is TextLayer => l.type === 'text' && l.subtitle
+
+/** Ids of everything the selection covers (just the item unless `all`). */
+export function selectedIds(p: Project, sel: Selection): string[] {
+  if (!sel) return []
+  if (!sel.all) return [sel.id]
+  if (sel.type === 'clip') return p.clips.map((c) => c.id)
+  const l = p.layers.find((x) => x.id === sel.id)
+  if (!l) return []
+  return p.layers.filter(isSub(l) ? isSub : (x) => x.track === l.track).map((x) => x.id)
+}
+
+// what a change to one item of a group passes on to the others: its look and sound, never its place or content
+const BULK = new Set(['speed', 'ramp', 'volume', 'fadeIn', 'fadeOut', 'denoise', 'filter', 'filterAmount', 'adjust', 'fit', 'transition',
+  'chroma', 'blend', 'mask', 'border', 'animIn', 'animOut', 'flipH', 'flipV', 'style', 'strength', 'shape', 'mode', 'color', 'color2'])
+function bulkPatch<T extends object>(patch: Partial<T>, sound: boolean): Partial<T> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(patch)) {
+    // a new speed on a track item comes with its new length
+    if (BULK.has(k) || (k === 'end' && 'speed' in patch)) out[k] = v
+  }
+  if (!sound) delete out.denoise
+  return out as Partial<T>
+}
 
 export const emptyProject = (): Project => ({ clips: [], layers: [], settings: { aspect: 'original', background: 'black', fps: 30 } })
 
@@ -41,6 +68,9 @@ export type Placement = 'track' | 'playhead' | 'start' | 'end'
 /** What was added and where, so the editor can select it, jump to it and say so. */
 export interface Placed { sel: Selection; start: number; where: Placement; cut: boolean }
 
+/** A camera recording made together with a screen recording: shown as a bubble over it, from the same moment. */
+export interface CamBubble { src: MediaSource; box: Box; mask: MediaLayer['mask'] }
+
 /** Overlay scale that fills the frame edge to edge (fit, no cropping) for a source of aspect `ar`. */
 function fullFrameScale(p: Project, sources: Record<string, MediaSource>, ar: number) {
   const { w: W, h: H } = outputSize(p, sources, 1000)
@@ -63,6 +93,16 @@ export function useEditor(initial: Project) {
   const sourcesRef = useRef(sources)
   sourcesRef.current = sources
   const [sel, setSel] = useState<Selection>(null)
+  const selRef = useRef(sel)
+  selRef.current = sel
+  /** The other members of the selected group when `id` is the item the group was picked from. */
+  const groupOf = (id: string) => {
+    const s = selRef.current
+    if (!s?.all || s.id !== id) return null
+    const ids = new Set(selectedIds(ref.current, s))
+    ids.delete(id)
+    return ids
+  }
   /** The row picked in the track headers: new text, stickers, overlays and audio go there when it has room. */
   const [track, setTrack] = useState<string | null>(null)
 
@@ -82,20 +122,37 @@ export function useEditor(initial: Project) {
     setSources(sourcesRef.current)
   }, [])
 
+  /** Changes a clip; with all clips selected the look and sound part of the change goes to every clip. */
   const updateClip = useCallback((id: string, patch: Partial<Clip> | ((c: Clip) => Partial<Clip>)) => {
     const p = ref.current
-    commit({ ...p, clips: p.clips.map((c) => (c.id === id ? { ...c, ...(typeof patch === 'function' ? patch(c) : patch) } : c)) })
-  }, [commit])
+    const group = groupOf(id)
+    const of = (c: Clip) => (typeof patch === 'function' ? patch(c) : patch)
+    commit({ ...p, clips: p.clips.map((c) => (c.id === id ? { ...c, ...of(c) } : group?.has(c.id) ? { ...c, ...bulkPatch(of(c), hasSound(sourcesRef.current[c.sourceId])) } : c)) })
+  }, [commit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateAllClips = useCallback((patch: (c: Clip) => Partial<Clip>) => {
     const p = ref.current
     commit({ ...p, clips: p.clips.map((c) => ({ ...c, ...patch(c) })) })
   }, [commit])
 
+  /**
+   * Changes a layer. With its row selected, the look and sound part of the change also goes to the items of the
+   * same kind on that row (subtitle groups are handled by the text tools themselves).
+   */
   const updateLayer = useCallback(<L extends Layer>(id: string, patch: Partial<L> | ((l: L) => Partial<L>)) => {
     const p = ref.current
-    commit({ ...p, layers: p.layers.map((l) => (l.id === id ? ({ ...l, ...keyedPatch(l, typeof patch === 'function' ? patch(l as L) : patch, now.current) } as Layer) : l)) })
-  }, [commit])
+    const of = (l: Layer) => (typeof patch === 'function' ? patch(l as L) : patch)
+    const anchor = p.layers.find((l) => l.id === id)
+    const group = anchor && !isSub(anchor) ? groupOf(id) : null
+    const sound = (l: Layer) => (l.type === 'media' || l.type === 'audio') && hasSound(sourcesRef.current[l.sourceId])
+    commit({
+      ...p, layers: p.layers.map((l) => {
+        if (l.id === id) return { ...l, ...keyedPatch(l, of(l), now.current) } as Layer
+        if (group?.has(l.id) && l.type === anchor!.type) return { ...l, ...bulkPatch(of(l), sound(l)) } as Layer
+        return l
+      }),
+    })
+  }, [commit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Patches every layer that matches, as one edit (e.g. the frame of all subtitles). */
   const updateLayers = useCallback((match: (l: Layer) => boolean, patch: (l: Layer) => Partial<Layer>) => {
@@ -117,13 +174,24 @@ export function useEditor(initial: Project) {
    * The one rule for adding photos, videos and recordings: on a new track at the playhead (a full-frame overlay
    * above the main video), or into the main video at the playhead (splitting the clip there), start or end.
    * Several files go one after another. An empty project always gets them as its main video.
+   * `at` puts them into the main video between clips at that position instead of at the playhead (no split).
+   * A camera bubble recorded with a screen recording goes on its own row in front, starting with it (same undo step).
    */
-  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop']; dur?: number }): Placed | null => {
+  const place = useCallback((srcs: MediaSource[], where: Placement, t: number, patch?: { crop?: Clip['crop']; dur?: number; cam?: CamBubble | null; at?: number }): Placed | null => {
     const photoDur = patch?.dur ?? 3
     const p = ref.current
     const visual = srcs.filter((s) => s.kind !== 'audio')
     if (!visual.length) return null
     const mode: Placement = p.clips.length ? where : 'end'
+    const bubble = (start: number, tot: number): MediaLayer[] => {
+      const cam = patch?.cam
+      if (!cam) return []
+      return [{
+        id: uid(), type: 'media', sourceId: cam.src.id, in: 0, start, end: Math.max(start + 0.5, Math.min(tot, start + cam.src.duration)),
+        box: { ...cam.box }, volume: 0, chroma: { enabled: false, color: '#00ff00', similarity: 0.35, smoothness: 0.08 }, mask: cam.mask,
+        border: 0, adjust: defaultAdjust(), filter: null, filterAmount: 1,
+      }]
+    }
     if (mode === 'track') {
       const tot = layoutClips(p.clips).total
       let at = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
@@ -152,7 +220,7 @@ export function useEditor(initial: Project) {
       const tr = free ? picked : newTrack('visual')
       const tracks = [...(p.tracks ?? [])]
       if (!free) tracks.splice(insertAt(tracks, 'visual', false), 0, tr)
-      h.set({ ...p, tracks, layers: [...p.layers, ...layers.map((l) => ({ ...l, track: tr.id }))] })
+      h.set({ ...p, tracks, layers: [...p.layers, ...layers.map((l) => ({ ...l, track: tr.id })), ...bubble(layers[0].start, tot)] })
       const sel: Selection = { type: 'layer', id: layers[0].id }
       setSel(sel)
       return { sel, start: layers[0].start, where: mode, cut }
@@ -160,7 +228,7 @@ export function useEditor(initial: Project) {
     const clips = visual.map((s) => ({ ...newClip(s, uid()), ...(s.kind === 'image' ? { out: photoDur } : {}), ...(patch?.crop ? { crop: patch.crop } : {}) }))
     let list = [...p.clips]
     let idx = mode === 'start' ? 0 : list.length
-    const gap = mode === 'playhead' ? gapAt(list, t) : null
+    const gap = mode === 'playhead' && patch?.at === undefined ? gapAt(list, t) : null
     if (gap) {
       // the playhead is in empty time (snap off): the new media goes right there
       list = insertClipsAt(list, clips, t)
@@ -169,7 +237,8 @@ export function useEditor(initial: Project) {
       setSel(sel)
       return { sel, start: layoutClips(list).items.find((x) => x.clip.id === clips[0].id)!.start, where: mode, cut: false }
     }
-    if (mode === 'playhead') {
+    if (mode === 'playhead' && patch?.at !== undefined) idx = Math.max(0, Math.min(list.length, patch.at))
+    else if (mode === 'playhead') {
       const { items } = layoutClips(list)
       const it = items.find((x) => t >= x.start && t < x.start + x.dur) ?? items[items.length - 1]
       const local = t - it.start
@@ -184,8 +253,9 @@ export function useEditor(initial: Project) {
       }
     }
     list.splice(idx, 0, ...clips)
-    h.set({ ...p, clips: list })
-    const start = layoutClips(list).items[idx].start
+    const laid = layoutClips(list)
+    const start = laid.items[idx].start
+    h.set({ ...p, clips: list, layers: [...p.layers, ...bubble(start, laid.total)] })
     const sel: Selection = { type: 'clip', id: clips[0].id }
     setSel(sel)
     return { sel, start, where: mode, cut: false }
@@ -401,12 +471,12 @@ export function useEditor(initial: Project) {
     return l
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const addAudio = useCallback((t: number, src: MediaSource, kind: AudioLayer['kind'], label: string) => {
+  const addAudio = useCallback((t: number, src: MediaSource, kind: AudioLayer['kind'], label: string, extra?: Partial<AudioLayer>) => {
     const tot = total()
     const start = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
     const l: AudioLayer = {
       id: uid(), type: 'audio', sourceId: src.id, in: 0, start, end: Math.min(start + src.duration, tot > 0 ? tot : start + src.duration),
-      volume: kind === 'music' ? 0.6 : 1, fadeIn: kind === 'music' ? 1 : 0, fadeOut: kind === 'music' ? 2 : 0, label, kind,
+      volume: kind === 'music' ? 0.6 : 1, fadeIn: kind === 'music' ? 1 : 0, fadeOut: kind === 'music' ? 2 : 0, label, kind, ...extra,
     }
     addLayer(l)
     return l
@@ -418,13 +488,13 @@ export function useEditor(initial: Project) {
     addLayer(l)
   }, [addLayer])
 
-  /** Deletes the selection. With `keepGap` (snap off) a deleted clip leaves empty time, so later clips stay put. */
+  /** Deletes the selection. With `keepGap` (snap off) deleted clips leave empty time, so later clips stay put. */
   const remove = useCallback((keepGap = false) => {
     const p = ref.current
     if (!sel) return
-    if (sel.type === 'clip') h.set({ ...p, clips: keepGap ? removeClipKeepGap(p.clips, sel.id) : p.clips.filter((c) => c.id !== sel.id) })
-    else if (sel.all) h.set({ ...p, layers: p.layers.filter((l) => !isSub(l)) })
-    else h.set({ ...p, layers: p.layers.filter((l) => l.id !== sel.id) })
+    const ids = new Set(selectedIds(p, sel))
+    if (sel.type === 'clip') h.set({ ...p, clips: keepGap ? [...ids].reduce(removeClipKeepGap, p.clips) : p.clips.filter((c) => !ids.has(c.id)) })
+    else h.set({ ...p, layers: p.layers.filter((l) => !ids.has(l.id)) })
     setSel(null)
   }, [h, sel])
 
@@ -491,20 +561,66 @@ export function useEditor(initial: Project) {
     setSel({ type: 'clip', id: right.id })
   }, [h, sel])
 
-  const moveClip = useCallback((id: string, to: number) => {
+  /** Moves a main-video clip to position `to` (counted after taking it out). Returns its new start time. */
+  const moveClip = useCallback((id: string, to: number): number | null => {
     const p = ref.current
     const from = p.clips.findIndex((c) => c.id === id)
-    if (from < 0 || from === to) return
+    if (from < 0 || p.main?.locked) return null
+    to = Math.max(0, Math.min(p.clips.length - 1, to))
+    if (from === to) return null
     const clips = [...p.clips]
     const [c] = clips.splice(from, 1)
-    clips.splice(Math.max(0, Math.min(clips.length, to)), 0, c)
+    clips.splice(to, 0, c)
     h.set({ ...p, clips })
+    return layoutClips(clips).items[to].start
   }, [h])
 
-  /** Snap off: the clip starts exactly at `at`, leaving empty time behind instead of closing up. */
-  const moveClipAt = useCallback((id: string, at: number) => {
+  /** Swaps two main-video clips (each keeps its own trim, look and transition). Returns the new start of `a`. */
+  const swapClips = useCallback((a: string, b: string): number | null => {
     const p = ref.current
-    h.set({ ...p, clips: moveClipTo(p.clips, id, at) })
+    const i = p.clips.findIndex((c) => c.id === a)
+    const j = p.clips.findIndex((c) => c.id === b)
+    if (i < 0 || j < 0 || i === j || p.main?.locked) return null
+    const clips = [...p.clips]
+    ;[clips[i], clips[j]] = [clips[j], clips[i]]
+    h.set({ ...p, clips })
+    return layoutClips(clips).items[j].start
+  }, [h])
+
+  /**
+   * Swaps two track items of the same kind. One after the other on a row: they trade places in that stretch
+   * and keep the space between them. Otherwise each takes the other's start time and row.
+   */
+  const swapLayers = useCallback((a: string, b: string): boolean => {
+    const p = ref.current
+    const A = p.layers.find((l) => l.id === a)
+    const B = p.layers.find((l) => l.id === b)
+    if (!A || !B || A === B || trackKind(A) !== trackKind(B)) return false
+    const locked = (l: Layer) => !!p.tracks?.find((x) => x.id === l.track)?.locked
+    if (locked(A) || locked(B)) return false
+    const len = (l: Layer) => l.end - l.start
+    const moved = new Map<string, Partial<Layer>>()
+    const [x, y] = A.start <= B.start ? [A, B] : [B, A]
+    if (x.track === y.track && x.end <= y.start + 1e-6) {
+      const gap = y.start - x.end
+      const yEnd = x.start + len(y)
+      moved.set(y.id, { start: x.start, end: yEnd })
+      moved.set(x.id, { start: yEnd + gap, end: yEnd + gap + len(x) })
+    } else {
+      moved.set(A.id, { start: B.start, end: B.start + len(A), track: B.track })
+      moved.set(B.id, { start: A.start, end: A.start + len(B), track: A.track })
+    }
+    h.set({ ...p, layers: p.layers.map((l) => (moved.has(l.id) ? ({ ...l, ...moved.get(l.id) } as Layer) : l)) })
+    return true
+  }, [h])
+
+  /** Snap off: the clip starts exactly at `at`, leaving empty time behind instead of closing up. Returns that start. */
+  const moveClipAt = useCallback((id: string, at: number): number | null => {
+    const p = ref.current
+    if (p.main?.locked) return null
+    const clips = moveClipTo(p.clips, id, at)
+    h.set({ ...p, clips })
+    return layoutClips(clips).items.find((x) => x.clip.id === id)?.start ?? null
   }, [h])
 
   /** Removes the empty time before a clip, pulling it and the clips after it forward. */
@@ -523,7 +639,7 @@ export function useEditor(initial: Project) {
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
-    remove, duplicate, split, moveClip, moveClipAt, closeGap, replaceProject,
+    remove, duplicate, split, moveClip, moveClipAt, closeGap, swapClips, swapLayers, replaceProject,
   }
 }
 

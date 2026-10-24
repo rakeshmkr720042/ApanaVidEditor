@@ -1,4 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg'
+import { Capacitor } from '@capacitor/core'
 import { isDesktop } from './desktop'
 
 const coreBase = () => new URL(`${import.meta.env.BASE_URL}ffmpeg/`, location.href).href
@@ -46,7 +47,7 @@ export async function runFFmpeg(args: string[], onProgress?: (p: number) => void
 }
 
 export async function isCoreCached() {
-  if (isDesktop) return true // bundled with the desktop app
+  if (isDesktop || Capacitor.isNativePlatform()) return true // bundled with the Windows and Android apps
   if (!('caches' in window)) return false
   return !!(await caches.match(wasmURL()))
 }

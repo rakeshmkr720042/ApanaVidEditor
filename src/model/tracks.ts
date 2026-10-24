@@ -3,7 +3,7 @@ import { uid } from '../lib/format'
 
 export const trackKind = (l: Layer): Track['kind'] => (l.type === 'audio' ? 'audio' : 'visual')
 
-/** Text, stickers, blur and waves get a new row at the top (in front); videos and photos one under the other rows. */
+/** Text, stickers, blur and waves get a new row at the top (in front); videos and photos one under the other rows (but over other videos/photos). */
 const FRONT: Layer['type'][] = ['text', 'sticker', 'blur', 'wave']
 
 export const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) => a.start < b.end - 1e-6 && b.start < a.end - 1e-6
@@ -41,10 +41,13 @@ export function withTracks(p: Project, prune = false): Project {
   const assign = new Map<string, string>()
   for (const l of [...loose].sort((a, b) => a.start - b.start)) {
     const kind = trackKind(l)
-    let tr = tracks.find((t) => t.kind === kind && !t.locked && !(busy.get(t.id) ?? []).some((x) => overlaps(x, l)))
+    const free = (t: Track) => t.kind === kind && !t.locked && !(busy.get(t.id) ?? []).some((x) => overlaps(x, l))
+    // a new video/photo goes in front of the videos/photos it plays over (like KineMaster), still under text
+    const under = l.type === 'media' ? tracks.findIndex((t) => (busy.get(t.id) ?? []).some((x) => x.type === 'media' && overlaps(x, l))) : -1
+    let tr = under >= 0 ? tracks.slice(0, under).reverse().find(free) : tracks.find(free)
     if (!tr) {
       tr = newTrack(kind)
-      tracks.splice(insertAt(tracks, kind, FRONT.includes(l.type)), 0, tr)
+      tracks.splice(under >= 0 ? under : insertAt(tracks, kind, FRONT.includes(l.type)), 0, tr)
     }
     busy.set(tr.id, [...(busy.get(tr.id) ?? []), l])
     assign.set(l.id, tr.id)

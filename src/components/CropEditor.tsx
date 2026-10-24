@@ -4,6 +4,7 @@ import type { Editor } from '../model/useEditor'
 import { Chips } from '../ui/kit'
 import { Icon } from './Icon'
 import { t } from '../lib/i18n'
+import { useBack } from '../lib/back'
 
 /** Crops a main-video clip, or an overlay video/photo (`layer`; it turns with its box, so no Rotate here). */
 interface Props { ed: Editor; clip?: Clip; layer?: MediaLayer; source: MediaSource; time: number; onClose: () => void }
@@ -93,6 +94,7 @@ export function CropEditor({ ed, clip, layer, source, time, onClose }: Props) {
     onClose()
   }
 
+  useBack(true, onClose)
   return (
     <div className="modal">
       <div className="modal-head">
@@ -101,7 +103,7 @@ export function CropEditor({ ed, clip, layer, source, time, onClose }: Props) {
         <button className="btn small primary" onClick={done}>{t('Done')}</button>
       </div>
       <div className="crop-stage" onPointerMove={onMove} onPointerUp={() => (drag.current = null)}>
-        <div className="crop-area" ref={area} style={{ aspectRatio: `${source.width} / ${source.height}` }}>
+        <div className="crop-area" ref={area} style={{ aspectRatio: `${source.width} / ${source.height}`, '--ar': source.width / source.height } as React.CSSProperties}>
           {img && <img src={img} alt="" draggable={false} />}
           <div className="crop-shade" style={{ clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x * 100}% ${crop.y * 100}%, ${crop.x * 100}% ${(crop.y + crop.h) * 100}%, ${(crop.x + crop.w) * 100}% ${(crop.y + crop.h) * 100}%, ${(crop.x + crop.w) * 100}% ${crop.y * 100}%, ${crop.x * 100}% ${crop.y * 100}%)` }} />
           <div className="crop-box" style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.w * 100}%`, height: `${crop.h * 100}%` }} onPointerDown={(e) => onDown(e, 'move')}>

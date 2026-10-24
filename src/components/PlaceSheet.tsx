@@ -2,6 +2,7 @@ import type { Placement } from '../model/useEditor'
 import { fmtTime } from '../lib/format'
 import { t } from '../lib/i18n'
 import { Icon, type IconName } from './Icon'
+import { SheetClose } from '../ui/kit'
 
 const LAST = 'placement'
 
@@ -15,7 +16,7 @@ export function lastPlacement(): Placement {
 
 const OPTIONS: { value: Placement; icon: IconName; label: string; hint: string }[] = [
   { value: 'track', icon: 'overlay', label: 'Track at the playhead', hint: 'Shows over the main video, full frame, on the track you picked (or a new one). Drag, trim or Replace it any time.' },
-  { value: 'playhead', icon: 'split', label: 'Main video at the playhead', hint: 'The clip under the playhead is split and this goes in between.' },
+  { value: 'playhead', icon: 'split', label: 'Main video at the playhead', hint: 'The clip under the playhead is split and this goes in between. On the line between two clips, it goes between them (no split).' },
   { value: 'start', icon: 'toStart', label: 'Main video at the start', hint: 'Plays before everything else.' },
   { value: 'end', icon: 'toEnd', label: 'Main video at the end', hint: 'Plays after everything else.' },
 ]
@@ -31,6 +32,7 @@ export function PlaceSheet({ what, time, onPick, onClose }: { what: string; time
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet place-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} />
         <h2>{t('Where should it go?')}</h2>
         <p className="muted small">{what} · {t('Playhead')} {fmtTime(time)}</p>
         {OPTIONS.map((o) => (

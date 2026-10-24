@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Player } from '../engine/player'
 import type { Editor } from '../model/useEditor'
-import type { Layer, TextLayer, VisualLayer } from '../types'
+import type { Layer, MediaLayer, TextLayer, VisualLayer } from '../types'
 import { defaultFrame } from '../engine/text'
 import { isLocked, playable } from '../model/tracks'
 import { atTime } from '../model/keyframes'
@@ -38,6 +38,7 @@ type Gesture =
   | { kind: 'wm'; x0: number; y0: number; cx: number; cy: number }
   | { kind: 'scale'; id: string; cx: number; cy: number; d0: number; a0: number; s0: number; r0: number }
   | { kind: 'edge'; id: string; edge: Edge; x0: number; y0: number; rect0: Rect }
+  | { kind: 'pinch'; id: string; d0: number; a0: number; s0: number; r0: number }
 
 /** The video canvas plus handles to move, scale and rotate text, stickers, overlays and blur areas. */
 export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit }: Props) {
@@ -45,6 +46,9 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   const [box, setBox] = useState({ w: 0, h: 0, left: 0, top: 0 })
   const gesture = useRef<Gesture | null>(null)
   const lastTap = useRef(0)
+  // fingers on the stage, for a two-finger pinch (resize + rotate)
+  const pts = useRef(new Map<number, { x: number; y: number }>())
+  const wheelEnd = useRef(0)
   const W = player?.renderer.W ?? 16, H = player?.renderer.H ?? 9
 
   // fit the canvas inside the stage keeping its aspect ratio
@@ -89,8 +93,33 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
     return null
   }
 
+  /** Two fingers apart and their angle. */
+  const spread = () => {
+    const [a, b] = [...pts.current.values()]
+    return { d: Math.hypot(b.x - a.x, b.y - a.y) || 1, a: Math.atan2(b.y - a.y, b.x - a.x) }
+  }
+
+  /** New size + turn for a centre-and-scale layer; subtitles change together. */
+  const setScaleRot = (l: VisualLayer, scale: number, rotation: number) => {
+    if (l.type === 'blur') return
+    for (const snap of [-180, -90, 0, 90, 180]) if (Math.abs(rotation - snap) < 4) rotation = snap
+    scale = Math.max(0.1, Math.min(8, scale))
+    if (l.type === 'text' && l.subtitle) ed.updateLayers((x) => x.type === 'text' && x.subtitle, (x) => ({ box: { ...(x as TextLayer).box, scale, rotation } }))
+    else ed.updateLayer(l.id, { box: { ...l.box, scale, rotation } })
+  }
+
   const onDown = (e: React.PointerEvent) => {
     const p = toCanvas(e)
+    pts.current.set(e.pointerId, p)
+    // a second finger on a selected overlay/sticker/caption turns the drag into a pinch
+    if (pts.current.size === 2 && selected && selected.type !== 'blur' && !rectOf(selected)) {
+      e.currentTarget.setPointerCapture(e.pointerId)
+      if (!gesture.current) ed.begin()
+      const sp = spread()
+      gesture.current = { kind: 'pinch', id: selected.id, d0: sp.d, a0: sp.a, s0: selected.box.scale, r0: selected.box.rotation }
+      return
+    }
+    if (pts.current.size > 1) return
     if (wmRect && Math.abs(p.x - wmRect.cx) <= wmRect.w / 2 + 10 && Math.abs(p.y - wmRect.cy) <= wmRect.h / 2 + 10) {
       e.currentTarget.setPointerCapture(e.pointerId)
       ed.begin()
@@ -182,9 +211,18 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   }
 
   const onMove = (e: React.PointerEvent) => {
+    if (pts.current.has(e.pointerId)) pts.current.set(e.pointerId, toCanvas(e))
     const g = gesture.current
     if (!g) return
     const p = toCanvas(e)
+    if (g.kind === 'pinch') {
+      if (pts.current.size < 2) return
+      const l0 = ed.project.layers.find((x) => x.id === g.id)
+      if (!l0 || l0.type === 'audio') return
+      const sp = spread()
+      setScaleRot(atTime(l0, t), g.s0 * (sp.d / g.d0), g.r0 + ((sp.a - g.a0) * 180) / Math.PI)
+      return
+    }
     if (g.kind === 'wm') {
       // dragging pins a floating watermark to the spot it was dropped
       ed.setWatermark({ position: 'custom', motion: 'static', x: (g.cx + p.x - g.x0) / W, y: (g.cy + p.y - g.y0) / H })
@@ -230,22 +268,50 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
       setRect({ x, y, w, h })
     } else if (l.type !== 'blur') {
       const d = Math.hypot(p.x - g.cx, p.y - g.cy)
-      const k = d / g.d0
-      let rot = g.r0 + ((Math.atan2(p.y - g.cy, p.x - g.cx) - g.a0) * 180) / Math.PI
-      for (const snap of [-180, -90, 0, 90, 180]) if (Math.abs(rot - snap) < 4) rot = snap
-      const scale = Math.max(0.1, Math.min(8, g.s0 * k))
-      // subtitles resize together, like they move together
-      if (l.type === 'text' && l.subtitle) ed.updateLayers((x) => x.type === 'text' && x.subtitle, (x) => ({ box: { ...(x as TextLayer).box, scale, rotation: rot } }))
-      else ed.updateLayer(l.id, { box: { ...l.box, scale, rotation: rot } })
+      setScaleRot(l, g.s0 * (d / g.d0), g.r0 + ((Math.atan2(p.y - g.cy, p.x - g.cx) - g.a0) * 180) / Math.PI)
     }
   }
 
-  const onUp = () => {
+  const onUp = (e: React.PointerEvent) => {
+    pts.current.delete(e.pointerId)
+    // lifting one finger of a pinch waits for the other
+    if (gesture.current?.kind === 'pinch' && pts.current.size) return
     if (gesture.current) { gesture.current = null; ed.end() }
   }
 
+  /** Mouse wheel over the selected layer resizes it (desktop has no pinch); one undo step per spin. */
+  const onWheel = (e: React.WheelEvent) => {
+    if (!selected || selected.type === 'blur' || rectOf(selected) || gesture.current) return
+    const r = wrap.current!.getBoundingClientRect()
+    if (!hit((e.clientX - r.left - box.left) / scale, (e.clientY - r.top - box.top) / scale)) return
+    if (!wheelEnd.current) ed.begin()
+    clearTimeout(wheelEnd.current)
+    wheelEnd.current = window.setTimeout(() => { wheelEnd.current = 0; ed.end() }, 400)
+    setScaleRot(selected, selected.box.scale * Math.exp(-e.deltaY * 0.0015), selected.box.rotation)
+  }
+
+  /** Quick spots for an overlay photo/video: fill or fit the screen, or picture-in-picture in a corner. */
+  const place = (where: 'fill' | 'fit' | 'tl' | 'tr' | 'bl' | 'br') => {
+    if (selected?.type !== 'media' || !player) return
+    const one = player.renderer.layerRect({ ...selected, box: { ...selected.box, scale: 1 } }, ed.sources)
+    const box1 = { ...selected.box, rotation: 0 }
+    let next: MediaLayer['box']
+    if (where === 'fill' || where === 'fit') {
+      const k = where === 'fill' ? Math.max(W / one.w, H / one.h) : Math.min(W / one.w, H / one.h)
+      next = { ...box1, x: 0.5, y: 0.5, scale: k }
+    } else {
+      // a third of the screen wide, a small margin from the edges
+      const k = Math.min((W * 0.34) / one.w, (H * 0.4) / one.h), m = 0.03
+      const hw = (one.w * k) / W / 2, hh = (one.h * k) / H / 2
+      next = { ...box1, scale: k, x: where.endsWith('l') ? m + hw : 1 - m - hw, y: where.startsWith('t') ? m + hh : 1 - m - hh }
+    }
+    ed.begin()
+    ed.updateLayer(selected.id, { box: next })
+    ed.end()
+  }
+
   return (
-    <div className="stage" ref={wrap} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+    <div className="stage" ref={wrap} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel}>
       <canvas ref={canvasRef} className="preview-canvas" style={{ width: box.w, height: box.h, left: box.left, top: box.top }} />
       {wmRect && (
         <div className="sel-box wm" style={{ left: box.left + wmRect.cx * scale, top: box.top + wmRect.cy * scale, width: wmRect.w * scale, height: wmRect.h * scale, transform: 'translate(-50%, -50%)' }} />
@@ -265,6 +331,16 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
               <div key={k} className={`sel-edge e-${k}`} onPointerDown={onEdgeDown(edge)} onPointerMove={onMove} onPointerUp={onUp} />
             ))}
           {!rectOf(selected) && <div className="sel-handle" onPointerDown={onHandleDown} onPointerMove={onMove} onPointerUp={onUp} />}
+        </div>
+      )}
+      {selected?.type === 'media' && (
+        <div className="frame-quick" onPointerDown={(e) => e.stopPropagation()}>
+          <button onClick={() => place('fill')}>⛶ {tr('Full screen')}</button>
+          <button onClick={() => place('fit')}>▭ {tr('Fit')}</button>
+          <button onClick={() => place('tl')} aria-label={tr('Top left')} title={tr('Top left')}>◰</button>
+          <button onClick={() => place('tr')} aria-label={tr('Top right')} title={tr('Top right')}>◳</button>
+          <button onClick={() => place('bl')} aria-label={tr('Bottom left')} title={tr('Bottom left')}>◱</button>
+          <button onClick={() => place('br')} aria-label={tr('Bottom right')} title={tr('Bottom right')}>◲</button>
         </div>
       )}
       {selected?.type === 'text' && (

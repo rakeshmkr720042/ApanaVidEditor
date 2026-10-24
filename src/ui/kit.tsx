@@ -1,5 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { t } from '../lib/i18n'
+import { BACK, useBack } from '../lib/back'
+import { Icon } from '../components/Icon'
 
 /** Range slider that reports live changes and a commit when the drag ends (one undo step). */
 export function Slider(p: {
@@ -60,14 +62,17 @@ export function Toggle(p: { label: string; value: boolean; onChange: (v: boolean
   )
 }
 
+/** A tool panel above the toolbar. The back arrow, ✓, the phone's Back button and Esc all close it (changes stay; Undo takes them back). */
 export function Panel(p: { title: string; onClose: () => void; children: ReactNode; actions?: ReactNode; tall?: boolean }) {
+  useBack(true, p.onClose, BACK.panel)
   return (
     <div className={`panel${p.tall ? ' tall' : ''}`}>
       <div className="panel-head">
-        <b>{t(p.title)}</b>
+        <button className="icon-btn panel-back" onClick={p.onClose} aria-label={t('Back')} title={t('Back')}><Icon name="back" size={20} /></button>
+        <b className="panel-title">{t(p.title)}</b>
         <div className="panel-actions">
           {p.actions}
-          <button className="btn small primary" onClick={p.onClose}>✓</button>
+          <button className="btn small primary" onClick={p.onClose} aria-label={t('Done')} title={t('Done')}>✓</button>
         </div>
       </div>
       <div className="panel-body">{p.children}</div>
@@ -88,5 +93,15 @@ export function ColorRow(p: { value: string | null; onChange: (c: string | null)
         <input type="color" value={(p.value ?? '#ffffff').slice(0, 7)} onChange={(e) => p.onChange(e.target.value)} />
       </label>
     </div>
+  )
+}
+
+/** The ✕ in the corner of a bottom sheet; Back / Esc do the same. `disabled` while a job must not be left. */
+export function SheetClose(p: { onClose: () => void; disabled?: boolean }) {
+  useBack(true, () => { if (!p.disabled) p.onClose() })
+  return (
+    <button className="icon-btn sheet-x" disabled={p.disabled} onClick={p.onClose} aria-label={t('Close')} title={t('Close')}>
+      <Icon name="close" size={20} />
+    </button>
   )
 }
