@@ -18,6 +18,8 @@ import { CropEditor } from './CropEditor'
 import { Icon, type IconName } from './Icon'
 import { AdjustPanel, FilterPanel, FormatPanel, LayerSpeedPanel, NoisePanel, SpeedPanel, TransitionPanel, VolumePanel } from '../panels/ClipPanels'
 import { hasSound } from '../engine/denoise'
+import { isNeutralFx } from '../engine/soundfx'
+import { AudioFxPanel } from '../panels/AudioFxPanel'
 import { BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, TextPanel, WavePanel } from '../panels/LayerPanels'
 import { AudioPanel } from '../panels/AudioPanel'
 import { AIPanel } from '../panels/AIPanel'
@@ -62,7 +64,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
   | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'order' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -413,7 +415,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'selectAll', label: 'One clip', on: selectOne, active: true },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
-      ...(sound ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool] : []),
+      ...(sound ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool, { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx') } as Tool] : []),
       { icon: 'filter', label: 'Filters', on: () => setPanel('filters') },
       { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') } },
@@ -436,7 +438,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
-      ...(hasSound(ed.sources[selClip.sourceId]) ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise'), active: !!selClip.denoise } as Tool] : []),
+      ...(hasSound(ed.sources[selClip.sourceId]) ? [
+        { icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise'), active: !!selClip.denoise } as Tool,
+        { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx'), active: !isNeutralFx(selClip.fx) } as Tool,
+      ] : []),
       { icon: 'filter', label: 'Filters', on: () => setPanel('filters') },
       { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') },
       { icon: 'crop', label: 'Crop', on: () => setPanel('crop') },
@@ -458,7 +463,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'anim', label: 'Animation', on: () => setPanel('media-anim') } as Tool,
         { icon: 'blend', label: 'Blend', on: () => setPanel('blend') } as Tool,
         ...(media && ed.sources[selLayer.sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
-        ...(media && hasSound(ed.sources[selLayer.sourceId]) ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool] : []),
+        ...(media && hasSound(ed.sources[selLayer.sourceId]) ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool, { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx') } as Tool] : []),
         { icon: 'filter', label: 'Filters', on: () => setPanel('filters') } as Tool,
         { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') } as Tool,
       ],
@@ -467,6 +472,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool,
         { icon: 'volume', label: 'Volume', on: () => setPanel('volume') } as Tool,
         { icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise') } as Tool,
+        { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx') } as Tool,
       ],
       wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
     }[selLayer.type]
@@ -504,9 +510,12 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'crop', label: 'Crop', on: () => setPanel('layer-crop') } as Tool,
         { icon: 'anim', label: 'Animation', on: () => setPanel('media-anim') } as Tool,
         { icon: 'blend', label: 'Blend', on: () => setPanel('blend') } as Tool,
-        { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: (selLayer as MediaLayer).chroma.enabled } as Tool,
+        { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!(selLayer as MediaLayer).chroma?.enabled } as Tool,
         ...(ed.sources[(selLayer as MediaLayer).sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
-        ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [{ icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise'), active: !!(selLayer as MediaLayer).denoise } as Tool] : []),
+        ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [
+          { icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise'), active: !!(selLayer as MediaLayer).denoise } as Tool,
+          { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx'), active: !isNeutralFx((selLayer as MediaLayer).fx) } as Tool,
+        ] : []),
         { icon: 'replace', label: 'Replace', on: () => replaceInput.current?.click() } as Tool,
         { icon: 'filter', label: 'Filters', on: () => setPanel('filters') } as Tool,
         { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') } as Tool,
@@ -516,6 +525,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool,
         { icon: 'volume', label: 'Volume', on: () => setPanel('volume') } as Tool,
         { icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise'), active: selLayer.type === 'audio' && !!selLayer.denoise } as Tool,
+        { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx'), active: selLayer.type === 'audio' && (!isNeutralFx(selLayer.fx) || selLayer.duck != null) } as Tool,
         { icon: 'wave', label: 'Waveform', on: () => { if (selLayer.type === 'audio') { ed.addWave(selLayer); setPanel('wave') } } } as Tool,
       ],
       wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
@@ -567,6 +577,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} />
   else if (panel === 'noise' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <NoisePanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'noise' && selClip) panelView = <NoisePanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
+  else if (panel === 'audiofx' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <AudioFxPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
+  else if (panel === 'audiofx' && selClip) panelView = <AudioFxPanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
   else if (panel === 'filters' && selLayer?.type === 'media') panelView = <FilterPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'filters' && tclip) panelView = <FilterPanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} />
   else if (panel === 'adjust' && selLayer?.type === 'media') panelView = <AdjustPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />

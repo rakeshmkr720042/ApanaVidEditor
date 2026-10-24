@@ -2,6 +2,7 @@ import { fetchFile } from '@ffmpeg/util'
 import type { MediaSource, Project } from '../types'
 import { isNeutral } from '../model/timeline'
 import { getFFmpeg, runFFmpeg } from './ffmpeg'
+import { isNeutralFx } from '../engine/soundfx'
 
 const ext = (name: string) => (name.split('.').pop() || 'mp4').toLowerCase()
 const t = (n: number) => n.toFixed(3)
@@ -14,7 +15,7 @@ export function isSimpleProject(p: Project, sources: Record<string, MediaSource>
     const s = sources[c.sourceId]
     return s?.kind === 'video' && s.width === first.width && s.height === first.height && ext(s.name) === ext(first.name) &&
       c.speed === 1 && !c.ramp && c.volume === 1 && !c.fadeIn && !c.fadeOut && !c.rotate && !c.flipH && !c.flipV &&
-      !c.crop && !c.filter && isNeutral(c.adjust) && !c.transition && !c.kenBurns && !c.denoise && !c.chroma?.enabled
+      !c.crop && !c.filter && isNeutral(c.adjust) && !c.transition && !c.kenBurns && !c.denoise && isNeutralFx(c.fx) && !c.chroma?.enabled
   })
 }
 

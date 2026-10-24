@@ -255,6 +255,8 @@ input, textarea { font: inherit; color: inherit; }
 .toggle input:checked + i { background: var(--accent); }
 .toggle input:checked + i::after { transform: translateX(18px); }
 .noise-row { align-items: center; margin-top: 4px; }
+.voice-grid button { display: grid; gap: 2px; justify-items: center; }
+.voice-emoji { font-size: 20px; line-height: 1; }
 .row-toggles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .row-toggles .toggle { font-size: 13px; }
 

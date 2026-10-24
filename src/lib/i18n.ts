@@ -399,6 +399,22 @@ const hi: Record<string, string> = {
   'items on this track selected': 'आइटम इस ट्रैक पर चुने गए', 'clips selected. Speed, volume, filters and Delete now change all of them.': 'क्लिप चुनी गईं। स्पीड, आवाज़, फ़िल्टर और डिलीट अब सब पर लगेंगे।',
   'Delete all clips?': 'सारी क्लिप हटाएं?', 'Delete everything on this track?': 'इस ट्रैक पर सब कुछ हटाएं?', 'Select all clips': 'सारी क्लिप चुनें',
   'Select everything on this track': 'इस ट्रैक पर सब चुनें',
+  'Audio effects': 'ऑडियो इफ़ेक्ट', 'Equalizer': 'इक्वलाइज़र', 'Voice changer': 'आवाज़ बदलें', 'Echo & reverb': 'गूंज और रिवर्ब', 'Loudness': 'लाउडनेस',
+  'Stereo': 'स्टीरियो', 'Auto-lower': 'अपने-आप धीमा', 'Flat': 'सामान्य', 'Voice boost': 'आवाज़ साफ़', 'Podcast': 'पॉडकास्ट', 'Bass boost': 'बास बढ़ाएं',
+  'Treble boost': 'ट्रेबल बढ़ाएं', 'Warm': 'गर्म', 'Bright': 'चमकदार', 'Less bass': 'कम बास', 'Muffled': 'दबी हुई', 'Bass': 'बास', 'Mid': 'मिड', 'Treble': 'ट्रेबल',
+'Deep': 'भारी', 'Child': 'बच्चा', 'Chipmunk': 'चिपमंक', 'Monster': 'राक्षस', 'Robot': 'रोबोट', 'Alien': 'एलियन', 'Telephone': 'टेलीफ़ोन',
+  'Old radio': 'पुराना रेडियो', 'Megaphone': 'माइक/भोंपू', 'Pitch': 'पिच',
+  'Pitch makes the voice higher or lower (in semitones); the speed stays the same.': 'पिच आवाज़ को पतली या भारी करती है (सेमीटोन में); स्पीड वही रहती है।',
+  'Echo': 'गूंज', 'Reverb': 'रिवर्ब', 'Room': 'कमरा', 'Hall': 'हॉल', 'Cave': 'गुफा', 'Even out loud and quiet parts': 'तेज़ और धीमे हिस्से बराबर करें',
+  'Loudness (normalize)': 'लाउडनेस (बराबर करें)', 'As it is': 'जैसा है', 'YouTube / Reels (-14)': 'YouTube / Reels (-14)', 'Podcast (-16)': 'पॉडकास्ट (-16)', 'TV (-23)': 'TV (-23)',
+  'Limiter (no clipping or distortion)': 'लिमिटर (फटी आवाज़ नहीं)',
+  'Loudness makes every clip equally loud. -14 suits YouTube, Instagram and WhatsApp.': 'लाउडनेस हर क्लिप को बराबर तेज़ करती है। -14 YouTube, Instagram और WhatsApp के लिए सही है।',
+  'Mono': 'मोनो', 'Left only': 'सिर्फ़ बायां', 'Right only': 'सिर्फ़ दायां', 'Swap sides': 'बायां-दायां बदलें', 'Balance': 'बैलेंस',
+  'left': 'बायां', 'right': 'दायां', 'Play backwards (reverse)': 'उल्टा चलाएं (रिवर्स)',
+  'Mic only on one side? Pick Left only or Right only, or Mono.': 'माइक एक ही तरफ़ है? सिर्फ़ बायां, सिर्फ़ दायां या मोनो चुनें।',
+  'Lower this sound when someone speaks': 'कोई बोले तो यह आवाज़ धीमी करें', 'Volume while speaking': 'बोलते समय आवाज़',
+  'Music goes down by itself under the voice in your video, overlays and voice recordings, and comes back up in the pauses.': 'वीडियो, ओवरले और वॉइस रिकॉर्डिंग में आवाज़ आने पर म्यूज़िक अपने-आप धीमा होता है और रुकने पर फिर तेज़ हो जाता है।',
+  'Applying effects…': 'इफ़ेक्ट लग रहे हैं…', 'Could not apply the effects. The original sound is used.': 'इफ़ेक्ट नहीं लग पाए। असली आवाज़ ही चलेगी।', 'With effects': 'इफ़ेक्ट के साथ',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

@@ -1,6 +1,7 @@
-import type { Denoise, MediaSource, Project } from '../types'
+import type { AudioFx, Denoise, MediaSource, Project } from '../types'
 import { decodeAudio } from '../lib/media'
 import { encodeWav } from './music'
+import { applyFx, fxKey, liveFx } from './soundfx'
 import type { DenoiseJob, DenoiseReply, SpectralOpts } from './denoise.worker'
 
 /**
@@ -138,13 +139,22 @@ export async function cleanBuffer(buf: AudioBuffer, d: Denoise, progress?: (p: n
   return out
 }
 
-// ---- cleaned sounds per source and setting, shared by the preview and the export
+// ---- cleaned sounds per source and setting (noise removal and/or sound effects), shared by the preview and the export
 
-export const denoiseKey = (sourceId: string, d: Denoise) => `${sourceId}|${d.kind}|${d.level}|${d.hum}|${+d.rumble}|${+d.gate}`
+/** Cache key of a source with its noise removal and sound effects ('' parts = off). */
+export const denoiseKey = (sourceId: string, d: Denoise | null | undefined, fx?: AudioFx | null) =>
+  `${sourceId}|${d ? `${d.kind}|${d.level}|${d.hum}|${+d.rumble}|${+d.gate}` : '-'}|${fxKey(fx)}`
+
+/** The noise removal and sound effects an item asks for; null when it plays its sound as it is. */
+export function soundJob(item: { denoise?: Denoise | null; fx?: AudioFx | null }): { dn: Denoise | null; fx: AudioFx | null } | null {
+  const dn = item.denoise ?? null, fx = liveFx(item.fx)
+  return dn || fx ? { dn, fx } : null
+}
 
 export interface CleanState { status: 'working' | 'ready' | 'error'; progress: number; blob?: Blob; source?: MediaSource; error?: string }
 
-const cache = new Map<string, CleanState & { done: Promise<Blob | null>; used: number }>()
+type Entry = CleanState & { done: Promise<Blob | null>; used: number; needed: boolean }
+const cache = new Map<string, Entry>()
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((f) => f())
 let queue: Promise<unknown> = Promise.resolve()
@@ -153,7 +163,9 @@ const KEEP = 8 // cleaned sounds kept in memory
 /** Called whenever a cleaned sound starts, moves on, finishes, or "hear original" is switched. */
 export function onCleanChange(f: () => void) { listeners.add(f); return () => { listeners.delete(f) } }
 
-export function cleanState(sourceId: string, d: Denoise): CleanState | undefined { return cache.get(denoiseKey(sourceId, d)) }
+export function cleanState(sourceId: string, d: Denoise | null | undefined, fx?: AudioFx | null): CleanState | undefined {
+  return cache.get(denoiseKey(sourceId, d, fx))
+}
 
 function evict() {
   const old = [...cache.entries()].filter(([, e]) => e.status !== 'working').sort((a, b) => a[1].used - b[1].used)
@@ -164,17 +176,25 @@ function evict() {
   }
 }
 
+// keys the preview still wants; a sound asked for only by the preview is skipped once nobody wants it
+// (a slider dragged across many values must not make every one of them)
+let wanted = new Set<string>()
+
 /** The cleaned sound of a source (made once, one at a time). Null when the source has no sound. */
-export function cleanSound(src: MediaSource, d: Denoise): Promise<Blob | null> {
-  const key = denoiseKey(src.id, d)
+export function cleanSound(src: MediaSource, d: Denoise | null | undefined, fx?: AudioFx | null, forPreview = false): Promise<Blob | null> {
+  const key = denoiseKey(src.id, d, fx)
   const have = cache.get(key)
-  if (have && have.status !== 'error') { have.used = performance.now(); return have.done }
-  const entry = { status: 'working', progress: 0, used: performance.now() } as CleanState & { done: Promise<Blob | null>; used: number }
+  if (have && have.status !== 'error') { have.used = performance.now(); if (!forPreview) have.needed = true; return have.done }
+  const entry = { status: 'working', progress: 0, used: performance.now(), needed: !forPreview } as Entry
+  const live = liveFx(fx)
   entry.done = (queue = queue.catch(() => {}).then(async () => {
     try {
+      if (!entry.needed && !wanted.has(key)) { cache.delete(key); return null }
       const buf = src.kind === 'image' ? null : await decodeAudio(src.file)
       if (!buf) throw new Error('no sound')
-      const out = await cleanBuffer(buf, d, (p) => { entry.progress = p; emit() })
+      const share = d && live ? 0.6 : 1 // part of the progress bar for noise removal
+      let out = d ? await cleanBuffer(buf, d, (p) => { entry.progress = p * share; emit() }) : buf
+      if (live) out = await applyFx(out, live, (p) => { const a = d ? share : 0; entry.progress = a + p * (1 - a); emit() })
       const blob = encodeWav(out)
       entry.blob = blob
       entry.source = { ...src, id: `dn:${key}`, kind: 'audio', file: blob, url: URL.createObjectURL(blob), thumbs: [] }
@@ -198,12 +218,22 @@ export function cleanSound(src: MediaSource, d: Denoise): Promise<Blob | null> {
 /** True when the source has a sound that can be cleaned (videos without sound have an empty waveform). */
 export const hasSound = (src: MediaSource | undefined): src is MediaSource => !!src && src.kind !== 'image' && src.hasAudio && src.wave !== ''
 
-/** Starts cleaning every sound the project asks to clean (the preview calls this on each change). */
+let prepTimer: ReturnType<typeof setTimeout> | null = null
+/**
+ * Starts cleaning every sound the project asks for (the preview calls this on each change). It waits a moment
+ * so a slider being dragged only makes the sound for where it stops.
+ */
 export function prepareCleanSounds(project: Project, sources: Record<string, MediaSource>) {
-  for (const c of project.clips) if (c.denoise && hasSound(sources[c.sourceId])) void cleanSound(sources[c.sourceId], c.denoise)
+  const jobs: [MediaSource, Denoise | null, AudioFx | null][] = []
+  for (const c of project.clips) { const j = soundJob(c); if (j && hasSound(sources[c.sourceId])) jobs.push([sources[c.sourceId], j.dn, j.fx]) }
   for (const l of project.layers) {
-    if ((l.type === 'media' || l.type === 'audio') && l.denoise && hasSound(sources[l.sourceId])) void cleanSound(sources[l.sourceId], l.denoise)
+    if (l.type !== 'media' && l.type !== 'audio') continue
+    const j = soundJob(l)
+    if (j && hasSound(sources[l.sourceId])) jobs.push([sources[l.sourceId], j.dn, j.fx])
   }
+  wanted = new Set(jobs.map(([s, d, fx]) => denoiseKey(s.id, d, fx)))
+  if (prepTimer) clearTimeout(prepTimer)
+  prepTimer = setTimeout(() => { for (const [s, d, fx] of jobs) void cleanSound(s, d, fx, true) }, 350)
 }
 
 let original = false
@@ -211,9 +241,9 @@ let original = false
 export function setHearOriginal(v: boolean) { if (original !== v) { original = v; emit() } }
 export const hearingOriginal = () => original
 
-/** The cleaned sound to play in the preview, or null (not ready yet, comparing, or no denoise). */
-export function previewSource(sourceId: string, d: Denoise | null | undefined): MediaSource | null {
-  if (!d || original) return null
-  const e = cache.get(denoiseKey(sourceId, d))
+/** The cleaned sound to play in the preview, or null (not ready yet, comparing, or nothing to do). */
+export function previewSource(sourceId: string, d: Denoise | null | undefined, fx?: AudioFx | null): MediaSource | null {
+  if ((!d && !liveFx(fx)) || original) return null
+  const e = cache.get(denoiseKey(sourceId, d, fx))
   return e?.status === 'ready' ? e.source ?? null : null
 }
