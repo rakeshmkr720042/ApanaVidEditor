@@ -1,7 +1,8 @@
 import type { AspectRatio, MediaSource, Project } from '../types'
 import { layoutClips } from '../model/timeline'
 import { getFFmpeg, runFFmpeg } from '../lib/ffmpeg'
-import { mixAudio } from './audiomix'
+import { longMix, mixAudio } from './audiomix'
+import { canEncodeLong, mixToOgg } from './longmix'
 import { sleep, stayAwake } from './background'
 import { openReader, type FrameReader } from './frames'
 import { encodeWav } from './music'
@@ -148,16 +149,25 @@ export async function exportProject(
   try {
     // ---- audio
     let hasAudio = false
+    let audioFile = 'a.wav'
     if (!gif) {
       onProgress(0.01, 'Mixing audio…')
-      const mix = await mixAudio(project, sources, (p) => onProgress(0.01 + p * 0.07, 'Mixing audio…'))
-      check()
-      if (mix) { await write('a.wav', new Uint8Array(await encodeWav(mix).arrayBuffer())); hasAudio = true }
+      const mixing = (p: number) => onProgress(0.01 + p * 0.07, 'Mixing audio…')
+      if (longMix(project) && await canEncodeLong()) {
+        // an hour of sound as one WAV would need gigabytes on the way; mix and compress it piece by piece instead
+        const ogg = await mixToOgg(project, sources, (p) => { check(); mixing(p) })
+        check()
+        if (ogg) { audioFile = 'a.ogg'; await write(audioFile, ogg); hasAudio = true }
+      } else {
+        const mix = await mixAudio(project, sources, mixing)
+        check()
+        if (mix) { await write(audioFile, new Uint8Array(await encodeWav(mix).arrayBuffer())); hasAudio = true }
+      }
     }
     if (job.format === 'mp3') {
       if (!hasAudio) throw new Error('This project has no sound to export')
       onProgress(0.5, 'Encoding MP3…')
-      const { code } = await runFFmpeg(['-i', 'a.wav', '-c:a', 'libmp3lame', '-b:a', `${size.audioK}k`, 'out.mp3'], (p) => onProgress(0.5 + p * 0.45, 'Encoding MP3…'))
+      const { code } = await runFFmpeg(['-i', audioFile, '-c:a', 'libmp3lame', '-b:a', `${size.audioK}k`, 'out.mp3'], (p) => onProgress(0.5 + p * 0.45, 'Encoding MP3…'))
       if (code !== 0) throw new Error('MP3 encoding failed')
       cleanup.push('out.mp3')
       const data = (await ff.readFile('out.mp3')) as Uint8Array
@@ -242,7 +252,7 @@ export async function exportProject(
     const ext = job.format
     const out = `out.${ext}`
     cleanup.push(out)
-    const audioIn = hasAudio ? ['-i', 'a.wav'] : []
+    const audioIn = hasAudio ? ['-i', audioFile] : []
     const audioMap = hasAudio ? ['-map', '1:a:0'] : []
     let args: string[]
     if (target) {

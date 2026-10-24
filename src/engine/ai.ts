@@ -2,7 +2,9 @@ import type { MediaSource, Project } from '../types'
 import type { Cue } from '../lib/srt'
 import type { AiRequest, AiResponse, Task } from './ai.worker'
 import { keepStorage, modelState, mtRoute, type ModelKind } from './offline'
-import { mixAudio, stretch } from './audiomix'
+import { longMix, mixAudio, mixInPieces, stretch } from './audiomix'
+import { layoutClips } from '../model/timeline'
+import { TOO_BIG } from '../lib/longaudio'
 import { localAI, translateLine } from '../lib/localai'
 import { decodeAudio } from '../lib/media'
 import { cloneLines } from './voiceclone'
@@ -122,15 +124,34 @@ const voiceOnly = (p: Project): Project => ({
 
 /** The timeline's sound (or a part of it) as 16 kHz mono, which is what Whisper listens to. */
 async function timelineAudio(project: Project, sources: Record<string, MediaSource>, range?: [number, number]) {
+  const total = layoutClips(project.clips).total
+  const [from, to] = range ? [Math.max(0, range[0]), Math.min(total, range[1])] : [0, total]
+  if (to - from < 0.2) return null
+  if (range) {
+    // only that part is mixed, straight at 16 kHz mono
+    const mix = await mixAudio(project, sources, undefined, { from, to, rate: 16000, channels: 1 })
+    return mix ? mix.getChannelData(0) : null
+  }
+  if (longMix(project)) {
+    // mixed straight to 16 kHz mono a piece at a time: a full-quality mix of an hour would not fit in memory
+    let out: Float32Array
+    try { out = new Float32Array(Math.ceil(total * 16000)) } catch { throw new Error(TOO_BIG) }
+    let any = false
+    await mixInPieces(project, sources, 16000, 1, (buf, at) => {
+      if (!buf) return
+      any = true
+      const i = Math.round(at * 16000), d = buf.getChannelData(0)
+      out.set(d.subarray(0, Math.max(0, Math.min(d.length, out.length - i))), i)
+    })
+    return any ? out : null
+  }
   const mix = await mixAudio(project, sources)
   if (!mix) return null
-  const [from, to] = range ? [Math.max(0, range[0]), Math.min(mix.duration, range[1])] : [0, mix.duration]
-  if (to - from < 0.2) return null
-  const ctx = new OfflineAudioContext(1, Math.ceil((to - from) * 16000), 16000)
+  const ctx = new OfflineAudioContext(1, Math.ceil(mix.duration * 16000), 16000)
   const n = ctx.createBufferSource()
   n.buffer = mix
   n.connect(ctx.destination)
-  n.start(0, from, to - from)
+  n.start()
   return (await ctx.startRendering()).getChannelData(0)
 }
 

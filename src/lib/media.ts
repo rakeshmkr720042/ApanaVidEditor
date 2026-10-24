@@ -1,6 +1,9 @@
 import type { MediaKind, MediaSource } from '../types'
 import { IMAGE_DURATION } from '../model/timeline'
 import { uid } from './format'
+import { TOO_BIG, isLong, longPeaks, probeDuration } from './longaudio'
+
+const LONG_BYTES_HINT = 30 * 1048576
 
 const THUMBS = 10
 const THUMB_H = 64
@@ -38,22 +41,28 @@ export async function decodeAudio(blob: Blob): Promise<AudioBuffer | null> {
 }
 
 export function waveform(buf: AudioBuffer, width = 400, height = 48) {
-  const c = document.createElement('canvas')
-  c.width = width; c.height = height
-  const ctx = c.getContext('2d')!
   const data = buf.getChannelData(0)
   const step = Math.max(1, Math.floor(data.length / width))
-  ctx.fillStyle = 'rgba(255,255,255,0.85)'
   const peaks = new Float32Array(width)
   for (let x = 0; x < width; x++) {
     let peak = 0
     for (let i = x * step; i < (x + 1) * step && i < data.length; i += 8) peak = Math.max(peak, Math.abs(data[i]))
     peaks[x] = peak
   }
+  return drawPeaks(peaks, height)
+}
+
+function drawPeaks(peaks: Float32Array, height: number) {
+  const width = peaks.length
+  const c = document.createElement('canvas')
+  c.width = width; c.height = height
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'
   // normalise so quiet recordings still show their shape (at most 8x gain)
-  const gain = 1 / Math.max(0.125, ...peaks)
+  let max = 0.125
+  for (const p of peaks) max = Math.max(max, p)
   for (let x = 0; x < width; x++) {
-    const h = Math.max(1, peaks[x] * gain * height * 0.95)
+    const h = Math.max(1, (peaks[x] / max) * height * 0.95)
     ctx.fillRect(x, (height - h) / 2, 1, h)
   }
   return c.toDataURL('image/png')
@@ -85,8 +94,14 @@ export async function loadSource(file: Blob, name: string, id = uid()): Promise<
   }
 
   if (kind === 'audio') {
+    // long recordings are never unpacked whole: the length comes from the header and the picture from a light read
+    const secs = await probeDuration(url)
+    if (isLong(secs, file.size)) {
+      const peaks = await longPeaks(file, 400).catch(() => null)
+      if (secs > 0) return { id, kind, file, url, name, duration: secs, width: 0, height: 0, hasAudio: true, thumbs: peaks ? [drawPeaks(peaks, 48)] : [] }
+    }
     const buf = await decodeAudio(file)
-    if (!buf) throw new Error(`${name} could not be decoded`)
+    if (!buf) throw new Error(file.size > LONG_BYTES_HINT ? TOO_BIG : `${name} could not be decoded. Try an MP3, M4A or WAV file.`)
     return { id, kind, file, url, name, duration: buf.duration, width: 0, height: 0, hasAudio: true, thumbs: [waveform(buf)] }
   }
 

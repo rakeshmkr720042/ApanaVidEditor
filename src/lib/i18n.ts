@@ -126,6 +126,8 @@ const hi: Record<string, string> = {
   'Local AI is writing key points…': 'Local AI मुख्य बातें लिख रहा है…', 'Skip key points': 'मुख्य बातें छोड़ें',
   'Key points were skipped; the cards show the first words of each chapter.': 'मुख्य बातें छोड़ दी गईं; कार्ड पर हर हिस्से के पहले शब्द दिखेंगे।',
   'Local AI stopped writing key points': 'Local AI ने मुख्य बातें लिखना रोक दिया', 'The other cards show the first words of each chapter.': 'बाकी कार्ड पर हर हिस्से के पहले शब्द दिखेंगे।',
+    'This audio is too long for the memory on this device. Split it into parts under 30 minutes, or use the computer app.': 'यह ऑडियो इस डिवाइस की मेमोरी के लिए बहुत लंबा है। इसे 30 मिनट से छोटे हिस्सों में बाँटें, या कंप्यूटर वाला ऐप इस्तेमाल करें।',
+  'Long audio: it is read in parts, so making the scenes and captions takes a while. Keep the app open. On a phone, recordings under 30 minutes are safest.': 'लंबा ऑडियो: इसे हिस्सों में पढ़ा जाता है, इसलिए सीन और कैप्शन बनने में समय लगेगा। ऐप खुला रखें। फ़ोन पर 30 मिनट से छोटी रिकॉर्डिंग सबसे सुरक्षित है।',
   'Scenes are cut at the pauses.': 'सीन रुकावटों पर काटे गए हैं।', 'The speech model needs internet the first time.': 'बोली वाला मॉडल पहली बार इंटरनेट से आता है।',
   'No speech was found, so there are no captions. Scenes are cut at the pauses.': 'बोली नहीं मिली, इसलिए कैप्शन नहीं हैं। सीन रुकावटों पर काटे गए हैं।',
   "each scene is one chapter of it. Edit a scene's text to change its captions.": 'हर सीन इसका एक हिस्सा है। कैप्शन बदलने के लिए सीन का टेक्स्ट बदलें।',
