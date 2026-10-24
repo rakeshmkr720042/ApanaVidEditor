@@ -651,3 +651,14 @@ input, textarea { font: inherit; color: inherit; }
 }
 .gs-status { margin: 0; }
 .gs-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* back arrow in tool panels, ✕ on sheets: always a way out (Back button and Esc too) */
+.panel-head .panel-back { margin-left: -8px; flex: none; }
+.panel-head .panel-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet { position: relative; }
+.sheet-x { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.sheet h2 { padding-right: 36px; }
+
+/* several clips / items picked together */
+.tl-clip.group { outline-color: var(--sel); }
+.tl-head > button.on { color: var(--accent); }

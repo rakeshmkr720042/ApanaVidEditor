@@ -31,7 +31,7 @@ import { AuxBoxes, CoverageMeter, Step, Thumb } from './Material'
 import { movingClip } from '../lib/moving'
 import type { WaveStyle } from '../types'
 import { encodeWav } from '../engine/music'
-import { Chips, Slider, Toggle } from '../ui/kit'
+import { Chips, Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { articleKeyPoints, chapterPoints, keyPoints, localAI, makeQuiz } from '../lib/localai'
 
@@ -1007,6 +1007,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet scene-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} disabled={!!busy} />
         <h2>{t(start === 'article' ? 'Article to video' : start === 'data' ? 'Data to video' : start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
         <p className="muted small">{t(start === 'article'
           ? 'Paste the link of a blog post or news article. Its headline, sections and pictures become scenes, read by the voice.'

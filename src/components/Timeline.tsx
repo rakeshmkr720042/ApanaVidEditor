@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Clip, Layer } from '../types'
 import { MIN_CLIP } from '../types'
-import type { Editor, Selection } from '../model/useEditor'
+import { selectedIds, type Editor, type Selection } from '../model/useEditor'
 import { clipDuration, IMAGE_DURATION, layerSpeed } from '../model/timeline'
 import { trackKind, trackName } from '../model/tracks'
 import { keysOf } from '../model/keyframes'
@@ -21,6 +21,9 @@ interface Props {
   onAdd: () => void
   /** A new audio row was made: offer what to put on it (file, voice, computer sound, music). */
   onAudioTrack?: () => void
+  /** Select every clip of the main video / every item on a row (from the row's first item). */
+  onSelectAll?: () => void
+  onSelectRow?: (firstId: string) => void
   snap: boolean
   /** Swap is waiting for a second item: taps pick it instead of selecting. */
   picking?: Selection
@@ -51,7 +54,7 @@ function layerLabel(l: Layer) {
   }
 }
 
-export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, snap, picking, onPicked }: Props) {
+export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, onSelectAll, onSelectRow, snap, picking, onPicked }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const lastSet = useRef(-1)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -61,6 +64,8 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
   const pinch = useRef<{ d0: number; pps0: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const { project, sources, layout, sel } = ed
+  // the other items picked together with the selected one
+  const group = useMemo(() => (sel?.all ? new Set(selectedIds(project, sel)) : null), [sel, project])
   const total = layout.total
   const [snapLine, setSnapLine] = useState<number | null>(null)
   const lanesRef = useRef<HTMLDivElement>(null)
@@ -342,6 +347,9 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
             <button className={mainLocked ? 'off' : ''} onClick={() => ed.setMain({ locked: !mainLocked })} aria-label="Lock main" aria-pressed={mainLocked} title={tl('Lock')}>
               <Icon name={mainLocked ? 'lock' : 'unlock'} size={16} />
             </button>
+            <button className={sel?.type === 'clip' && sel.all ? 'on' : ''} disabled={mainLocked} onClick={() => onSelectAll?.()} aria-label="Select all clips" title={tl('Select all clips')}>
+              <Icon name="selectAll" size={16} />
+            </button>
           </div>
           <div className="tl-head-rows">
             {tracks.map((tr, i) => {
@@ -389,6 +397,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
               const src = sources[clip.sourceId]
               if (!src) return null
               const selected = sel?.type === 'clip' && sel.id === clip.id
+              const inGroup = !selected && !!group?.has(clip.id)
               const reordering = drag?.kind === 'reorder' && drag.moved && drag.id === clip.id
               const speed = clip.ramp ? (clip.out - clip.in) / clipDuration(clip) : clip.speed
               const isImg = src.kind === 'image'
@@ -397,7 +406,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
               return (
                 <div
                   key={clip.id}
-                  className={`tl-clip${selected ? ' selected' : ''}${reordering ? ' ghost' : ''}${mainLocked ? ' locked' : ''}`}
+                  className={`tl-clip${selected ? ' selected' : ''}${inGroup ? ' group' : ''}${reordering ? ' ghost' : ''}${mainLocked ? ' locked' : ''}`}
                   style={{ left: it.start * pps + shift, width: it.dur * pps }}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -472,12 +481,12 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
               const row = tracks[lane]
               const locked = !!row?.locked
               const selected = sel?.type === 'layer' && sel.id === l.id
-              const group = !selected && sel?.type === 'layer' && sel.all && l.type === 'text' && l.subtitle
+              const inGroup = !selected && !!group?.has(l.id)
               const src = (l.type === 'audio') ? sources[l.sourceId] : null
               return (
                 <div
                   key={l.id}
-                  className={`tl-layer${selected ? ' selected' : ''}${group ? ' group' : ''}${locked ? ' locked' : ''}${row?.hidden ? ' hidden' : ''}`}
+                  className={`tl-layer${selected ? ' selected' : ''}${inGroup ? ' group' : ''}${locked ? ' locked' : ''}${row?.hidden ? ' hidden' : ''}`}
                   style={{ left: l.start * pps, width: Math.max(4, (l.end - l.start) * pps), top: lane * LANE + 3, background: LAYER_COLORS[l.type] }}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -524,7 +533,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
           </div>
         </>
       })()}
-      {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} />}
+      {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} onSelectAll={onSelectRow} />}
     </div>
   )
 }

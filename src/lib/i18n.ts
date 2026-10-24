@@ -373,7 +373,11 @@ const hi: Record<string, string> = {
   'The background video plays silently and starts again if it is shorter than this clip.': 'बैकग्राउंड वीडियो बिना आवाज़ चलता है, और क्लिप से छोटा हो तो फिर से शुरू हो जाता है।',
   'The background stays with this clip when you move, split or trim it.': 'क्लिप को हिलाने, काटने या छोटा करने पर बैकग्राउंड उसी के साथ रहता है।',
   'The background fills the screen behind this layer and moves with it.': 'बैकग्राउंड इस लेयर के पीछे पूरी स्क्रीन भरता है और उसके साथ चलता है।',
-  'Background photo added behind the person': 'व्यक्ति के पीछे बैकग्राउंड फ़ोटो लग गई', 'Background video added behind the person': 'व्यक्ति के पीछे बैकग्राउंड वीडियो लग गया'
+  'Background photo added behind the person': 'व्यक्ति के पीछे बैकग्राउंड फ़ोटो लग गई', 'Background video added behind the person': 'व्यक्ति के पीछे बैकग्राउंड वीडियो लग गया',
+  'Select all': 'सब चुनें', 'One clip': 'एक क्लिप', 'One item': 'एक आइटम', 'clips selected': 'क्लिप चुनी गईं', 'captions selected': 'कैप्शन चुने गए',
+  'items on this track selected': 'आइटम इस ट्रैक पर चुने गए', 'clips selected. Speed, volume, filters and Delete now change all of them.': 'क्लिप चुनी गईं। स्पीड, आवाज़, फ़िल्टर और डिलीट अब सब पर लगेंगे।',
+  'Delete all clips?': 'सारी क्लिप हटाएं?', 'Delete everything on this track?': 'इस ट्रैक पर सब कुछ हटाएं?', 'Select all clips': 'सारी क्लिप चुनें',
+  'Select everything on this track': 'इस ट्रैक पर सब चुनें',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()
