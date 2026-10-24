@@ -10,6 +10,8 @@ import { Icon } from './Icon'
 import { LocalAISheet } from './LocalAISheet'
 import { OfflineSheet } from './OfflineSheet'
 import { CompressSheet } from './CompressSheet'
+import { FeedbackSheet } from './FeedbackSheet'
+import { listNotes } from '../lib/feedback'
 import { localAI } from '../lib/localai'
 
 export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang: () => void }) {
@@ -23,6 +25,8 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [aiSheet, setAiSheet] = useState(false)
   const [compress, setCompress] = useState(false)
   const [aiOn, setAiOn] = useState(() => !!localAI())
+  const [notesSheet, setNotesSheet] = useState(false)
+  const [openNotes, setOpenNotes] = useState(0)
 
   const openFile = async (f: File) => {
     setError(null); setOpening(true)
@@ -34,6 +38,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   useEffect(() => {
     refresh()
     checkOffline()
+    listNotes().then((l) => setOpenNotes(l.filter((n) => !n.done).length)).catch(() => {})
     storageEstimate().then((e) => e?.usage != null && setUsage(`${(e.usage / 1048576).toFixed(0)} MB`))
   }, [])
 
@@ -50,6 +55,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
       <header className="top">
         <div className="brand"><span className="logo"><Icon name="play" size={16} /></span> ApanaVidEditor</div>
         <div className="top-actions">
+          <button className="btn ghost small notes-btn" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
+            <Icon name="note" size={16} /><span className="wide-only"> {t('Notes')}</span>{openNotes > 0 && <span className="count">{openNotes}</span>}
+          </button>
           <button className="btn ghost small" onClick={() => setAiSheet(true)}>{aiOn ? '✓ ' : ''}{t('Local AI')}</button>
           <button className="btn ghost small" onClick={() => { setLang(getLang() === 'hi' ? 'en' : 'hi'); onLang() }}>{getLang() === 'hi' ? 'English' : 'हिंदी'}</button>
         </div>
@@ -91,6 +99,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
       </main>
       {netSheet && <OfflineSheet onClose={() => { setNetSheet(false); checkOffline() }} />}
       {compress && <CompressSheet onClose={() => setCompress(false)} />}
+      {notesSheet && <FeedbackSheet where="Home" onClose={(n) => { setNotesSheet(false); setOpenNotes(n) }} />}
       {aiSheet && <LocalAISheet onClose={() => { setAiSheet(false); setAiOn(!!localAI()) }} />}
     </div>
   )

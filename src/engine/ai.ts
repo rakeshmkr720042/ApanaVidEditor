@@ -36,10 +36,24 @@ export const VOICES: Record<string, string> = {
 }
 
 export const ASR_MODELS = [
-  { id: 'onnx-community/whisper-tiny', label: 'Fast', size: '~45 MB' },
-  { id: 'onnx-community/whisper-base', label: 'Balanced', size: '~80 MB' },
-  { id: 'onnx-community/whisper-small', label: 'Accurate', size: '~250 MB' },
+  { id: 'onnx-community/whisper-tiny', label: 'Fast', size: '~75 MB' },
+  { id: 'onnx-community/whisper-base', label: 'Balanced', size: '~140 MB' },
+  { id: 'onnx-community/whisper-small', label: 'Accurate', size: '~500 MB' },
+  { id: 'onnx-community/whisper-large-v3-turbo', label: 'Best (computer)', size: '~1 GB' },
 ]
+/** Large v3 turbo was trained without the translate task, so English captions use the small model. */
+const NO_TRANSLATE = 'onnx-community/whisper-large-v3-turbo'
+
+const MODEL_KEY = 'asr-model'
+/** The quality the user picked last time (Balanced on a first run). */
+export const savedModel = () => {
+  try { const m = localStorage.getItem(MODEL_KEY); if (m && ASR_MODELS.some((x) => x.id === m)) return m } catch { /* private mode */ }
+  return ASR_MODELS[1].id
+}
+/** Whether the user ever chose a quality (otherwise the app may pick one that works offline). */
+export const modelChosen = () => { try { return !!localStorage.getItem(MODEL_KEY) } catch { return false } }
+export const saveModel = (m: string) => { try { localStorage.setItem(MODEL_KEY, m) } catch { /* private mode */ } }
+
 export const VOICE_SIZE = '~40 MB'
 
 const TASK: Record<ModelKind, Task> = { asr: 'automatic-speech-recognition', tts: 'text-to-speech', mt: 'translation' }
@@ -86,17 +100,37 @@ function call(req: NoId<AiRequest>, progress?: Progress, transfer: Transferable[
   })
 }
 
+/**
+ * Stops whatever the AI engine is doing (a long listen, say): the engine is closed and every
+ * waiting call fails with `why`. The next call starts it again, with the models still cached.
+ */
+export function stopAI(why = 'Stopped') {
+  worker?.terminate()
+  worker = null
+  for (const w of waiting.values()) w.reject(new Error(why))
+  waiting.clear()
+}
+
 // ---------------------------------------------------------------- speech to text
 
-/** The whole timeline's sound as 16 kHz mono, which is what Whisper listens to. */
-async function timelineAudio(project: Project, sources: Record<string, MediaSource>, onProgress?: (p: number) => void) {
-  const mix = await mixAudio(project, sources, onProgress)
+/** Only the user's own recordings: everything else (video sound, music, effects) is muted. */
+const voiceOnly = (p: Project): Project => ({
+  ...p,
+  clips: p.clips.map((c) => ({ ...c, volume: 0 })),
+  layers: p.layers.filter((l) => l.type !== 'media' && (l.type !== 'audio' || l.kind === 'voice')),
+})
+
+/** The timeline's sound (or a part of it) as 16 kHz mono, which is what Whisper listens to. */
+async function timelineAudio(project: Project, sources: Record<string, MediaSource>, range?: [number, number]) {
+  const mix = await mixAudio(project, sources)
   if (!mix) return null
-  const ctx = new OfflineAudioContext(1, Math.ceil(mix.duration * 16000), 16000)
+  const [from, to] = range ? [Math.max(0, range[0]), Math.min(mix.duration, range[1])] : [0, mix.duration]
+  if (to - from < 0.2) return null
+  const ctx = new OfflineAudioContext(1, Math.ceil((to - from) * 16000), 16000)
   const n = ctx.createBufferSource()
   n.buffer = mix
   n.connect(ctx.destination)
-  n.start()
+  n.start(0, from, to - from)
   return (await ctx.startRendering()).getChannelData(0)
 }
 
@@ -120,22 +154,36 @@ function splitLong(c: Cue, max = 84): Cue[] {
   })
 }
 
+export interface ListenOpts { model: string; language: string; toEnglish: boolean }
+
+/** Whether the timeline has voice recordings that can be listened to on their own. */
+export const hasVoice = (p: Project) => p.layers.some((l) => l.type === 'audio' && l.kind === 'voice')
+
+/**
+ * Speech to text on the timeline. `range` listens to only that part (to redo a
+ * few captions); `voice` listens to the user's voice recordings without the music.
+ */
 export async function transcribe(
   project: Project, sources: Record<string, MediaSource>,
-  opts: { model: string; language: string; toEnglish: boolean }, progress: Progress,
-): Promise<Cue[]> {
+  opts: ListenOpts & { range?: [number, number]; voice?: boolean }, progress: Progress,
+): Promise<{ cues: Cue[]; language: string | null }> {
   progress('work', 0)
-  const audio = await timelineAudio(project, sources)
+  const audio = await timelineAudio(opts.voice ? voiceOnly(project) : project, sources, opts.range)
   if (!audio) throw new Error('This video has no sound to listen to')
-  return transcribeSamples(audio, opts, progress)
+  return listen(audio, opts, progress, opts.range ? Math.max(0, opts.range[0]) : 0)
+}
+
+async function listen(audio: Float32Array, opts: ListenOpts, progress: Progress, offset = 0) {
+  const language = opts.language === 'auto' ? null : opts.language.split('-')[0]
+  const model = opts.toEnglish && opts.model === NO_TRANSLATE ? ASR_MODELS[2].id : opts.model
+  const r = await call({ type: 'asr', audio, model, language, task: opts.toEnglish ? 'translate' : 'transcribe', offset }, progress, [audio.buffer])
+  if (r.type !== 'asr') throw new Error('Unexpected reply')
+  return { cues: r.cues.flatMap((c) => splitLong(c)), language: r.language }
 }
 
 /** Speech to text on 16 kHz mono samples (the array is handed to the worker, so pass a copy to keep it). */
-export async function transcribeSamples(audio: Float32Array, opts: { model: string; language: string; toEnglish: boolean }, progress: Progress): Promise<Cue[]> {
-  const language = opts.language === 'auto' ? null : opts.language.split('-')[0]
-  const r = await call({ type: 'asr', audio, model: opts.model, language, task: opts.toEnglish ? 'translate' : 'transcribe' }, progress, [audio.buffer])
-  if (r.type !== 'asr') throw new Error('Unexpected reply')
-  return r.cues.flatMap((c) => splitLong(c))
+export async function transcribeSamples(audio: Float32Array, opts: ListenOpts, progress: Progress): Promise<Cue[]> {
+  return (await listen(audio, opts, progress)).cues
 }
 
 // ---------------------------------------------------------------- translation

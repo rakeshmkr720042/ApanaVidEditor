@@ -5,7 +5,7 @@ import { runsInBackground } from '../engine/background'
 import { resetFFmpeg } from '../lib/ffmpeg'
 import { isNative, saveNative } from '../lib/save'
 import { fmtTime } from '../lib/format'
-import { Chips } from '../ui/kit'
+import { Chips, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 
 const PRESETS: { value: CompressPreset; label: string }[] = [
@@ -110,6 +110,7 @@ export function CompressSheet({ file: given, onClose }: { file?: File; onClose: 
     <div className="sheet-backdrop" onClick={running ? undefined : onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} data-testid="compress-sheet">
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} disabled={!!running} />
         <input ref={picker} type="file" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setResult(null) } e.target.value = '' }} />
         {running ? (
           <>

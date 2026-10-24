@@ -1,8 +1,9 @@
-import type { MediaSource, Project } from '../types'
+import type { Denoise, MediaSource, Project } from '../types'
 import { clipSegments, layerSpeed, layoutClips } from '../model/timeline'
 import { decodeAudio } from '../lib/media'
 import { encodeWav } from './music'
 import { runFFmpeg, getFFmpeg } from '../lib/ffmpeg'
+import { cleanSound, denoiseKey, hasSound } from './denoise'
 
 export const MIX_RATE = 48000
 
@@ -40,12 +41,15 @@ export async function mixAudio(
   if (total <= 0) return null
   const ctx = new OfflineAudioContext(2, Math.ceil(total * MIX_RATE), MIX_RATE)
   const decoded = new Map<string, AudioBuffer | null>()
-  const getBuf = async (id: string) => {
-    if (!decoded.has(id)) {
+  // the sound of a source, or its cleaned sound when the clip or layer has noise removal on
+  const getBuf = async (id: string, dn?: Denoise | null) => {
+    const key = dn ? denoiseKey(id, dn) : id
+    if (!decoded.has(key)) {
       const src = sources[id]
-      decoded.set(id, src && src.kind !== 'image' ? await decodeAudio(src.file) : null)
+      const blob = !hasSound(src) ? null : dn ? await cleanSound(src, dn) ?? src.file : src.file
+      decoded.set(key, blob ? await decodeAudio(blob) : null)
     }
-    return decoded.get(id)!
+    return decoded.get(key)!
   }
   let any = false
   const steps = items.length + project.layers.length
@@ -55,7 +59,7 @@ export async function mixAudio(
     const c = it.clip
     onProgress?.(done++ / steps)
     if (c.volume <= 0) continue
-    const buf = await getBuf(c.sourceId)
+    const buf = await getBuf(c.sourceId, c.denoise)
     if (!buf) continue
     const g = ctx.createGain()
     g.connect(ctx.destination)
@@ -91,7 +95,7 @@ export async function mixAudio(
   for (const l of project.layers) {
     onProgress?.(done++ / steps)
     if ((l.type !== 'audio' && l.type !== 'media') || l.volume <= 0) continue
-    const buf = await getBuf(l.sourceId)
+    const buf = await getBuf(l.sourceId, l.denoise)
     if (!buf) continue
     const len = l.end - l.start
     const g = ctx.createGain()

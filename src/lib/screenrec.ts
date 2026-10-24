@@ -6,6 +6,25 @@ export const canRecordScreen = () => typeof navigator !== 'undefined' && !!navig
 
 export type Surface = 'monitor' | 'window' | 'browser'
 
+/** Camera recording needs getUserMedia: phones, the Windows app and every modern browser. */
+export const canRecordCamera = () => typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
+
+/** Opens a camera (a given one, or the front camera). Big for a camera-only video, smaller for a bubble. */
+export async function openCamera(deviceId: string | null, big: boolean) {
+  const size = big ? { width: { ideal: 1920 }, height: { ideal: 1080 } } : { width: { ideal: 1280 }, height: { ideal: 720 } }
+  return navigator.mediaDevices.getUserMedia({
+    video: { ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'user' }), ...size, frameRate: { ideal: 30 } },
+    audio: false,
+  })
+}
+
+/** The cameras on this device (names show only after camera permission was given). */
+export async function listCameras() {
+  try { return (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput') } catch { return [] }
+}
+
+export const micStream = () => navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+
 /** Asks the user to share a screen, window or tab, optionally with the computer's sound. */
 export async function captureScreen(surface: Surface, systemAudio: boolean) {
   return navigator.mediaDevices.getDisplayMedia({

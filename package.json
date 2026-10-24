@@ -19,6 +19,7 @@
     "electron:build": "npm run build && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.6.9",
     "@capacitor/filesystem": "^7.1.9",
     "@capacitor/share": "^7.0.4",
@@ -27,6 +28,7 @@
     "@ffmpeg/util": "^0.12.2",
     "@gradio/client": "^2.7.1",
     "@huggingface/transformers": "4.3.1",
+    "@jitsi/rnnoise-wasm": "^0.2.1",
     "mp4box": "^0.5.3",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",

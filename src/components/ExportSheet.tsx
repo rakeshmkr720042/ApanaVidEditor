@@ -7,7 +7,7 @@ import { resetFFmpeg } from '../lib/ffmpeg'
 import { isNative, saveNative } from '../lib/save'
 import { layoutClips } from '../model/timeline'
 import { fmtTime } from '../lib/format'
-import { Chips, Slider, Toggle } from '../ui/kit'
+import { Chips, Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { youTubeMode } from '../lib/youtube'
 import { YouTubeSheet } from './YouTubeSheet'
@@ -153,6 +153,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
     <div className="sheet-backdrop" onClick={running ? undefined : onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} disabled={!!running} />
         {running ? (
           <>
             <h2>{running.n > 1 ? `${running.i + 1}/${running.n} · ` : ''}{t(running.label)}</h2>

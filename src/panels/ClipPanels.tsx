@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Adjust, AspectRatio, AudioLayer, Clip, MediaLayer } from '../types'
+import type { Adjust, AspectRatio, AudioLayer, Clip, Denoise, MediaLayer } from '../types'
 import type { Editor } from '../model/useEditor'
 import { defaultAdjust, SPEED_RAMPS } from '../model/timeline'
 import { ADJUST_SLIDERS, colorParams, FILTER_GROUPS, FILTERS } from '../engine/filters'
 import { Grader } from '../engine/gl'
 import { TRANSITION_GROUPS, TRANSITIONS } from '../engine/transitions'
+import { cleanState, DEFAULT_DENOISE, hasSound, hearingOriginal, onCleanChange, setHearOriginal } from '../engine/denoise'
 import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
 
@@ -46,9 +47,10 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
 
 /** Speed of a video or sound on its own track (no speed ramps there). */
 export function LayerSpeedPanel({ ed, layer, onClose }: P & { layer: MediaLayer | AudioLayer }) {
-  const src = ed.sources[layer.sourceId]
   // the layer keeps the same part of the video, so it gets shorter when faster and longer when slower
+  // (worked out for each item, as a selected row changes them all)
   const set = (s: number) => ed.updateLayer<MediaLayer | AudioLayer>(layer.id, (l) => {
+    const src = ed.sources[l.sourceId]
     const len = ((l.end - l.start) * (l.speed ?? 1)) / s
     const room = src ? (src.duration - l.in) / s : Infinity
     return { speed: s, end: l.start + Math.max(0.2, Math.min(room, len)) }
@@ -224,4 +226,64 @@ export function FormatPanel({ ed, onClose }: P) {
 /** Small helpers used by the toolbar for direct (non-panel) clip actions. */
 export function useClip(ed: Editor) {
   return useMemo(() => (ed.sel?.type === 'clip' ? ed.project.clips.find((c) => c.id === ed.sel!.id) ?? null : null), [ed.sel, ed.project.clips])
+}
+
+type Cleanable = { kind: 'clip'; clip: Clip } | { kind: 'layer'; layer: MediaLayer | AudioLayer }
+
+/** Background-noise removal for a clip's or layer's sound, with a quick before/after switch. */
+export function NoisePanel({ ed, target, onClose }: P & { target: Cleanable }) {
+  const item = target.kind === 'clip' ? target.clip : target.layer
+  const d = item.denoise ?? null
+  const [, redraw] = useState(0)
+  useEffect(() => onCleanChange(() => redraw((n) => n + 1)), [])
+  // leaving the panel always goes back to the cleaned sound
+  useEffect(() => () => setHearOriginal(false), [])
+  const set = (next: Denoise | null) => {
+    if (target.kind === 'clip') ed.updateClip(target.clip.id, { denoise: next })
+    else ed.updateLayer<MediaLayer | AudioLayer>(target.layer.id, { denoise: next })
+  }
+  const patch = (p: Partial<Denoise>) => set({ ...(d ?? DEFAULT_DENOISE), ...p })
+  const st = d ? cleanState(item.sourceId, d) : undefined
+  const withSound = target.kind === 'clip' ? ed.project.clips.filter((c) => hasSound(ed.sources[c.sourceId])) : []
+  return (
+    <Panel title="Remove noise" onClose={onClose}>
+      <Chips
+        options={[{ value: 'off', label: 'Off' }, { value: 'light', label: 'Light' }, { value: 'medium', label: 'Medium' }, { value: 'strong', label: 'Strong' }]}
+        value={d?.level ?? 'off'}
+        onChange={(v) => (v === 'off' ? set(null) : patch({ level: v }))}
+      />
+      {d ? (
+        <>
+          <Chips options={[{ value: 'voice', label: 'Voice (AI)' }, { value: 'any', label: 'Music & other sounds' }]} value={d.kind} onChange={(v) => patch({ kind: v })} />
+          <p className="muted small">{t(d.kind === 'voice'
+            ? 'Keeps only speech: removes fans, traffic, crowd, keyboard, wind.'
+            : 'Turns down steady noise (hiss, fan, AC, room hum) and keeps music.')}</p>
+          <div className="row noise-row">
+            <span className="muted small">{t('Electric hum')}</span>
+            <Chips options={[{ value: 0, label: 'Off' }, { value: 50, label: '50 Hz (India)' }, { value: 60, label: '60 Hz' }]} value={d.hum} onChange={(v) => patch({ hum: v as Denoise['hum'] })} />
+          </div>
+          <Toggle label="Cut low rumble (wind, AC, traffic)" value={d.rumble} onChange={(v) => patch({ rumble: v })} />
+          <Toggle label="Quieter between words" value={d.gate} onChange={(v) => patch({ gate: v })} />
+          {st?.status === 'working' && (
+            <>
+              <p className="muted small">{t('Cleaning the sound…')} {Math.round(st.progress * 100)}%</p>
+              <div className="progress"><div style={{ width: `${Math.round(st.progress * 100)}%` }} /></div>
+            </>
+          )}
+          {st?.status === 'error' && <p className="error-text small">{t('Could not clean this sound. The original sound is used.')}</p>}
+          {st?.status === 'ready' && (
+            <div className="row noise-row">
+              <span className="muted small">{t('Listen')}</span>
+              <Chips options={[{ value: 'clean', label: 'Cleaned' }, { value: 'original', label: 'Original' }]} value={hearingOriginal() ? 'original' : 'clean'} onChange={(v) => setHearOriginal(v === 'original')} />
+            </div>
+          )}
+          {withSound.length > 1 && (
+            <button className="btn small" onClick={() => ed.updateAllClips((c) => (hasSound(ed.sources[c.sourceId]) ? { denoise: d } : {}))}>{t('Apply to all clips')}</button>
+          )}
+        </>
+      ) : (
+        <p className="muted small">{t('Removes background noise from this sound. Your file is not changed; turn it off any time.')}</p>
+      )}
+    </Panel>
+  )
 }
