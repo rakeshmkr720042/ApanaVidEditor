@@ -74,6 +74,7 @@ export interface Clip {
   kenBurns?: KenBurns | null // missing in projects saved before slideshows
   fromTemplate?: boolean // part of an intro/outro; never decides the "original" frame shape
   denoise?: Denoise | null // background-noise removal, missing = off
+  gap?: number // seconds of empty (black) time before this clip, left when snap is off
 }
 
 export interface Box {

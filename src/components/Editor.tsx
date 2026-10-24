@@ -338,7 +338,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   // Delete with several items selected removes them all, so check first
   const removeSel = () => {
     if (group && group.length > 1 && !confirm(`${t(groupCaps ? 'Delete all captions?' : sel?.type === 'clip' ? 'Delete all clips?' : 'Delete everything on this track?')} (${group.length})`)) return
-    ed.remove()
+    ed.remove(!snap)
   }
   // the phone's Back button (and Esc) first closes a panel, then lets go of the selection
   useBack(!!sel, () => { setPanel(null); setSwapFrom(null); ed.setSel(null) }, BACK.selection)

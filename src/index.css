@@ -160,6 +160,12 @@ input, textarea { font: inherit; color: inherit; }
 .tl-lhandle.in { left: -12px; border-radius: 5px 0 0 5px; }
 .tl-lhandle.out { right: -12px; border-radius: 0 5px 5px 0; }
 .tl-playhead { position: absolute; left: 50%; top: 16px; bottom: 4px; width: 2px; margin-left: -1px; background: #fff; border-radius: 1px; pointer-events: none; box-shadow: 0 0 4px rgba(0,0,0,.6); z-index: 5; }
+.tl-gap {
+  position: absolute; top: 0; height: 100%; border: 1px dashed rgba(255,255,255,.25); border-radius: 6px; display: grid; place-items: center;
+  background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255,255,255,.05) 6px 12px);
+}
+.tl-gap button { width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(255,255,255,.85); color: #111; font-size: 11px; line-height: 1; padding: 0; }
+.tl-clip-drop { position: absolute; top: 0; height: 100%; border: 2px solid var(--accent); border-radius: 6px; background: rgba(255,255,255,.12); pointer-events: none; z-index: 5; }
 .tl-reorder-hint { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); background: var(--accent); padding: 4px 10px; border-radius: 99px; font-size: 12px; z-index: 6; white-space: nowrap; pointer-events: none; }
 .tl-clip.selected { touch-action: none; cursor: grab; }
 .tl-drop { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--sel); border-radius: 2px; z-index: 6; box-shadow: 0 0 6px rgba(0,0,0,.6); pointer-events: none; }
