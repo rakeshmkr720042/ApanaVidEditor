@@ -22,7 +22,7 @@ import { outputSize } from '../engine/renderer'
 import { loadSource } from '../lib/media'
 import { saveMedia } from '../lib/db'
 import { fmtTime } from '../lib/format'
-import { ASR_MODELS, SPOKEN, VOICES, langName, speakLines, transcribeSamples } from '../engine/ai'
+import { ASR_MODELS, SPOKEN, VOICES, langName, savedModel, saveModel, speakLines, stopAI, transcribeSamples } from '../engine/ai'
 import { WAVE_STYLES, analyse, decodeMono, primeWave } from '../engine/visualizer'
 import { audioToScenes, bitmapOf, drawAudioCard, findGaps, type AudioLook } from '../lib/audioScenes'
 import { fillInOrder, picsFromFiles, type Leftover, type Pic } from '../lib/rawMedia'
@@ -31,7 +31,7 @@ import { AuxBoxes, CoverageMeter, Step, Thumb } from './Material'
 import { movingClip } from '../lib/moving'
 import type { WaveStyle } from '../types'
 import { encodeWav } from '../engine/music'
-import { Chips, Slider, Toggle } from '../ui/kit'
+import { Chips, Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { articleKeyPoints, chapterPoints, keyPoints, localAI, makeQuiz } from '../lib/localai'
 
@@ -42,7 +42,7 @@ let draft = '' // pasted script, kept if the sheet is closed before making scene
 let mapDraft = { tab: 'outline' as 'outline' | 'tree', outline: '', tree: node('', [node('')]), overview: true }
 let mapMemo: MapSettings | null = null
 // the audio being turned into a video, and how
-let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as AudioLook, cover: null as Blob | null, target: 12, listen: true, lang: 'auto', model: ASR_MODELS[0].id }
+let audioDraft = { src: null as MediaSource | null, title: '', look: 'card' as AudioLook, cover: null as Blob | null, target: 12, listen: true, lang: 'auto', model: savedModel() }
 // extra material beside the main file: pictures for the scenes, and music under the video
 let matDraft = { pics: [] as Pic[], music: null as MediaSource | null, leftover: 'card' as Leftover }
 // the quiz being written, and how it looks
@@ -157,6 +157,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const [o, setO] = useState(() => (start === 'audio' && !memo.wave ? (memo = { ...memo, wave: 'bars', captions: true, theme: memo.theme === 'clean' ? 'dark' : memo.theme }) : memo))
   const [track, setTrack] = useState<MediaSource | null>(null)
   const [busy, setBusy] = useState<{ label: string; p: number } | null>(null)
+  // a long step that can be given up on shows a button under the progress bar
+  const [skip, setSkip] = useState<{ label: string; run: () => void } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pasting, setPasting] = useState(start === 'text')
   const [script, setScript] = useState(draft)
@@ -376,10 +378,18 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     void redrawAudio(o.theme, wave)
   }
 
+  /** Runs `work` with a button that gives up on it; resolves to null when the button is pressed. */
+  const skippable = <T,>(work: Promise<T>, label: string, onSkip?: () => void) => new Promise<T | null>((resolve, reject) => {
+    const run = () => { setSkip(null); onSkip?.(); resolve(null) }
+    setSkip({ label, run })
+    work.then(resolve, reject).finally(() => setSkip((cur) => (cur?.run === run ? null : cur)))
+  })
+
   const addAudio = async () => {
     const src = ad.src
     if (!src) return
     setError(null); setNote(null)
+    const notes: string[] = []
     try {
       setBusy({ label: t('Reading the audio…'), p: 0 })
       const pcm = await decodeMono(src.file)
@@ -390,19 +400,32 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       let cues: Awaited<ReturnType<typeof transcribeSamples>> = []
       if (ad.listen) {
         try {
-          cues = await transcribeSamples(pcm.slice(), { model: ad.model, language: ad.lang, toEnglish: false }, (stage, p) =>
-            setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : t('Listening to the audio…'), p }))
-          if (!cues.length) setNote(t('No speech was found, so there are no captions. Scenes are cut at the pauses.'))
+          const heard = await skippable(transcribeSamples(pcm.slice(), { model: ad.model, language: ad.lang, toEnglish: false }, (stage, p) =>
+            setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : t('Listening to the audio…'), p })),
+          t('Continue without captions'), () => stopAI('Skipped'))
+          if (!heard) notes.push(t('Captions were skipped. Scenes are cut at the pauses.'))
+          else if (!heard.length) notes.push(t('No speech was found, so there are no captions. Scenes are cut at the pauses.'))
+          cues = heard ?? []
         } catch (e) {
           const msg = (e as Error).message
           const why = /fetch|network|load/i.test(msg) ? t('The speech model needs internet the first time.') : msg
-          setNote(`${t('Captions could not be made')}: ${why} ${t('Scenes are cut at the pauses.')}`)
+          notes.push(`${t('Captions could not be made')}: ${why} ${t('Scenes are cut at the pauses.')}`)
         }
       }
+      // Local AI writes a key point for each chapter card, a few chapters at a time
+      const ai = localAI()
+      const points = ai ? async (texts: string[]) => {
+        const label = `${t('Local AI is writing key points…')} (${ai.model})`
+        setBusy({ label, p: 0 })
+        const got = await skippable(chapterPoints(texts, (p) => setBusy({ label, p })), t('Skip key points'))
+        if (!got) notes.push(t('Key points were skipped; the cards show the first words of each chapter.'))
+        else if (got.failed) notes.push(`${t('Local AI stopped writing key points')}: ${t(got.failed)} ${t('The other cards show the first words of each chapter.')}`)
+        return got?.points ?? []
+      } : undefined
       const { w, h } = frame()
       const made = await audioToScenes({
         duration: src.duration, gaps, cues, target: ad.target, title: ad.title.trim() || src.name, look: ad.look,
-        pics: mat.pics, leftover: mat.leftover, cover: ad.cover, theme: themeOf(o.theme), wave: o.wave, W: w, H: h, points: localAI() ? chapterPoints : undefined,
+        pics: mat.pics, leftover: mat.leftover, cover: ad.cover, theme: themeOf(o.theme), wave: o.wave, W: w, H: h, points,
         progress: (p) => setBusy({ label: ad.look === 'photos' && localAI() ? `${t('Matching pictures to chapters…')} (${localAI()?.model})` : t('Making scenes…'), p }),
       })
       const got = made.scenes
@@ -421,9 +444,13 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
         if (made.matched) parts.push(`${made.matched} ${t(made.byAI ? 'matched by Local AI to what is said' : 'matched to what is said')}`)
         if (got.length - shown) parts.push(`${got.length - shown} ${t('got a title card')}`)
         if (made.unused) parts.push(`${made.unused} ${t('pictures were not needed')}`)
-        setNote(`${parts.join(' · ')}. ${t('Tap a picture to change it.')}`)
+        notes.push(`${parts.join(' · ')}. ${t('Tap a picture to change it.')}`)
       }
-    } catch (e) { setError((e as Error).message) } finally { setBusy(null) }
+      if (notes.length) setNote(notes.join(' '))
+    } catch (e) {
+      if (notes.length) setNote(notes.join(' '))
+      setError((e as Error).message)
+    } finally { setBusy(null); setSkip(null) }
   }
 
   /** Adds slides, photos, GIFs or clips to the pictures the scenes can use. */
@@ -980,6 +1007,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet scene-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
+        <SheetClose onClose={onClose} disabled={!!busy} />
         <h2>{t(start === 'article' ? 'Article to video' : start === 'data' ? 'Data to video' : start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
         <p className="muted small">{t(start === 'article'
           ? 'Paste the link of a blog post or news article. Its headline, sections and pictures become scenes, read by the voice.'
@@ -1072,7 +1100,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
                     <select className="select" value={ad.lang} onChange={(e) => setAudio({ lang: e.target.value })} aria-label={t('Language spoken')}>
                       {SPOKEN.map((c) => <option key={c} value={c}>{c === 'auto' ? t('Detect automatically') : langName(c)}</option>)}
                     </select>
-                    <select className="select" value={ad.model} onChange={(e) => setAudio({ model: e.target.value })} aria-label={t('Quality')}>
+                    <select className="select" value={ad.model} onChange={(e) => { saveModel(e.target.value); setAudio({ model: e.target.value }) }} aria-label={t('Quality')}>
                       {ASR_MODELS.map((m) => <option key={m.id} value={m.id}>{t(m.label)} ({m.size})</option>)}
                     </select>
                   </div>
@@ -1294,6 +1322,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           <div className="ai-status">
             <span className="small">{busy.label}{busy.p >= 0 && ` ${Math.round(busy.p * 100)}%`}</span>
             <div className={`progress${busy.p < 0 ? ' waiting' : ''}`}><div style={{ width: busy.p < 0 ? undefined : `${Math.round(busy.p * 100)}%` }} /></div>
+            {skip && <button className="btn small" onClick={skip.run}>{skip.label}</button>}
           </div>
         )}
         {note && <p className="small warn">{note}</p>}

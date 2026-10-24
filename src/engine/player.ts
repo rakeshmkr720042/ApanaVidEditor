@@ -1,6 +1,7 @@
 import type { MediaSource, Project } from '../types'
 import { activeAt, layerSpeed, layoutClips, sourceAt, type LaidClip } from '../model/timeline'
 import { clipKey, layerKey, outputSize, Renderer, type FrameImage } from './renderer'
+import { onCleanChange, prepareCleanSounds, previewSource } from './denoise'
 
 interface Need { key: string; source: MediaSource; time: number; rate: number; volume: number; preload?: boolean }
 
@@ -21,7 +22,11 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     const src = sources[c.sourceId]
     if (!src) continue
     const { time, speed } = sourceAt(c, act.local)
-    needs.push({ key: clipKey(c), source: src, time, rate: speed, volume: c.volume * g * fadeGain(act.local, act.item.dur, c.fadeIn, c.fadeOut) })
+    const volume = c.volume * g * fadeGain(act.local, act.item.dur, c.fadeIn, c.fadeOut)
+    // with noise removal the picture plays silent and the cleaned sound plays next to it
+    const clean = previewSource(c.sourceId, c.denoise)
+    needs.push({ key: clipKey(c), source: src, time, rate: speed, volume: clean ? 0 : volume })
+    if (clean) needs.push({ key: clipKey(c) + '~clean', source: clean, time, rate: speed, volume })
   }
   if (lookahead > 0 && a) {
     const next = items[a.item.index + (b ? 2 : 1)]
@@ -39,7 +44,14 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     const local = Math.max(0, t - l.start)
     const vol = l.type === 'audio' ? l.volume * fadeGain(local, l.end - l.start, l.fadeIn, l.fadeOut) : l.volume
     const sp = layerSpeed(l)
-    needs.push({ key: layerKey(l), source: src, time: l.in + local * sp, rate: sp, volume: active ? vol : 0, preload: !active })
+    const clean = previewSource(l.sourceId, l.denoise)
+    const time = l.in + local * sp
+    if (clean && l.type === 'audio') {
+      needs.push({ key: layerKey(l), source: clean, time, rate: sp, volume: active ? vol : 0, preload: !active })
+      continue
+    }
+    needs.push({ key: layerKey(l), source: src, time, rate: sp, volume: active && !clean ? vol : 0, preload: !active })
+    if (clean) needs.push({ key: layerKey(l) + '~clean', source: clean, time, rate: sp, volume: active ? vol : 0, preload: !active })
   }
   return needs
 }
@@ -74,7 +86,10 @@ export class Player {
     this.renderer = new Renderer(canvas)
     this.renderer.onNeedsRedraw = () => this.requestRender()
     this.previewShort = previewShort
+    // a cleaned sound became ready (or "hear original" was switched): swap the sound now
+    this.offClean = onCleanChange(() => this.sync())
   }
+  private offClean: () => void
 
   setProject(project: Project, sources: Record<string, MediaSource>) {
     this.project = project
@@ -82,6 +97,7 @@ export class Player {
     const { items, total } = layoutClips(project.clips)
     this.items = items
     this.total = total
+    prepareCleanSounds(project, sources)
     const { w, h } = outputSize(project, sources, this.previewShort)
     this.renderer.resize(w, h)
     if (this.t > total) this.t = total
@@ -256,6 +272,7 @@ export class Player {
   }
 
   destroy() {
+    this.offClean()
     this.pause()
     for (const el of this.els.values()) { el.removeAttribute('src'); el.load() }
     this.els.clear()
