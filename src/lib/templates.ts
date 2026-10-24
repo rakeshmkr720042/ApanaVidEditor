@@ -1,6 +1,7 @@
 import type { AudioLayer, Clip, Layer, MediaLayer, MediaSource, Project, TextAnim, TextLayer, TextStyle } from '../types'
 import type { TemplateRecord } from './db'
 import { clipDuration, defaultAdjust, layoutClips, newClip } from '../model/timeline'
+import { defaultChroma } from '../engine/chromakey'
 import { defaultTextStyle } from '../engine/text'
 import { restoreSource } from './media'
 import { uid } from './format'
@@ -96,7 +97,7 @@ export async function buildFromDesign(d: TemplateDesign, load: SourceLoader) {
 
   const media = (src: MediaSource, x: number, y: number, scale: number, start: number, mask: MediaLayer['mask'], border: number): MediaLayer => ({
     id: uid(), type: 'media', sourceId: src.id, in: 0, start, end: src.kind === 'video' ? Math.min(total, start + src.duration) : total,
-    box: { x, y, scale, rotation: 0, opacity: 1 }, volume: 0, chroma: { enabled: false, color: '#00ff00', similarity: 0.35, smoothness: 0.08 },
+    box: { x, y, scale, rotation: 0, opacity: 1 }, volume: 0, chroma: defaultChroma(),
     mask, border, adjust: defaultAdjust(), filter: null, filterAmount: 1,
   })
   const text = (value: string, y: number, start: number, style: Partial<TextStyle>, animIn: TextAnim): TextLayer => ({
@@ -128,10 +129,12 @@ export async function buildFromDesign(d: TemplateDesign, load: SourceLoader) {
 }
 
 const sourceIdOf = (l: Layer) => (l.type === 'media' || l.type === 'audio' || l.type === 'wave' ? l.sourceId : null)
+/** The photo/video behind a green screen clip or layer. */
+const backdropIdOf = (o: Clip | Layer) => ('backdrop' in o && o.backdrop?.kind === 'media' ? o.backdrop.sourceId ?? null : null)
 
 /** The media a set of clips and layers needs, ready to store in a template. */
 export function templateMedia(clips: Clip[], layers: Layer[], sources: Record<string, MediaSource>): TemplateRecord['media'] {
-  const ids = new Set([...clips.map((c) => c.sourceId), ...layers.map(sourceIdOf).filter((x): x is string => !!x)])
+  const ids = new Set([...clips.map((c) => c.sourceId), ...[...layers.map(sourceIdOf), ...[...clips, ...layers].map(backdropIdOf)].filter((x): x is string => !!x)])
   return [...ids].filter((id) => sources[id]).map((id) => {
     const { url: _url, file, ...meta } = sources[id] // eslint-disable-line @typescript-eslint/no-unused-vars
     void _url
@@ -149,7 +152,8 @@ export function placeTemplate(p: Project, tpl: TemplateRecord, where: 'start' | 
   const ids = new Map(tpl.media.map((m) => [m.id, uid()]))
   const sources = tpl.media.map((m) => restoreSource({ ...m.meta, id: ids.get(m.id)! }, m.file))
   const mapId = (id: string) => ids.get(id) ?? id
-  const tClips: Clip[] = tpl.clips.map((c) => ({ ...c, id: uid(), sourceId: mapId(c.sourceId), fromTemplate: true }))
+  const mapBd = <T extends { backdrop?: Clip['backdrop'] }>(o: T): T => (o.backdrop?.sourceId ? { ...o, backdrop: { ...o.backdrop, sourceId: mapId(o.backdrop.sourceId) } } : o)
+  const tClips: Clip[] = tpl.clips.map((c) => mapBd({ ...c, id: uid(), sourceId: mapId(c.sourceId), fromTemplate: true }))
   const has = p.clips.length > 0
   let clips: Clip[]
   if (where === 'start') {
@@ -172,7 +176,7 @@ export function placeTemplate(p: Project, tpl: TemplateRecord, where: 'start' | 
     const copy = { ...l, id: uid(), start: l.start + tplStart, end: l.end + tplStart } as Layer
     if (copy.type === 'media' || copy.type === 'audio' || copy.type === 'wave') copy.sourceId = mapId(copy.sourceId)
     if ('box' in copy) copy.box = { ...copy.box }
-    return copy
+    return copy.type === 'media' ? mapBd(copy) : copy
   })
   const wm = p.watermark && shift && p.watermark.range === 'custom'
     ? { ...p.watermark, start: p.watermark.start + shift, end: p.watermark.end + shift }

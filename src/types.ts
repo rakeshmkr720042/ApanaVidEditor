@@ -52,6 +52,29 @@ export interface Denoise {
   gate: boolean // quieten what is left between words
 }
 
+/**
+ * Green screen (chroma key): makes one colour of the picture see-through. Spill and shrink are missing in
+ * projects saved before they existed (then 0.5 and 0).
+ */
+export interface ChromaKey {
+  enabled: boolean
+  color: string // #rrggbb, the screen colour
+  similarity: number // strength: how far from the screen colour still goes (0..0.6)
+  smoothness: number // edge softness (0..0.3)
+  spill?: number // 0..1, pulls the green (or blue) glow out of hair and edges
+  shrink?: number // 0..1, eats into the edge to drop a leftover outline
+}
+
+/** What shows through a green screen: a colour, or a photo/video filling the frame. It moves with its clip or layer. */
+export interface Backdrop {
+  kind: 'color' | 'media'
+  color: string // kind color
+  sourceId?: string // kind media
+  in?: number // video: source second it starts from; it loops when shorter than the clip
+  fit?: 'fill' | 'fit' // missing = fill
+  blur?: number // 0..1, soft-focus look behind the person
+}
+
 export interface Clip {
   id: string
   sourceId: string
@@ -74,6 +97,8 @@ export interface Clip {
   kenBurns?: KenBurns | null // missing in projects saved before slideshows
   fromTemplate?: boolean // part of an intro/outro; never decides the "original" frame shape
   denoise?: Denoise | null // background-noise removal, missing = off
+  chroma?: ChromaKey | null // green screen, missing = off
+  backdrop?: Backdrop | null // shows through the green screen, missing = the project background
   gap?: number // seconds of empty (black) time before this clip, left when snap is off
 }
 
@@ -156,7 +181,8 @@ export interface MediaLayer extends LayerBase, Keyed {
   in: number
   box: Box
   volume: number
-  chroma: { enabled: boolean; color: string; similarity: number; smoothness: number }
+  chroma: ChromaKey
+  backdrop?: Backdrop | null // full frame behind the layer, through its green screen
   mask: 'none' | 'circle' | 'rounded'
   border: number
   adjust: Adjust

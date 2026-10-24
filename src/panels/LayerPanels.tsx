@@ -147,26 +147,9 @@ export function StickerPanel({ ed, layer, t: time, onClose }: P & { layer: Stick
   )
 }
 
-export function OverlayPanel({ ed, layer, onClose, chroma }: P & { layer: MediaLayer; chroma?: boolean }) {
+export function OverlayPanel({ ed, layer, onClose }: P & { layer: MediaLayer }) {
   const set = (patch: Partial<MediaLayer>) => ed.updateLayer<MediaLayer>(layer.id, patch)
-  const ck = (patch: Partial<MediaLayer['chroma']>) => ed.updateLayer<MediaLayer>(layer.id, (l) => ({ chroma: { ...l.chroma, ...patch } }))
   const isVideo = ed.sources[layer.sourceId]?.kind === 'video'
-  if (chroma) {
-    return (
-      <Panel title="Green screen" onClose={onClose}>
-        <Toggle label="Remove background colour" value={layer.chroma.enabled} onChange={(enabled) => ck({ enabled })} />
-        <span className="field-label">{t('Key colour')}</span>
-        <div className="colors">
-          {['#00ff00', '#00b140', '#0047bb', '#0000ff', '#ffffff', '#000000'].map((c) => (
-            <button key={c} className={`swatch${layer.chroma.color === c ? ' on' : ''}`} style={{ background: c }} onClick={() => ck({ color: c, enabled: true })} aria-label={c} />
-          ))}
-          <label className="swatch picker"><input type="color" value={layer.chroma.color} onChange={(e) => ck({ color: e.target.value, enabled: true })} /></label>
-        </div>
-        <Slider label="Strength" min={0} max={1} value={layer.chroma.similarity} format={(v) => `${Math.round(v * 100)}`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => ck({ similarity: v })} />
-        <Slider label="Softness" min={0} max={0.3} value={layer.chroma.smoothness} format={(v) => `${Math.round(v * 333)}`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => ck({ smoothness: v })} />
-      </Panel>
-    )
-  }
   return (
     <Panel title="Overlay" onClose={onClose}>
       <Slider label="Opacity" min={0} max={1} value={layer.box.opacity} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ box: { ...layer.box, opacity: v } })} />

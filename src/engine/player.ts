@@ -1,6 +1,7 @@
-import type { MediaSource, Project } from '../types'
+import type { MediaLayer, MediaSource, Project } from '../types'
 import { activeAt, layerSpeed, layoutClips, sourceAt, type LaidClip } from '../model/timeline'
-import { clipKey, layerKey, outputSize, Renderer, type FrameImage } from './renderer'
+import { backdropKey, clipKey, layerKey, outputSize, Renderer, type FrameImage } from './renderer'
+import { backdropSource, backdropTime } from './chromakey'
 import { onCleanChange, prepareCleanSounds, previewSource } from './denoise'
 
 interface Need { key: string; source: MediaSource; time: number; rate: number; volume: number; preload?: boolean }
@@ -27,12 +28,16 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     const clean = previewSource(c.sourceId, c.denoise)
     needs.push({ key: clipKey(c), source: src, time, rate: speed, volume: clean ? 0 : volume })
     if (clean) needs.push({ key: clipKey(c) + '~clean', source: clean, time, rate: speed, volume })
+    const bd = backdropSource(c, sources)
+    if (bd) needs.push({ key: backdropKey(c), source: bd, time: backdropTime(c.backdrop!, bd, act.local), rate: 1, volume: 0 })
   }
   if (lookahead > 0) {
     // in empty time (snap off) the next clip is the first one that starts later
     const next = a ? items[a.item.index + (b ? 2 : 1)] : items.find((x) => x.start > t)
     if (next && next.start - t < lookahead && sources[next.clip.sourceId]) {
       needs.push({ key: clipKey(next.clip), source: sources[next.clip.sourceId], time: next.clip.in, rate: 1, volume: 0, preload: true })
+      const bd = backdropSource(next.clip, sources)
+      if (bd) needs.push({ key: backdropKey(next.clip), source: bd, time: backdropTime(next.clip.backdrop!, bd, 0), rate: 1, volume: 0, preload: true })
     }
   }
   for (const l of project.layers) {
@@ -52,6 +57,8 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
       continue
     }
     needs.push({ key: layerKey(l), source: src, time, rate: sp, volume: active && !clean ? vol : 0, preload: !active })
+    const bd = l.type === 'media' ? backdropSource(l, sources) : undefined
+    if (bd) needs.push({ key: backdropKey(l), source: bd, time: backdropTime((l as MediaLayer).backdrop!, bd, local), rate: 1, volume: 0, preload: !active })
     if (clean) needs.push({ key: layerKey(l) + '~clean', source: clean, time, rate: sp, volume: active ? vol : 0, preload: !active })
   }
   return needs
@@ -243,9 +250,11 @@ export class Player {
     if (el && el instanceof HTMLVideoElement) {
       return el.readyState >= 2 && el.videoWidth ? { image: el, width: el.videoWidth, height: el.videoHeight } : null
     }
-    const id = key.startsWith('c:')
-      ? this.project.clips.find((c) => clipKey(c) === key)?.sourceId
-      : (this.project.layers.find((l) => layerKey(l) === key) as { sourceId?: string } | undefined)?.sourceId
+    const id = key.startsWith('g:')
+      ? ([...this.project.clips, ...this.project.layers] as { id: string; backdrop?: { sourceId?: string } | null }[]).find((o) => backdropKey(o) === key)?.backdrop?.sourceId
+      : key.startsWith('c:')
+        ? this.project.clips.find((c) => clipKey(c) === key)?.sourceId
+        : (this.project.layers.find((l) => layerKey(l) === key) as { sourceId?: string } | undefined)?.sourceId
     const src = id ? this.sources[id] : undefined
     if (src?.kind === 'image') {
       const img = this.image(src)
