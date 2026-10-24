@@ -249,3 +249,13 @@ export async function openReader(src: MediaSource, preferDecoder = true): Promis
   }
   return new ElementReader(src)
 }
+
+/** Average frame rate of an MP4/MOV video track, or null when the file can't be demuxed. */
+export async function videoFps(file: Blob): Promise<number | null> {
+  let p = demuxCache.get(file)
+  if (!p) { p = demux(file).catch(() => null); demuxCache.set(file, p) }
+  const d = await p
+  if (!d) return null
+  const secs = d.samples.reduce((s, x) => s + x.duration, 0) / d.samples[0].timescale
+  return secs > 0 ? d.samples.length / secs : null
+}

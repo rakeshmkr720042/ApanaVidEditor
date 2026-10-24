@@ -612,6 +612,9 @@ input, textarea { font: inherit; color: inherit; }
 .net-badge.ok { color: #7ee2a8; border-color: #2d5c41; }
 .net-badge.net { color: #ffcc66; border-color: #6b5520; }
 
+/* Compress video */
+.compress-estimate { margin: 14px 0 8px; font-size: 14px; line-height: 1.5; }
+.target-size input { width: 100%; margin-bottom: 8px; }
 /* testing notes */
 .top-actions .count { margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
 .feedback h3 { font-size: 14px; margin: 12px 0 0; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
