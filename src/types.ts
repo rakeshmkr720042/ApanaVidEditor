@@ -265,6 +265,8 @@ export interface Project {
   watermark?: Watermark | null
   tracks?: Track[] // top to bottom; a higher row is drawn in front. Missing in projects saved before tracks.
   main?: MainTrack
+  /** The subtitles as first made (spoken language), kept when they are swapped for a translation. */
+  originalSubs?: { lang: string; cues: { start: number; end: number; text: string }[] } | null
 }
 
 export const MIN_CLIP = 0.2

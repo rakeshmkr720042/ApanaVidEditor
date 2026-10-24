@@ -539,6 +539,11 @@ input, textarea { font: inherit; color: inherit; }
 .meter-empty span.long { background: #4a3413; color: #ffd27a; }
 .meter p { margin: 0; }
 .clone-box { display: grid; gap: 8px; padding: 10px; margin: 6px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+/* translated .srt files, one per language */
+.srt-many { display: grid; gap: 8px; padding: 10px; margin: 10px 0 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.srt-made { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+.srt-made .row { flex-wrap: wrap; }
+.srt-peek { margin: 0; padding-left: 18px; display: grid; gap: 2px; overflow-wrap: anywhere; }
 .rec-live { color: #ff3b30; font-variant-numeric: tabular-nums; }
 
 /* fast backward / forward and preview speed */

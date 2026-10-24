@@ -589,8 +589,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'slideshow') panelView = <SlideshowPanel ed={ed} onClose={closePanel} onAddPhotos={pickPhotos} onMusic={() => setPanel('audio')} />
   else if (panel === 'photo' && selClip) panelView = <PhotoPanel ed={ed} clip={selClip} onClose={closePanel} />
   else if (panel === 'templates') panelView = <TemplatesPanel ed={ed} onClose={closePanel} onToast={setToast} />
-  else if (panel === 'ai') panelView = <AIPanel ed={ed} onClose={closePanel} />
-  else if (panel === 'subtitles') panelView = <SubtitlePanel ed={ed} t={time} onClose={closePanel} onSeek={seek}
+  else if (panel === 'ai') panelView = <AIPanel ed={ed} name={name} onClose={closePanel} />
+  else if (panel === 'subtitles') panelView = <SubtitlePanel ed={ed} name={name} t={time} onClose={closePanel} onSeek={seek}
     onSelectAll={() => { const first = ed.project.layers.filter(isSub).sort((a, b) => a.start - b.start)[0]; if (first) { ed.setSel({ type: 'layer', id: first.id, all: true }); setPanel('text-style') } }} />
   else if (panel === 'audio') panelView = (
     <AudioPanel key={audioTab} ed={ed} time={time} onClose={closePanel} startTab={audioTab}
