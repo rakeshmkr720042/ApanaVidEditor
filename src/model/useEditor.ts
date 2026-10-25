@@ -162,6 +162,16 @@ export function useEditor(initial: Project) {
     commit({ ...p, layers: p.layers.map((l) => (match(l) ? ({ ...l, ...keyedPatch(l, patch(l), now.current) } as Layer) : l)) })
   }, [commit])
 
+  /** Different changes for several clips and layers, as one edit (Smart shortcuts' "Your usual" on a group). */
+  const patchItems = useCallback((patches: Record<string, Partial<Clip> | Partial<Layer>>) => {
+    const p = ref.current
+    commit({
+      ...p,
+      clips: p.clips.map((c) => (patches[c.id] ? { ...c, ...patches[c.id] } as Clip : c)),
+      layers: p.layers.map((l) => (patches[l.id] ? { ...l, ...patches[l.id] } as Layer : l)),
+    })
+  }, [commit])
+
   const setSettings = useCallback((patch: Partial<ProjectSettings>) => {
     const p = ref.current
     commit({ ...p, settings: { ...p.settings, ...patch } })
@@ -702,7 +712,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, place, replaceMedia, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark, setPresenter,
+    addSource, place, replaceMedia, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, setWatermark, setPresenter,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
