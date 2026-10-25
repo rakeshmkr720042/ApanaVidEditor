@@ -8,6 +8,7 @@ import { isEngineCached } from '../engine/offline'
 import { getLang, setLang, t } from '../lib/i18n'
 import { Icon } from './Icon'
 import { LocalAISheet } from './LocalAISheet'
+import { HabitsSheet } from './HabitsSheet'
 import { OfflineSheet } from './OfflineSheet'
 import { CompressSheet } from './CompressSheet'
 import { FeedbackSheet } from './FeedbackSheet'
@@ -23,6 +24,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const [aiSheet, setAiSheet] = useState(false)
+  const [habitsSheet, setHabitsSheet] = useState(false)
   const [compress, setCompress] = useState(false)
   const [aiOn, setAiOn] = useState(() => !!localAI())
   const [notesSheet, setNotesSheet] = useState(false)
@@ -57,6 +59,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         <div className="top-actions">
           <button className="btn ghost small notes-btn" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
             <Icon name="note" size={16} /><span className="wide-only"> {t('Notes')}</span>{openNotes > 0 && <span className="count">{openNotes}</span>}
+          </button>
+          <button className="btn ghost small" onClick={() => setHabitsSheet(true)} aria-label={t('Smart shortcuts')} title={t('Smart shortcuts')}>
+            <Icon name="habit" size={16} /><span className="wide-only"> {t('Shortcuts')}</span>
           </button>
           <button className="btn ghost small" onClick={() => setAiSheet(true)}>{aiOn ? '✓ ' : ''}{t('Local AI')}</button>
           <button className="btn ghost small" onClick={() => { setLang(getLang() === 'hi' ? 'en' : 'hi'); onLang() }}>{getLang() === 'hi' ? 'English' : 'हिंदी'}</button>
@@ -100,6 +105,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
       {netSheet && <OfflineSheet onClose={() => { setNetSheet(false); checkOffline() }} />}
       {compress && <CompressSheet onClose={() => setCompress(false)} />}
       {notesSheet && <FeedbackSheet where="Home" onClose={(n) => { setNotesSheet(false); setOpenNotes(n) }} />}
+      {habitsSheet && <HabitsSheet onClose={() => setHabitsSheet(false)} />}
       {aiSheet && <LocalAISheet onClose={() => { setAiSheet(false); setAiOn(!!localAI()) }} />}
     </div>
   )

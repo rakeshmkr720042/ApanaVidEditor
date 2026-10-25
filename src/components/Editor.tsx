@@ -36,6 +36,8 @@ import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../pane
 import { ClipOrderPanel, type OrderMode } from '../panels/ClipOrderPanel'
 import { GreenScreenPanel } from '../panels/GreenScreenPanel'
 import { BACK, useBack } from '../lib/back'
+import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
+import { HabitBar, HabitsSheet } from './HabitsSheet'
 
 const SKIP = 5 // seconds jumped by fast backward / forward
 const RATES = [1, 1.5, 2, 4, 0.5]
@@ -70,6 +72,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const ed = useEditor(initial.project)
   const [name, setName] = useState(initial.name)
   const [notesSheet, setNotesSheet] = useState(false)
+  const [habitsSheet, setHabitsSheet] = useState(false)
+  const habitsVersion = useHabitsVersion()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [player, setPlayer] = useState<Player | null>(null)
   const [time, setTime] = useState(0)
@@ -143,6 +147,12 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const id = setTimeout(saveNow, 600)
     return () => clearTimeout(id)
   }, [saveNow])
+
+  // Smart shortcuts learn from how the items end up (on this device only)
+  useEffect(() => {
+    const id = setTimeout(() => observe(initial.id, ed.project, ed.sources), 1500)
+    return () => clearTimeout(id)
+  }, [ed.project, ed.sources, initial.id])
 
   const [saveMenu, setSaveMenu] = useState(false)
   const saveToApp = async () => { setSaveMenu(false); if (await saveNow()) setToast(t('Project saved')) }
@@ -581,6 +591,82 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     ]
   }
 
+  // ---- Smart shortcuts: "Your usual" for what is selected (or the project), and the usual next tool
+  const usual = useMemo((): { hs: Habit[]; key: string; patches: Record<string, object>; project: boolean } | null => {
+    void habitsVersion
+    const p = ed.project
+    const lastId = p.clips.at(-1)?.id
+    // the project's own usual (its format…) when the selected item has none
+    const setup = () => {
+      if (empty) return null
+      const hs = usualFor(p, ed.sources, `p:${initial.id}`)
+      return hs.length ? { hs, key: `p:${initial.id}`, patches: {}, project: true } : null
+    }
+    if (!sel) return setup()
+    const anchor: Project['clips'][number] | Project['layers'][number] | undefined = sel.type === 'clip' ? p.clips.find((c) => c.id === sel.id) : p.layers.find((l) => l.id === sel.id)
+    if (!anchor) return setup()
+    const hs = usualFor(anchor, ed.sources, anchor.id, anchor.id === lastId)
+    if (!hs.length) return setup()
+    // a group gets the same habits on each of its items of the same kind that lacks them
+    const ids = group ?? [anchor.id]
+    const want = new Set(hs.map((h) => h.id))
+    const patches: Record<string, object> = {}
+    for (const id of ids) {
+      const x = sel.type === 'clip' ? p.clips.find((c) => c.id === id) : p.layers.find((l) => l.id === id)
+      if (!x) continue
+      const mine = id === anchor.id ? hs : usualFor(x, ed.sources, id, id === lastId).filter((h) => want.has(h.id))
+      if (mine.length) patches[id] = patchFor(x, mine)
+    }
+    return { hs, key: `${sel.all ? 'all:' : ''}${sel.id}`, patches, project: false }
+  }, [sel, group, ed.project, ed.sources, empty, initial.id, habitsVersion])
+  // suggestions waved away this session (the "Your usual" tool still works for them)
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
+  const [next, setNext] = useState<NextStep | null>(null)
+  useEffect(() => {
+    if (!next) return
+    const id = setTimeout(() => setNext(null), 20000)
+    return () => clearTimeout(id)
+  }, [next])
+  const applyUsual = () => {
+    if (!usual) return
+    if (usual.project) ed.setSettings(patchFor(ed.project, usual.hs).settings!)
+    else ed.patchItems(usual.patches)
+    acceptHabits(usual.hs.map((h) => h.id))
+    const n = Object.keys(usual.patches).length
+    setToast(`${t('Your usual applied')}${n > 1 ? ` (${n})` : ''}: ${usual.hs.map((h) => t(describeHabit(h))).join(', ')}. ${t('Undo takes it back.')}`)
+  }
+  const sayPaused = (names: string[]) => {
+    if (names.length) setToast(`${t('OK, no more suggestions for')} ${names.join(', ')}. ${t('Turn them back on in Smart shortcuts.')}`)
+  }
+  // what was selected when a tool was tapped, so "after Split comes Delete" is learned for clips, not for text
+  const ctx = selClip ? (group ? 'clips' : 'clip') : selStored ? `${group ? 'row' : 'layer'}:${selStored.type}` : 'none'
+  const runTool = (tl: Tool) => {
+    setNext(null)
+    if (tl.label !== 'Your usual' && tl.label !== 'Smart shortcuts') {
+      toolUsed(ctx, tl.label)
+      const n = nextStep(ctx, tl.label)
+      if (n) setNext(n)
+    }
+    tl.on()
+  }
+  if (usual && sel && !usual.project) tools = [{ icon: 'habit', label: 'Your usual', on: applyUsual }, ...tools]
+  if (!sel) tools = [...tools, { icon: 'habit', label: 'Smart shortcuts', on: () => setHabitsSheet(true) }]
+  const nextTool = next ? tools.find((x) => x.label === next.label && !x.disabled) ?? null : null
+  const quiet = !!panel || !!swapFrom || playing || !!pending
+  const habitBar: { key: string; text: string; action: string; apply: () => void; notNow: () => void } | null = quiet ? null
+    : nextTool && next ? {
+      key: next.id, text: `${t('Usually next')}: ${t(next.label)}`, action: 'Do it',
+      apply: () => { acceptHabits([next.id]); runTool(nextTool) },
+      notNow: () => { sayPaused(rejectHabits([next]).map((n) => `${t(n.after)} → ${t(n.label)}`)); setNext(null) },
+    }
+      : usual && !dismissed.has(usual.key) ? {
+        key: usual.key, text: `${t('Your usual')}: ${usual.hs.map((h) => t(describeHabit(h))).join(' · ')}`, action: 'Apply',
+        apply: applyUsual,
+        notNow: () => { sayPaused(rejectHabits(usual.hs).map((h) => t(describeHabit(h)))); setDismissed((d) => new Set(d).add(usual.key)) },
+      } : null
+  const shownKey = habitBar?.key
+  useEffect(() => { if (shownKey) noteShown() }, [shownKey])
+
   const closePanel = () => setPanel(null)
   let panelView: React.ReactNode = null
   const tclip = targetClip
@@ -729,10 +815,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         </div>
       )}
 
+      {habitBar && <HabitBar key={habitBar.key} text={habitBar.text} action={habitBar.action} onApply={habitBar.apply} onNotNow={habitBar.notNow} onSettings={() => setHabitsSheet(true)} />}
       <nav className="tools" onWheel={toolsWheel}>
         {(selClip || selStored) && <button className="tool back" onClick={() => { ed.setSel(null); setPanel(null) }}><Icon name="back" /><span>{t('Back')}</span></button>}
         {tools.map((tl) => (
-          <button key={tl.label} className={`tool${tl.active ? ' on' : ''}`} disabled={tl.disabled} onClick={tl.on}>
+          <button key={tl.label} className={`tool${tl.active ? ' on' : ''}${tl.icon === 'habit' ? ' habit' : ''}`} disabled={tl.disabled} onClick={() => runTool(tl)}>
             <Icon name={tl.icon} />
             <span>{t(tl.label)}</span>
           </button>
@@ -756,6 +843,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder mode={screenRec} onClose={() => setScreenRec(null)} onDone={addRecording} />}
+      {habitsSheet && <HabitsSheet onClose={() => setHabitsSheet(false)} />}
       {notesSheet && <FeedbackSheet where={`Editor: ${name}${panel ? ` › ${panel}` : ''}`} onClose={() => setNotesSheet(false)} />}
       {exporting && <ExportSheet project={output} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>

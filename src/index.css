@@ -678,3 +678,19 @@ input, textarea { font: inherit; color: inherit; }
 /* several clips / items picked together */
 .tl-clip.group { outline-color: var(--sel); }
 .tl-head > button.on { color: var(--accent); }
+
+/* ---------- Smart shortcuts */
+.habit-bar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; font-size: 13px; font-weight: 600;
+  background: linear-gradient(90deg, rgba(255, 204, 0, .16), rgba(255, 204, 0, .06)); border-top: 1px solid rgba(255, 204, 0, .35); color: var(--text);
+}
+.habit-bar > svg { color: #ffcc00; flex: 0 0 auto; }
+.habit-bar > span { flex: 1; min-width: 0; line-height: 1.25; overflow-wrap: anywhere; }
+.habit-bar small { display: block; font-weight: 400; opacity: .7; font-size: 11px; }
+.habit-bar .btn { flex: 0 0 auto; }
+.tool.habit svg { color: #ffcc00; }
+.habit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.habit-list li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; }
+.habit-list li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.habit-list li small { opacity: .7; font-size: 12px; }
+.habit-list li.paused b { text-decoration: line-through; opacity: .6; }
