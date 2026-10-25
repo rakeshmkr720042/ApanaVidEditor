@@ -181,6 +181,7 @@ export async function exportProject(
     renderer.resize(w, h)
     await renderer.prepareWatermark(project, sources)
     await renderer.prepareWaves(project, sources)
+    await renderer.preparePresenter(project)
     const readers = new Map<string, FrameReader>()
     const renderAt = async (t: number, seed: number) => {
       const needs = mediaNeeds(project, items, sources, t)

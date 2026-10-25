@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BlurLayer, Box, Clip, Layer, MainTrack, MediaLayer, MediaSource, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AudioLayer, BlurLayer, Box, Clip, Layer, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -7,6 +7,7 @@ import { clipSegments, defaultAdjust, gapAt, insertClipsAt, layerSpeed, layoutCl
 import { applySlideshow, type SlideshowOptions } from './slideshow'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
+import { defaultPresenter } from '../engine/presenter'
 import { outputSize } from '../engine/renderer'
 import { hasSound } from '../engine/denoise'
 import { insertAt, isLocked, newTrack, overlaps, trackKind, withTracks } from './tracks'
@@ -169,6 +170,11 @@ export function useEditor(initial: Project) {
   const setWatermark = useCallback((patch: Partial<Watermark>) => {
     const p = ref.current
     commit({ ...p, watermark: { ...(p.watermark ?? defaultWatermark()), ...patch } })
+  }, [commit])
+
+  const setPresenter = useCallback((patch: Partial<Presenter>) => {
+    const p = ref.current
+    commit({ ...p, presenter: { ...(p.presenter ?? defaultPresenter()), ...patch } })
   }, [commit])
 
   /**
@@ -696,7 +702,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, place, replaceMedia, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark,
+    addSource, place, replaceMedia, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, setSettings, setWatermark, setPresenter,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
