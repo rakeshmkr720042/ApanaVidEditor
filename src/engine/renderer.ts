@@ -8,6 +8,7 @@ import { toChroma } from './chromakey'
 import { defaultAdjust } from '../model/timeline'
 import { animState, drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
 import { drawWave, waveData, waveReady, waveSize } from './visualizer'
+import { captionsDuring, drawPresenter, presenterAt } from './presenter'
 import { drawUserWatermark, watermarkCenter, watermarkSize, watermarkVisible } from './watermark'
 
 export interface FrameImage { image: CanvasImageSource; width: number; height: number }
@@ -80,6 +81,7 @@ export class Renderer {
   private scratch = makeCanvas()
   private bgSmall = makeCanvas(48, 48)
   private wmImage: { id: string; img: CanvasImageSource | null; ready: Promise<void> } | null = null
+  private prImage: { url: string; img: ImageBitmap | null; ready: Promise<void> } | null = null
   onNeedsRedraw: (() => void) | null = null
   W = 2
   H = 2
@@ -136,6 +138,12 @@ export class Renderer {
       }
     }
 
+    // a full-screen presenter card goes under captions and text; the strip and the corner card go on top
+    const pr = inp.project.presenter
+    const prTotal = pr?.enabled ? inp.items.reduce((m, it) => Math.max(m, it.start + it.dur), 0) : 0
+    const prStart = presenterAt(pr, prTotal, inp.t)
+    if (prStart !== null && pr!.style === 'full') this.drawPresenter(inp, prStart, prTotal)
+
     for (const l0 of inp.project.layers) {
       if (l0.type === 'audio' || inp.t < l0.start || inp.t >= l0.end) continue
       const l = atTime(l0, inp.t)
@@ -152,6 +160,8 @@ export class Renderer {
       }
     }
 
+    if (prStart !== null && pr!.style !== 'full') this.drawPresenter(inp, prStart, prTotal)
+
     const wm = inp.project.watermark
     if (watermarkVisible(wm, inp.t)) {
       const src = wm.sourceId ? inp.sources[wm.sourceId] : undefined
@@ -160,6 +170,36 @@ export class Renderer {
     }
 
     if (inp.watermark) this.drawWatermark(inp.watermark)
+  }
+
+  private drawPresenter(inp: RenderInput, start: number, total: number) {
+    const pr = inp.project.presenter!
+    const D = Math.min(pr.duration, total)
+    if (!fontLoaded('Poppins') || !fontLoaded('Noto Sans Devanagari')) {
+      Promise.all([ensureFont('Poppins'), ensureFont('Noto Sans Devanagari')]).then(() => this.onNeedsRedraw?.())
+    }
+    const lift = pr.style === 'lower' && captionsDuring(inp.project, start, start + D)
+    drawPresenter(this.ctx, pr, inp.t - start, D, this.W, this.H, this.presenterPhoto(pr.profile.photo), lift)
+  }
+
+  /** Decoded presenter photo; null until it has loaded (then a redraw is requested). */
+  private presenterPhoto(url: string | null): ImageBitmap | null {
+    if (!url) return null
+    if (this.prImage?.url !== url) {
+      const entry: NonNullable<Renderer['prImage']> = { url, img: null, ready: Promise.resolve() }
+      entry.ready = fetch(url).then((r) => r.blob()).then((b) => createImageBitmap(b))
+        .then((img) => { entry.img = img; this.onNeedsRedraw?.() }).catch(() => {})
+      this.prImage = entry
+    }
+    return this.prImage.img
+  }
+
+  /** Waits for the presenter banner's fonts and photo, so exported banners are complete from their first frame. */
+  async preparePresenter(project: Project) {
+    const pr = project.presenter
+    if (!pr?.enabled) return
+    await Promise.all([ensureFont('Poppins'), ensureFont('Noto Sans Devanagari')])
+    if (pr.profile.photo) { this.presenterPhoto(pr.profile.photo); await this.prImage?.ready }
   }
 
   /** Decoded logo for an image watermark; null until it has loaded (then a redraw is requested). */

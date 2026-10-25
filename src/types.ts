@@ -297,6 +297,30 @@ export interface Watermark {
   end: number
 }
 
+/** The presenter's details for the name banner, filled in once and kept on the device. */
+export interface PresenterProfile {
+  name: string
+  qualification: string
+  experience: string
+  extra: string // a short tag, e.g. channel name or "Guest"
+  photo: string | null // small square JPEG data URL
+}
+
+/**
+ * A news-style name banner of the presenter (src/engine/presenter.ts), drawn on top of the video in preview and
+ * export: at the start, every `every` minutes and at the end.
+ */
+export interface Presenter {
+  enabled: boolean
+  profile: PresenterProfile
+  style: 'lower' | 'card' | 'full' // lower-third strip, corner card, full-screen card
+  theme: string
+  duration: number // seconds each time, 2..15
+  atStart: boolean
+  atEnd: boolean
+  every: number // minutes between repeats in the middle, 0 = none
+}
+
 /** A timeline row under the main video. Its switches apply to every layer on it. */
 export interface Track {
   id: string
@@ -317,6 +341,7 @@ export interface Project {
   layers: Layer[]
   settings: ProjectSettings
   watermark?: Watermark | null
+  presenter?: Presenter | null
   tracks?: Track[] // top to bottom; a higher row is drawn in front. Missing in projects saved before tracks.
   main?: MainTrack
   /** The subtitles as first made (spoken language), kept when they are swapped for a translation. */

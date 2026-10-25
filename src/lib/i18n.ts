@@ -319,7 +319,6 @@ const hi: Record<string, string> = {
   'Offline': 'ऑफ़लाइन',
   'Online': 'ऑनलाइन',
   'On': 'चालू',
-  'Off': 'बंद',
   'Slides, PDF, script, mind map, quiz, data and audio to video': 'स्लाइड, PDF, स्क्रिप्ट, माइंड मैप, क्विज़, डेटा और ऑडियो से वीडियो',
   'AI captions (speech to text)': 'AI कैप्शन (आवाज़ से टेक्स्ट)',
   'Download a model once': 'एक बार मॉडल डाउनलोड करें',
@@ -429,6 +428,18 @@ const hi: Record<string, string> = {
   'Lower this sound when someone speaks': 'कोई बोले तो यह आवाज़ धीमी करें', 'Volume while speaking': 'बोलते समय आवाज़',
   'Music goes down by itself under the voice in your video, overlays and voice recordings, and comes back up in the pauses.': 'वीडियो, ओवरले और वॉइस रिकॉर्डिंग में आवाज़ आने पर म्यूज़िक अपने-आप धीमा होता है और रुकने पर फिर तेज़ हो जाता है।',
   'Applying effects…': 'इफ़ेक्ट लग रहे हैं…', 'Could not apply the effects. The original sound is used.': 'इफ़ेक्ट नहीं लग पाए। असली आवाज़ ही चलेगी।', 'With effects': 'इफ़ेक्ट के साथ',
+  'Presenter profile': 'प्रेज़ेंटर प्रोफ़ाइल', 'Show my profile in this video': 'इस वीडियो में मेरी प्रोफ़ाइल दिखाएं', 'Profile': 'प्रोफ़ाइल',
+  'When': 'कब', 'No photo': 'फ़ोटो नहीं', 'Change photo': 'फ़ोटो बदलें', 'Add photo / logo': 'फ़ोटो / लोगो जोड़ें',
+  'Could not open this photo. Try a JPG or PNG.': 'यह फ़ोटो नहीं खुली। JPG या PNG आज़माएं।', 'Qualification': 'योग्यता',
+  'Experience': 'अनुभव', 'Tag (optional)': 'टैग (ज़रूरी नहीं)', 'e.g. Dr. Rakesh Kumar': 'जैसे डॉ. राकेश कुमार', 'e.g. MBBS, MD': 'जैसे MBBS, MD',
+  'e.g. 10 years experience': 'जैसे 10 साल का अनुभव', 'e.g. Expert, Guest, channel name': 'जैसे एक्सपर्ट, मेहमान, चैनल का नाम',
+  'Saved on this device and used in every project. Hindi works too.': 'यह इसी डिवाइस में सेव रहती है और हर प्रोजेक्ट में मिलती है। हिंदी भी लिख सकते हैं।',
+  'Design': 'डिज़ाइन', 'Colours': 'रंग', 'News strip': 'न्यूज़ पट्टी', 'Corner card': 'कोने का कार्ड',
+  'News red': 'न्यूज़ लाल', 'Blue': 'नीला', 'Gold': 'सुनहरा', 'Green': 'हरा',
+  'At the start': 'शुरू में', 'At the end': 'आखिर में', 'Repeat every': 'हर इतने में दोहराएं', 'Off': 'बंद',
+  'Repeats in the middle are skipped when the video is too short for them.': 'वीडियो छोटा हो तो बीच वाले अपने-आप नहीं आते।',
+  'Shows at': 'कब दिखेगी', 'Fill in your name in Profile first.': 'पहले प्रोफ़ाइल में अपना नाम भरें।',
+  'Not shown. Turn on start, end or repeat.': 'अभी नहीं दिखेगी। शुरू, आखिर या दोहराना चालू करें।',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()
