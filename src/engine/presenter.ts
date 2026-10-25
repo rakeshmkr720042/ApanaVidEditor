@@ -144,7 +144,8 @@ export function drawPresenter(ctx: Ctx, pr: Presenter, p: number, D: number, W: 
     const kPhoto = Math.min(easeOut(p / 0.45), easeOut(out))
     const portrait = H > W
     const marginX = W * (portrait ? 0.04 : 0.05)
-    const nameH = S * 0.085, subH = detail ? S * 0.06 : 0, tagH = extra ? S * 0.045 : 0
+    const z = portrait ? 1.3 : 1 // the short side is the width on a phone video: a bit bigger reads better
+    const nameH = S * 0.085 * z, subH = detail ? S * 0.06 * z : 0, tagH = extra ? S * 0.045 * z : 0
     const photoD = photo ? nameH + subH : 0
     const left = marginX + (photo ? photoD + S * 0.012 : S * 0.014)
     const maxW = W - left - marginX
