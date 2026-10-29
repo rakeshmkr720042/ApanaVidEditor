@@ -704,3 +704,25 @@ input, textarea { font: inherit; color: inherit; }
 .habit-list li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .habit-list li small { opacity: .7; font-size: 12px; }
 .habit-list li.paused b { text-decoration: line-through; opacity: .6; }
+
+/* ---------- Premium */
+.tool { position: relative; }
+.crown-badge { position: absolute; top: 2px; right: 6px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #ffcc00; color: #3a2a00; }
+.premium-btn svg, .premium h2 svg, .premium-list svg { color: #ffcc00; }
+.premium-btn.on { color: #ffcc00; }
+.premium h2 { display: flex; align-items: center; gap: 8px; }
+.premium-why { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 204, 0, .12); border: 1px solid rgba(255, 204, 0, .35); }
+.premium-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.premium-list li { display: flex; align-items: flex-start; gap: 8px; padding: 7px 10px; background: var(--panel-2); border-radius: 10px; }
+.premium-list li.on { outline: 1px solid #ffcc00; }
+.premium-list li svg { flex: 0 0 auto; margin-top: 2px; }
+.premium-list li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.premium-list li small { opacity: .7; font-size: 12px; }
+.plans { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.plan { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; border-radius: 12px; border: 2px solid var(--panel-2); background: var(--panel-2); color: var(--text); font: inherit; cursor: pointer; }
+.plan.on { border-color: var(--accent); }
+.plan .price { font-size: 22px; font-weight: 800; }
+.plan small { opacity: .7; }
+.plan i { position: absolute; top: -9px; right: 8px; font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 8px; background: #ffcc00; color: #3a2a00; }
+.premium .version { text-align: center; user-select: none; }
+.dev-box { margin: 8px 0; padding: 8px 10px; border: 1px dashed var(--muted, #888); border-radius: 10px; }

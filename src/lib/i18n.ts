@@ -440,6 +440,23 @@ const hi: Record<string, string> = {
   'Repeats in the middle are skipped when the video is too short for them.': 'वीडियो छोटा हो तो बीच वाले अपने-आप नहीं आते।',
   'Shows at': 'कब दिखेगी', 'Fill in your name in Profile first.': 'पहले प्रोफ़ाइल में अपना नाम भरें।',
   'Not shown. Turn on start, end or repeat.': 'अभी नहीं दिखेगी। शुरू, आखिर या दोहराना चालू करें।',
+  'Premium': 'प्रीमियम', 'ApanaVidEditor Premium': 'ApanaVidEditor प्रीमियम', 'You have Premium': 'आपके पास प्रीमियम है',
+  'is a Premium feature.': 'प्रीमियम फ़ीचर है।', 'Right now every feature is free for everyone.': 'अभी सभी फ़ीचर सबके लिए मुफ़्त हैं।',
+  'Monthly': 'मासिक', 'Yearly': 'सालाना', 'per month': 'प्रति माह', 'per year': 'प्रति वर्ष', 'Save 33%': '33% बचत',
+  'renews or ends on': 'नवीनीकरण / समाप्ति', 'connect to the internet soon so we can check your plan': 'जल्द इंटरनेट से जोड़ें ताकि प्लान जांचा जा सके',
+  'Free forever: editing, tracks, text, music, filters, captions, recording, compress, and export up to 1080p.': 'हमेशा मुफ़्त: एडिटिंग, ट्रैक, टेक्स्ट, म्यूज़िक, फ़िल्टर, कैप्शन, रिकॉर्डिंग, कंप्रेस और 1080p तक एक्सपोर्ट।',
+  'Subscribe': 'सब्सक्राइब करें', 'Payments are not switched on yet. You will be able to subscribe here soon.': 'पेमेंट अभी चालू नहीं है। जल्द ही आप यहाँ सब्सक्राइब कर पाएंगे।',
+  'Restore purchase': 'खरीद वापस लाएं', 'Manage or cancel': 'बदलें या रद्द करें', 'Thank you! Premium is on.': 'धन्यवाद! प्रीमियम चालू हो गया।',
+  'Premium restored.': 'प्रीमियम वापस आ गया।', 'No earlier purchase found for this account.': 'इस खाते पर पहले की कोई खरीद नहीं मिली।',
+  'Developer switches are on.': 'डेवलपर स्विच चालू हैं।', 'Developer switches (this device only)': 'डेवलपर स्विच (सिर्फ़ इस डिवाइस पर)',
+  'Preview the Premium lock': 'प्रीमियम लॉक आज़माएं', 'Pretend I have Premium': 'मान लो मेरे पास प्रीमियम है', 'Hide developer switches': 'डेवलपर स्विच छुपाएं',
+  '2K export': '2K एक्सपोर्ट', 'Sharper 1440p videos': 'ज़्यादा साफ़ 1440p वीडियो', 'Batch export': 'बैच एक्सपोर्ट', 'Several sizes in one go': 'एक बार में कई साइज़',
+  'No ApanaVidEditor mark': 'ApanaVidEditor का निशान नहीं', 'Clean exports without the app name': 'ऐप के नाम के बिना साफ़ वीडियो',
+  'Translate, voice-over, voice cloning, YouTube subtitles': 'अनुवाद, वॉइस-ओवर, वॉइस क्लोनिंग, YouTube सबटाइटल',
+  'Remove noise & audio effects': 'शोर हटाना और ऑडियो इफ़ेक्ट', 'Clean voice, equalizer, voice changer, loudness': 'साफ़ आवाज़, इक्वलाइज़र, वॉइस चेंजर, लाउडनेस',
+  'Smart green screen': 'स्मार्ट ग्रीन स्क्रीन', 'Remove the background in one tap': 'एक टैप में बैकग्राउंड हटाएं',
+  'Your name and photo banner on every video': 'हर वीडियो पर आपका नाम और फ़ोटो बैनर', 'Content to video': 'कंटेंट से वीडियो',
+  'Slides, script, article, audio, mind map, quiz and data to video': 'स्लाइड, स्क्रिप्ट, लेख, ऑडियो, माइंड मैप, क्विज़ और डेटा से वीडियो',
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()

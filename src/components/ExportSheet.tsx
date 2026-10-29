@@ -12,6 +12,9 @@ import { t } from '../lib/i18n'
 import { youTubeMode } from '../lib/youtube'
 import { YouTubeSheet } from './YouTubeSheet'
 import { CompressSheet } from './CompressSheet'
+import { PremiumSheet } from './PremiumSheet'
+import { Icon } from './Icon'
+import { isAllowed, usePremium, type Feature } from '../lib/premium'
 
 interface Props {
   project: Project
@@ -73,6 +76,12 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const [youtube, setYoutube] = useState<Result | null>(null)
   const [compress, setCompress] = useState<Result | null>(null)
   const abort = useRef<AbortController | null>(null)
+  usePremium()
+  const [paywall, setPaywall] = useState<Feature | null>(null)
+  // free plan: up to 1080p, one export at a time, with the app's mark
+  const can2k = isAllowed('export2k'), canBatch = isAllowed('batch'), canHideMark = isAllowed('nomark')
+  const resolution = res === '1440' && !can2k ? '1080' : res
+  const mark = watermark || !canHideMark
 
   useEffect(() => () => results.forEach((r) => URL.revokeObjectURL(r.url)), [results])
   useEffect(() => {
@@ -83,7 +92,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   }, [useCover, coverT, snapshot])
 
   const presetAspect = PRESETS.find((p) => p.id === preset)?.aspect
-  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : res, fps, watermark: watermark ? 'ApanaVidEditor' : null, cover: useCover ? coverT : null, aspect: presetAspect, size })
+  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : resolution, fps, watermark: mark ? 'ApanaVidEditor' : null, cover: useCover ? coverT : null, aspect: presetAspect, size })
   const estimate = estimateSize(project, sources, job())
   const pickPreset = (id: string) => {
     setPreset(id)
@@ -193,14 +202,15 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
                 {format !== 'mp3' && (
                   <>
                     <span className="field-label">{t('Resolution')}</span>
-                    <Chips options={format === 'gif' ? RES.slice(0, 1) : RES} value={format === 'gif' ? '480' : res} onChange={(v) => { setRes(v); setPreset('') }} />
+                    <Chips options={format === 'gif' ? RES.slice(0, 1) : RES.map((r) => (r.value === '1440' && !can2k ? { ...r, label: `${r.label} 👑` } : r))} value={format === 'gif' ? '480' : resolution}
+                      onChange={(v) => { if (v === '1440' && !can2k) { setPaywall('export2k'); return } setRes(v); setPreset('') }} />
                     {format !== 'gif' && (
                       <>
                         <span className="field-label">{t('Frame rate')}</span>
                         <Chips options={[24, 25, 30, 60].map((f) => ({ value: f, label: `${f} fps` }))} value={fps} onChange={(v) => { setFps(v); setPreset('') }} />
                       </>
                     )}
-                    <Toggle label="ApanaVidEditor watermark" value={watermark} onChange={setWatermark} />
+                    <Toggle label={canHideMark ? 'ApanaVidEditor watermark' : `${t('ApanaVidEditor watermark')} 👑`} value={mark} onChange={(v) => { if (!v && !canHideMark) setPaywall('nomark'); else setWatermark(v) }} />
                     {(format === 'mp4' || format === 'mov') && <Toggle label="Choose cover image" value={useCover} onChange={setUseCover} />}
                     {useCover && (format === 'mp4' || format === 'mov') && (
                       <div className="cover-pick">
@@ -222,7 +232,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
             )}
             {error && <p className="error-text">{error}</p>}
             <div className="row">
-              {!(fast && simple) && <button className="btn" onClick={() => setBatch([...batch, job()])}>+ {t('Batch')}</button>}
+              {!(fast && simple) && <button className="btn" onClick={() => (canBatch ? setBatch([...batch, job()]) : setPaywall('batch'))}>+ {t('Batch')}{!canBatch && <> <Icon name="crown" size={14} /></>}</button>}
               <button className="btn primary grow" disabled={total <= 0} onClick={() => run(batch.length ? batch : [job()])}>
                 {batch.length ? `${t('Export all')} (${batch.length})` : t('Export')}
               </button>
@@ -249,6 +259,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
         {toast && <p className="muted small">{toast}</p>}
         {!running && <button className="btn wide ghost" onClick={onClose}>{t('Close')}</button>}
         {compress && <CompressSheet file={new File([compress.blob], compress.file, { type: compress.blob.type })} onClose={() => setCompress(null)} />}
+        {paywall && <PremiumSheet feature={paywall} onClose={() => setPaywall(null)} />}
         {youtube && <YouTubeSheet blob={youtube.blob} cover={youtube.cover} title={name} onClose={() => setYoutube(null)} />}
       </div>
     </div>
