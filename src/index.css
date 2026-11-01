@@ -730,3 +730,16 @@ input, textarea { font: inherit; color: inherit; }
 .plan i { position: absolute; top: -9px; right: 8px; font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 8px; background: #ffcc00; color: #3a2a00; }
 .premium .version { text-align: center; user-select: none; }
 .dev-box { margin: 8px 0; padding: 8px 10px; border: 1px dashed var(--muted, #888); border-radius: 10px; }
+
+/* Color panel: curves, HSL bands, LUT list */
+.curve-editor { width: 100%; max-width: 300px; aspect-ratio: 1; display: block; margin: 6px auto; background: #0d0f14; border: 1px solid var(--line); border-radius: 10px; touch-action: none; cursor: crosshair; }
+.curve-editor line { stroke: #ffffff18; stroke-width: 1; }
+.curve-editor line.diag { stroke: #ffffff30; stroke-dasharray: 4 4; }
+.curve-editor path { fill: none; stroke-width: 2.5; }
+.curve-editor circle { stroke: #000; stroke-width: 1.5; }
+.hsl-bands { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 6px 0; }
+.hsl-bands button { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; color: #000; font-weight: 700; }
+.hsl-bands button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+.lut-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.lut-list button { padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; }
+.lut-list button.on { border-color: var(--accent); }

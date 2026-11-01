@@ -25,6 +25,13 @@ uniform vec2 u_keyP; // similarity, smoothness
 uniform vec2 u_keyQ; // spill, shrink radius in texels
 uniform float u_seed;
 uniform float u_ratio;
+uniform sampler2D u_curve; // 256 x 1: R, G, B curves (master already in)
+uniform float u_curveOn;
+uniform vec3 u_hsl[8]; // per colour band: hue shift, saturation, lightness
+uniform vec2 u_hslC[8]; // band centre and half width, degrees
+uniform float u_hslOn;
+uniform sampler2D u_lut; // (n*n) x n atlas, blue slices side by side
+uniform vec3 u_lutP; // size, amount, on
 
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 float rnd(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -37,6 +44,27 @@ float keyMask(vec3 c) {
   float kl = max(length(kc), 1e-4);
   float d = distance(cc, kc * clamp(length(cc) / kl, 0.7, 1.0));
   return smoothstep(u_keyP.x, u_keyP.x + max(u_keyP.y, 0.001), d);
+}
+
+vec3 rgb2hsv(vec3 c) {
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x);
+}
+vec3 hsv2rgb(vec3 c) {
+  vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+vec3 lutAt(vec3 c) {
+  float n = u_lutP.x;
+  float b = c.b * (n - 1.0);
+  float b0 = floor(b);
+  float b1 = min(b0 + 1.0, n - 1.0);
+  float x = (c.r * (n - 1.0) + 0.5) / (n * n);
+  float y = (c.g * (n - 1.0) + 0.5) / n;
+  return mix(texture2D(u_lut, vec2(x + b0 / n, y)).rgb, texture2D(u_lut, vec2(x + b1 / n, y)).rgb, b - b0);
 }
 
 void main() {
@@ -90,6 +118,20 @@ void main() {
     yiq.yz = vec2(yiq.y * cs - yiq.z * sn, yiq.y * sn + yiq.z * cs);
     c = toRGB * yiq;
   }
+  if (u_hslOn > 0.5) {
+    vec3 hsv = rgb2hsv(clamp(c, 0.0, 1.0));
+    float h = hsv.x * 360.0;
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 8; i++) {
+      float d = abs(mod(h - u_hslC[i].x + 540.0, 360.0) - 180.0);
+      acc += u_hsl[i] * max(0.0, 1.0 - d / u_hslC[i].y);
+    }
+    acc *= smoothstep(0.04, 0.2, hsv.y); // greys and whites keep their colour
+    hsv.x = fract(hsv.x + acc.x * 30.0 / 360.0);
+    hsv.y = clamp(hsv.y * (1.0 + acc.y), 0.0, 1.0);
+    hsv.z = clamp(hsv.z * (1.0 + acc.z * 0.5), 0.0, 1.0);
+    c = hsv2rgb(hsv);
+  }
   l = clamp(luma(c), 0.0, 1.0);
   c = mix(c, vec3(l), clamp(u_d.z, 0.0, 1.0));
   vec3 sep = vec3(dot(c, vec3(0.393, 0.769, 0.189)), dot(c, vec3(0.349, 0.686, 0.168)), dot(c, vec3(0.272, 0.534, 0.131)));
@@ -98,6 +140,11 @@ void main() {
   c = mix(c, mix(u_duoD.rgb, u_duoL, l), clamp(u_duoD.w, 0.0, 1.0));
   c = u_c.z * 0.15 + c * (1.0 - u_c.z * 0.2);
   c = clamp(c, 0.0, 1.0);
+  if (u_curveOn > 0.5) {
+    vec3 k = c * (255.0 / 256.0) + 0.5 / 256.0;
+    c = vec3(texture2D(u_curve, vec2(k.r, 0.5)).r, texture2D(u_curve, vec2(k.g, 0.5)).g, texture2D(u_curve, vec2(k.b, 0.5)).b);
+  }
+  if (u_lutP.z > 0.5) c = mix(c, lutAt(c), u_lutP.y);
   if (u_c.w > 0.0) {
     vec2 q = (v_uv - 0.5) * vec2(u_ratio, 1.0) / max(u_ratio, 1.0);
     c *= 1.0 - u_c.w * smoothstep(0.25, 0.75, length(q) * 1.1);
@@ -119,6 +166,9 @@ vec4 from(vec2 uv) { return (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.
 vec4 to(vec2 uv) { return (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? vec4(0.0, 0.0, 0.0, 1.0) : texture2D(u_to, uv); }
 vec4 transition(vec2 uv, float p, float ratio) { ${body} }
 void main() { gl_FragColor = transition(v_uv, clamp(u_p, 0.0, 1.0), u_ratio); }`
+
+// HSL band centres and half widths (degrees): red, orange, yellow, green, aqua, blue, purple, magenta
+const HSL_CENTRES = new Float32Array([0, 30, 30, 30, 60, 45, 120, 60, 180, 55, 230, 50, 275, 45, 315, 45])
 
 export interface Chroma { color: [number, number, number]; similarity: number; smoothness: number; spill?: number; shrink?: number }
 
@@ -151,6 +201,7 @@ export class Grader {
   private w = 0
   private h = 0
   private uniforms = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>()
+  private dataTex = new Map<string, WebGLTexture>() // curve and LUT lookups by content key
 
   static create(canvas: HTMLCanvasElement | OffscreenCanvas): Grader | null {
     try {
@@ -216,6 +267,21 @@ export class Grader {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src)
   }
 
+  /** A lookup texture (curves, LUT) uploaded once per content key. */
+  private lookup(key: string, w: number, h: number, data: Uint8Array) {
+    let t = this.dataTex.get(key)
+    if (!t) {
+      const gl = this.gl
+      if (this.dataTex.size > 24) { for (const x of this.dataTex.values()) gl.deleteTexture(x); this.dataTex.clear() }
+      t = this.texture()
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data)
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+      this.dataTex.set(key, t)
+    }
+    return t
+  }
+
   private runGrade(tex: WebGLTexture, p: ColorParams, target: WebGLFramebuffer | null, seed: number, chroma?: Chroma) {
     const gl = this.gl
     const prog = this.grade
@@ -241,6 +307,26 @@ export class Grader {
     gl.uniform2f(u('u_keyQ'), chroma?.spill ?? 0.5, ((chroma?.shrink ?? 0) * Math.min(this.w, this.h)) / 180)
     gl.uniform1f(u('u_seed'), seed)
     gl.uniform1f(u('u_ratio'), this.w / this.h)
+    const g = p.gpu
+    gl.uniform1f(u('u_curveOn'), g?.curve ? 1 : 0)
+    if (g?.curve) {
+      gl.activeTexture(gl.TEXTURE2)
+      gl.bindTexture(gl.TEXTURE_2D, this.lookup(`c:${g.curve.key}`, 256, 1, g.curve.data))
+    }
+    gl.uniform1i(u('u_curve'), 2)
+    gl.uniform1f(u('u_hslOn'), g?.hsl ? 1 : 0)
+    if (g?.hsl) {
+      gl.uniform3fv(u('u_hsl'), g.hsl)
+      gl.uniform2fv(u('u_hslC'), HSL_CENTRES)
+    }
+    gl.uniform3f(u('u_lutP'), g?.lut?.size ?? 2, g?.lut?.amount ?? 0, g?.lut ? 1 : 0)
+    if (g?.lut) {
+      gl.activeTexture(gl.TEXTURE3)
+      gl.bindTexture(gl.TEXTURE_2D, this.lookup(`l:${g.lut.key}`, g.lut.size * g.lut.size, g.lut.size, g.lut.data))
+    }
+    gl.uniform1i(u('u_lut'), 3)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 
