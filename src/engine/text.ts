@@ -1,5 +1,5 @@
 import { drawShower } from './shower'
-import type { CaptionFrame, CaptionFramePreset, StickerLayer, TextAnim, TextLayer, TextStyle } from '../types'
+import type { CaptionFrame, CaptionFramePreset, LoopAnim, StickerLayer, TextAnim, TextFill, TextLayer, TextStyle } from '../types'
 
 export const FONTS = [
   'Poppins', 'Montserrat', 'Noto Sans Devanagari', 'Hind', 'Bebas Neue', 'Anton', 'Oswald', 'Teko', 'Bangers',
@@ -70,7 +70,41 @@ export const TEXT_PRESETS: { name: string; style: Partial<TextStyle> }[] = [
   { name: 'Hindi', style: { font: 'Yatra One', color: '#ffd166', stroke: '#3d1f00', strokeWidth: 0.5 } },
 ]
 
-export const ANIMS: TextAnim[] = ['none', 'fade', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'pop', 'zoom', 'bounce', 'typewriter']
+export const ANIMS: TextAnim[] = ['none', 'fade', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'pop', 'zoom', 'bounce', 'blur', 'spin', 'drop', 'wipe', 'typewriter', 'letters']
+/** Animations that only make sense for text (they work letter by letter). */
+export const TEXT_ONLY_ANIMS: TextAnim[] = ['typewriter', 'letters']
+
+export const LOOPS: { value: LoopAnim; label: string }[] = [
+  { value: 'none', label: 'None' }, { value: 'pulse', label: 'Pulse' }, { value: 'heartbeat', label: 'Heartbeat' },
+  { value: 'float', label: 'Float' }, { value: 'swing', label: 'Swing' }, { value: 'shimmer', label: 'Shimmer' },
+]
+
+/** Gradient paints for letters (top to bottom; rainbow goes left to right). */
+export const FILLS: { value: TextFill; label: string; stops: string[] }[] = [
+  { value: 'gold', label: 'Gold', stops: ['#fff6c4', '#f7d24a', '#c8901a', '#ffe28a', '#a8700c'] },
+  { value: 'rose-gold', label: 'Rose gold', stops: ['#ffe4dc', '#f4b3a2', '#c97b6b', '#f6c7b8'] },
+  { value: 'silver', label: 'Silver', stops: ['#ffffff', '#d9dde3', '#8d949e', '#eef1f4', '#7a818b'] },
+  { value: 'royal', label: 'Royal', stops: ['#ffe9a8', '#e0a526', '#8a1538'] },
+  { value: 'sunset', label: 'Sunset', stops: ['#ffd27a', '#ff8a5c', '#e8467c'] },
+  { value: 'love', label: 'Love', stops: ['#ffd1e1', '#ff5c93', '#c2185b'] },
+  { value: 'rainbow', label: 'Rainbow', stops: ['#ff3b3b', '#ffb000', '#ffe600', '#3ddc84', '#3d9bff', '#a259ff'] },
+]
+
+/** Ready-made wedding and event titles: words, look and movement in one tap. */
+export const TITLE_PRESETS: { name: string; text: string; style: Partial<TextStyle>; animIn: TextAnim; animOut: TextAnim; loop: LoopAnim }[] = [
+  { name: 'Couple names', text: 'Rahul ❤ Priya', style: { font: 'Dancing Script', size: 0.11, fill: 'gold', glow: '#ffd36b', color: '#f7d24a', shadow: false, stroke: null, background: null }, animIn: 'letters', animOut: 'fade', loop: 'shimmer' },
+  { name: 'Shubh Vivah', text: 'शुभ विवाह', style: { font: 'Yatra One', size: 0.12, fill: 'royal', glow: '#ffcc66', color: '#e0a526', shadow: false, stroke: '#4a0d1e', strokeWidth: 0.4, background: null }, animIn: 'zoom', animOut: 'fade', loop: 'shimmer' },
+  { name: 'Save the Date', text: 'Save the Date\n12 . 12 . 2026', style: { font: 'Playfair Display', italic: true, size: 0.08, fill: 'rose-gold', glow: null, color: '#f4b3a2', shadow: true, stroke: null, background: null }, animIn: 'blur', animOut: 'fade', loop: 'none' },
+  { name: 'Just Married', text: 'Just Married', style: { font: 'Pacifico', size: 0.1, fill: null, glow: '#ff7aa8', color: '#ffffff', shadow: false, stroke: null, background: null }, animIn: 'drop', animOut: 'fade', loop: 'heartbeat' },
+  { name: 'Forever', text: 'Forever Begins', style: { font: 'Dancing Script', size: 0.1, fill: 'silver', glow: '#ffffff', color: '#ffffff', shadow: false, stroke: null, background: null }, animIn: 'wipe', animOut: 'fade', loop: 'float' },
+  { name: 'Haldi', text: 'Haldi Ceremony', style: { font: 'Lobster', size: 0.09, fill: 'sunset', glow: '#ffd27a', color: '#ffb000', shadow: false, stroke: '#5a2a00', strokeWidth: 0.3, background: null }, animIn: 'bounce', animOut: 'fade', loop: 'swing' },
+  { name: 'Mehendi', text: 'Mehendi Night', style: { font: 'Dancing Script', size: 0.1, fill: null, glow: '#7dff9a', color: '#d8ffcf', shadow: false, stroke: '#0b3d1b', strokeWidth: 0.3, background: null }, animIn: 'letters', animOut: 'fade', loop: 'pulse' },
+  { name: 'Sangeet', text: 'Sangeet Night', style: { font: 'Righteous', size: 0.09, fill: 'love', glow: '#ff5cb3', color: '#ff5c93', shadow: false, stroke: null, background: null }, animIn: 'spin', animOut: 'fade', loop: 'pulse' },
+  { name: 'Baraat', text: 'Baraat Aa Gayi!', style: { font: 'Bangers', size: 0.11, fill: 'gold', glow: null, color: '#f7d24a', shadow: true, stroke: '#3d1f00', strokeWidth: 0.6, background: null }, animIn: 'pop', animOut: 'zoom', loop: 'heartbeat' },
+  { name: 'Reception', text: 'Wedding Reception', style: { font: 'Playfair Display', italic: false, size: 0.08, fill: 'gold', glow: null, color: '#f7d24a', shadow: true, stroke: null, background: null, letterSpacing: 0.08 }, animIn: 'wipe', animOut: 'fade', loop: 'shimmer' },
+  { name: 'Happy Anniversary', text: 'Happy Anniversary', style: { font: 'Pacifico', size: 0.09, fill: 'love', glow: '#ffb3cf', color: '#ff5c93', shadow: false, stroke: null, background: null }, animIn: 'letters', animOut: 'fade', loop: 'float' },
+  { name: 'Happy Birthday', text: 'Happy Birthday', style: { font: 'Bangers', size: 0.11, fill: 'rainbow', glow: null, color: '#ffe600', shadow: true, stroke: '#111111', strokeWidth: 0.5, background: null }, animIn: 'drop', animOut: 'fade', loop: 'swing' },
+]
 
 const ANIM_TIME = 0.45
 
@@ -84,16 +118,22 @@ function bounce(x: number) {
   return n * (x -= 2.625 / d) * x + 0.984375
 }
 
-export interface AnimState { alpha: number; scale: number; dx: number; dy: number; chars: number }
+export interface AnimState {
+  alpha: number; scale: number; dx: number; dy: number; chars: number
+  rot: number // degrees
+  blur: number // fraction of the canvas height
+  wipe: number // 0..1: share shown from the left
+  letters: number // 0..1 while letters come in one by one, Infinity when done
+}
 
 /** Animation state of a text/sticker layer at time t (dx/dy in fractions of canvas height). */
 export function animState(l: { start: number; end: number; animIn: TextAnim; animOut: TextAnim }, t: number): AnimState {
-  const s: AnimState = { alpha: 1, scale: 1, dx: 0, dy: 0, chars: Infinity }
+  const s: AnimState = { alpha: 1, scale: 1, dx: 0, dy: 0, chars: Infinity, rot: 0, blur: 0, wipe: 1, letters: Infinity }
   const dur = l.end - l.start
   const at = Math.min(ANIM_TIME, dur / 2)
   const apply = (anim: TextAnim, p: number, entering: boolean) => {
     p = Math.max(0, Math.min(1, p))
-    if (p >= 1 && anim !== 'typewriter') return
+    if (p >= 1 && anim !== 'typewriter' && anim !== 'letters') return
     switch (anim) {
       case 'fade': s.alpha *= p; break
       case 'slide-up': s.alpha *= p; s.dy += (1 - easeOut(p)) * (entering ? 0.08 : -0.08); break
@@ -105,13 +145,80 @@ export function animState(l: { start: number; end: number; animIn: TextAnim; ani
       case 'zoom': s.scale *= 0.4 + 0.6 * easeOut(p); s.alpha *= p; break
       case 'bounce': s.dy += (1 - bounce(p)) * (entering ? -0.15 : 0.15); s.alpha *= Math.min(1, p * 4); break
       case 'typewriter': if (entering) s.chars = p; break
+      case 'letters': if (entering) { if (p < 1) s.letters = p } else s.alpha *= p; break
+      case 'blur': s.alpha *= Math.min(1, p * 1.5); s.blur += (1 - easeOut(p)) * 0.025; break
+      case 'spin': s.scale *= Math.max(0.01, easeOut(p)); s.rot += (1 - easeOut(p)) * (entering ? -200 : 200); s.alpha *= Math.min(1, p * 2); break
+      case 'drop': s.dy += (1 - Math.max(0, Math.min(1.2, easeOutBack(p)))) * (entering ? -0.35 : 0.35); s.alpha *= Math.min(1, p * 3); break
+      case 'wipe': s.wipe = Math.min(s.wipe, easeOut(p)); break
       default: break
     }
   }
-  if (l.animIn === 'typewriter') apply('typewriter', (t - l.start) / Math.min(1.2, dur * 0.6), true)
+  if (l.animIn === 'typewriter' || l.animIn === 'letters') apply(l.animIn, (t - l.start) / Math.min(l.animIn === 'letters' ? 1.5 : 1.2, dur * 0.6), true)
   else apply(l.animIn, (t - l.start) / at, true)
-  if (l.animOut !== 'typewriter') apply(l.animOut, (l.end - t) / at, false)
+  if (l.animOut !== 'typewriter') apply(l.animOut === 'letters' ? 'fade' : l.animOut, (l.end - t) / at, false)
   return s
+}
+
+export interface LoopState { scale: number; dy: number; rot: number; shine: number /* 0..1 band position, >1 = none */ }
+
+/** A repeating movement `t` seconds after an item starts. */
+export function loopState(loop: LoopAnim | undefined, t: number): LoopState {
+  const s: LoopState = { scale: 1, dy: 0, rot: 0, shine: 2 }
+  const T = Math.PI * 2
+  switch (loop) {
+    case 'pulse': s.scale = 1 + 0.045 * Math.sin((T * t) / 1.3); break
+    case 'heartbeat': { const b = t % 1.1; s.scale = 1 + 0.08 * Math.exp(-b * 9) + 0.05 * Math.exp(-Math.max(0, b - 0.22) * 9) * (b > 0.22 ? 1 : 0); break }
+    case 'float': s.dy = 0.012 * Math.sin((T * t) / 2.6); break
+    case 'swing': s.rot = 4 * Math.sin((T * t) / 2.2); break
+    case 'shimmer': s.shine = (t % 2.4) / 1.6; break
+    default: break
+  }
+  return s
+}
+
+/** Paint for a line of text: its flat colour or a gradient fill spanning the line. */
+function paintFor(ctx: Ctx, st: TextStyle, cx: number, y: number, px: number, w: number): string | CanvasGradient {
+  const f = st.fill ? FILLS.find((x) => x.value === st.fill) : null
+  if (!f) return st.color
+  const g = f.value === 'rainbow' ? ctx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0) : ctx.createLinearGradient(0, y - px * 0.5, 0, y + px * 0.5)
+  f.stops.forEach((c, i) => g.addColorStop(i / (f.stops.length - 1), c))
+  return g
+}
+
+/** Outline, glow and fill of one piece of text at (x, y), then the shimmer's moving shine over it. */
+function paintText(ctx: Ctx, st: TextStyle, text: string, x: number, y: number, px: number, lineX: number, lineW: number, shine: number) {
+  if (st.shadow && !st.glow) {
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'
+    ctx.shadowBlur = px * 0.15
+    ctx.shadowOffsetY = px * 0.04
+  }
+  if (st.stroke) {
+    ctx.strokeStyle = st.stroke
+    ctx.lineWidth = Math.max(1, st.strokeWidth * px * 0.2)
+    ctx.strokeText(text, x, y)
+    ctx.shadowColor = 'transparent'
+  }
+  ctx.fillStyle = paintFor(ctx, st, lineX, y, px, lineW)
+  if (st.glow) {
+    ctx.shadowColor = st.glow
+    ctx.shadowOffsetY = 0
+    ctx.shadowBlur = px * 0.45
+    ctx.fillText(text, x, y)
+    ctx.shadowBlur = px * 0.18
+  }
+  ctx.fillText(text, x, y)
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+  if (shine <= 1) {
+    const bx = lineX - lineW / 2 - px + (lineW + px * 2) * shine
+    const g = ctx.createLinearGradient(bx - px * 0.8, 0, bx + px * 0.8, 0)
+    g.addColorStop(0, 'rgba(255,255,255,0)')
+    g.addColorStop(0.5, 'rgba(255,255,255,0.85)')
+    g.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = g
+    ctx.fillText(text, x, y)
+  }
 }
 
 const fontString = (st: TextStyle, px: number) =>
@@ -148,7 +255,8 @@ export function drawText(ctx: Ctx, layer: TextLayer, t: number, W: number, H: nu
   if (layer.frame) { drawFramedText(ctx, layer, layer.frame, t, W, H); return }
   const st = layer.style
   const a = animState(layer, t)
-  if (a.alpha <= 0.001 || a.scale <= 0.001) return
+  if (a.alpha <= 0.001 || a.scale <= 0.001 || a.wipe <= 0.001) return
+  const lp = loopState(layer.loop, t - layer.start)
   const m = measureText(ctx, layer, H)
   let lines = m.lines
   if (a.chars < 1) {
@@ -158,9 +266,16 @@ export function drawText(ctx: Ctx, layer: TextLayer, t: number, W: number, H: nu
   }
   ctx.save()
   ctx.globalAlpha = layer.box.opacity * a.alpha
-  ctx.translate(layer.box.x * W + a.dx * H, layer.box.y * H + a.dy * H)
-  ctx.rotate((layer.box.rotation * Math.PI) / 180)
-  ctx.scale(layer.box.scale * a.scale, layer.box.scale * a.scale)
+  ctx.translate(layer.box.x * W + a.dx * H, layer.box.y * H + (a.dy + lp.dy) * H)
+  ctx.rotate(((layer.box.rotation + a.rot + lp.rot) * Math.PI) / 180)
+  const sc = layer.box.scale * a.scale * lp.scale
+  ctx.scale(sc, sc)
+  if (a.blur > 0) ctx.filter = `blur(${(a.blur * H).toFixed(1)}px)`
+  if (a.wipe < 1) {
+    ctx.beginPath()
+    ctx.rect(-m.w / 2 - m.px, -m.h / 2 - m.px, (m.w + m.px * 2) * a.wipe, m.h + m.px * 2)
+    ctx.clip()
+  }
   if (st.background) {
     ctx.fillStyle = st.background
     roundRect(ctx, -m.w / 2, -m.h / 2, m.w, m.h, m.px * 0.25)
@@ -169,26 +284,35 @@ export function drawText(ctx: Ctx, layer: TextLayer, t: number, W: number, H: nu
   ctx.font = fontString(st, m.px)
   if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D).letterSpacing = `${st.letterSpacing * m.px}px`
   ctx.textBaseline = 'middle'
-  ctx.textAlign = st.align
   ctx.lineJoin = 'round'
   const x = st.align === 'left' ? -m.w / 2 + m.pad : st.align === 'right' ? m.w / 2 - m.pad : 0
   const top = -((lines.length - 1) * m.lh) / 2
+  const total = Math.max(1, lines.reduce((n, l) => n + [...l].length, 0))
+  let seen = 0
   lines.forEach((line, i) => {
     const y = top + i * m.lh
-    if (st.shadow) {
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'
-      ctx.shadowBlur = m.px * 0.15
-      ctx.shadowOffsetY = m.px * 0.04
+    const lw = ctx.measureText(line).width
+    const left = st.align === 'left' ? x : st.align === 'right' ? x - lw : x - lw / 2
+    if (a.letters < 1) {
+      // letters arrive one after another, each rising and fading in
+      ctx.textAlign = 'left'
+      const chars = [...line]
+      let prefix = ''
+      const base = ctx.globalAlpha
+      for (const ch of chars) {
+        const q = Math.max(0, Math.min(1, (a.letters - (seen / total) * 0.7) / 0.3))
+        seen++
+        if (q > 0) {
+          ctx.globalAlpha = base * q
+          paintText(ctx, st, ch, left + ctx.measureText(prefix).width, y + (1 - easeOut(q)) * m.px * 0.5, m.px, left + lw / 2, lw, 2)
+        }
+        prefix += ch
+      }
+      ctx.globalAlpha = base
+      return
     }
-    if (st.stroke) {
-      ctx.strokeStyle = st.stroke
-      ctx.lineWidth = Math.max(1, st.strokeWidth * m.px * 0.2)
-      ctx.strokeText(line, x, y)
-      ctx.shadowColor = 'transparent'
-    }
-    ctx.fillStyle = st.color
-    ctx.fillText(line, x, y)
-    ctx.shadowColor = 'transparent'
+    ctx.textAlign = st.align
+    paintText(ctx, st, line, x, y, m.px, left + lw / 2, lw, lp.shine)
   })
   ctx.restore()
 }
@@ -264,6 +388,7 @@ function drawFramedText(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, t: numb
   const st = layer.style
   const a = animState(layer, t)
   if (a.alpha <= 0.001 || a.scale <= 0.001) return
+  const shine = loopState(layer.loop, t - layer.start).shine
   const x = frame.rect.x * W, y = frame.rect.y * H, w = frame.rect.w * W, h = frame.rect.h * H
   ctx.save()
   ctx.globalAlpha = layer.box.opacity * a.alpha
@@ -315,20 +440,9 @@ function drawFramedText(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, t: numb
         ctx.fill()
       }
     }
-    if (st.shadow) {
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'
-      ctx.shadowBlur = m.px * 0.15
-      ctx.shadowOffsetY = m.px * 0.04
-    }
-    if (st.stroke) {
-      ctx.strokeStyle = st.stroke
-      ctx.lineWidth = Math.max(1, st.strokeWidth * m.px * 0.2)
-      ctx.strokeText(line, tx, ly)
-      ctx.shadowColor = 'transparent'
-    }
-    ctx.fillStyle = st.color
-    ctx.fillText(line, tx, ly)
-    ctx.shadowColor = 'transparent'
+    const lw = ctx.measureText(line).width
+    const lx = st.align === 'left' ? tx + lw / 2 : st.align === 'right' ? tx - lw / 2 : tx
+    paintText(ctx, st, line, tx, ly, m.px, lx, lw, shine)
   })
   ctx.restore()
 }
@@ -339,12 +453,15 @@ export function drawSticker(ctx: Ctx, layer: StickerLayer, t: number, W: number,
   const a = animState(layer, t)
   if (a.alpha <= 0.001 || a.scale <= 0.001) return
   if (layer.shower) return drawShower(ctx, layer, t, W, H, layer.box.opacity * a.alpha)
+  const lp = loopState(layer.loop, t - layer.start)
   const px = STICKER_BASE * H
   ctx.save()
   ctx.globalAlpha = layer.box.opacity * a.alpha
-  ctx.translate(layer.box.x * W + a.dx * H, layer.box.y * H + a.dy * H)
-  ctx.rotate((layer.box.rotation * Math.PI) / 180)
-  ctx.scale(layer.box.scale * a.scale, layer.box.scale * a.scale)
+  ctx.translate(layer.box.x * W + a.dx * H, layer.box.y * H + (a.dy + lp.dy) * H)
+  ctx.rotate(((layer.box.rotation + a.rot + lp.rot) * Math.PI) / 180)
+  ctx.scale(layer.box.scale * a.scale * lp.scale, layer.box.scale * a.scale * lp.scale)
+  if (a.blur > 0) ctx.filter = `blur(${(a.blur * H).toFixed(1)}px)`
+  if (a.wipe < 1) { ctx.beginPath(); ctx.rect(-px, -px, px * 2 * a.wipe, px * 2); ctx.clip() }
   ctx.font = `${px}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
