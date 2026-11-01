@@ -94,7 +94,7 @@ function oggOpus(packets: { data: Uint8Array; samples: number }[], preSkip: numb
   head[8] = 1; head[9] = 2
   hv.setUint16(10, preSkip, true)
   hv.setUint32(12, MIX_RATE, true)
-  const vendor = new TextEncoder().encode('ApanaVidEditor')
+  const vendor = new TextEncoder().encode('Apna Editor')
   const tags = new Uint8Array(8 + 4 + vendor.length + 4)
   tags.set(new TextEncoder().encode('OpusTags'))
   new DataView(tags.buffer).setUint32(8, vendor.length, true)

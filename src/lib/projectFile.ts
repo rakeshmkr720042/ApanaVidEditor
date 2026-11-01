@@ -36,8 +36,8 @@ export async function projectToFile(name: string, project: Project, sources: Rec
 /** Reads an .avp file into a new project in IndexedDB and returns its id. */
 export async function importProjectFile(file: Blob): Promise<string> {
   let parsed: AvpFile
-  try { parsed = JSON.parse(await file.text()) } catch { throw new Error('This is not an ApanaVidEditor project file') }
-  if (parsed?.app !== 'ApanaVidEditor' || !parsed.project || !Array.isArray(parsed.media)) throw new Error('This is not an ApanaVidEditor project file')
+  try { parsed = JSON.parse(await file.text()) } catch { throw new Error('This is not an Apna Editor project file') }
+  if (parsed?.app !== 'ApanaVidEditor' || !parsed.project || !Array.isArray(parsed.media)) throw new Error('This is not an Apna Editor project file')
   const sources: MediaSource[] = []
   for (const m of parsed.media) {
     const blob = await (await fetch(m.data)).blob()

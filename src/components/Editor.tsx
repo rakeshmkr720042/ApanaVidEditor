@@ -183,7 +183,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     try {
       const blob = await projectToFile(name, ed.project, ed.sources)
       const file = `${name.replace(/[^\w\- ]+/g, '').trim() || 'project'}.avp`
-      if (isNative) { await saveNative(blob, file, true); setToast(`${t('Saved to')} Documents/ApanaVidEditor/${file}`); return }
+      if (isNative) { await saveNative(blob, file, true); setToast(`${t('Saved to')} Documents/Apna Editor/${file}`); return }
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob); a.download = file; a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 10000)

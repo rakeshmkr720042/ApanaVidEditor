@@ -1,5 +1,5 @@
 ---
-title: ApanaVidEditor Voice Clone
+title: Apna Editor Voice Clone
 emoji: 🎙️
 colorFrom: indigo
 colorTo: pink
@@ -11,7 +11,7 @@ pinned: false
 license: other
 ---
 
-Voice cloning backend for [ApanaVidEditor](https://rakeshmkr720042.github.io/ApanaVidEditor/).
+Voice cloning backend for [Apna Editor](https://rakeshmkr720042.github.io/ApanaVidEditor/).
 
 API: `/clone(reference: audio file, text: str, language: str, speed: float) -> wav`.
 

@@ -22,7 +22,7 @@ export type Feature = 'export2k' | 'batch' | 'nomark' | 'dub' | 'audio' | 'green
 export const FEATURES: Record<Feature, { label: string; info: string }> = {
   export2k: { label: '2K export', info: 'Sharper 1440p videos' },
   batch: { label: 'Batch export', info: 'Several sizes in one go' },
-  nomark: { label: 'No ApanaVidEditor mark', info: 'Clean exports without the app name' },
+  nomark: { label: 'No Apna Editor mark', info: 'Clean exports without the app name' },
   dub: { label: 'AI Dub', info: 'Translate, voice-over, voice cloning, YouTube subtitles' },
   audio: { label: 'Remove noise & audio effects', info: 'Clean voice, equalizer, voice changer, loudness' },
   greenscreen: { label: 'Smart green screen', info: 'Remove the background in one tap' },

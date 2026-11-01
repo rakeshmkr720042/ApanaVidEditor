@@ -92,7 +92,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   }, [useCover, coverT, snapshot])
 
   const presetAspect = PRESETS.find((p) => p.id === preset)?.aspect
-  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : resolution, fps, watermark: mark ? 'ApanaVidEditor' : null, cover: useCover ? coverT : null, aspect: presetAspect, size })
+  const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : resolution, fps, watermark: mark ? 'Apna Editor' : null, cover: useCover ? coverT : null, aspect: presetAspect, size })
   const estimate = estimateSize(project, sources, job())
   const pickPreset = (id: string) => {
     setPreset(id)
@@ -141,7 +141,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
 
   const save = async (r: Result) => {
     if (isNative) {
-      try { await saveNative(r.blob, r.file, false); setToast(`${t('Saved to')} Documents/ApanaVidEditor/${r.file}`) } catch (e) { setToast((e as Error).message) }
+      try { await saveNative(r.blob, r.file, false); setToast(`${t('Saved to')} Documents/Apna Editor/${r.file}`) } catch (e) { setToast((e as Error).message) }
       return
     }
     const a = document.createElement('a')
@@ -210,7 +210,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
                         <Chips options={[24, 25, 30, 60].map((f) => ({ value: f, label: `${f} fps` }))} value={fps} onChange={(v) => { setFps(v); setPreset('') }} />
                       </>
                     )}
-                    <Toggle label={canHideMark ? 'ApanaVidEditor watermark' : `${t('ApanaVidEditor watermark')} 👑`} value={mark} onChange={(v) => { if (!v && !canHideMark) setPaywall('nomark'); else setWatermark(v) }} />
+                    <Toggle label={canHideMark ? 'Apna Editor watermark' : `${t('Apna Editor watermark')} 👑`} value={mark} onChange={(v) => { if (!v && !canHideMark) setPaywall('nomark'); else setWatermark(v) }} />
                     {(format === 'mp4' || format === 'mov') && <Toggle label="Choose cover image" value={useCover} onChange={setUseCover} />}
                     {useCover && (format === 'mp4' || format === 'mov') && (
                       <div className="cover-pick">

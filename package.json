@@ -1,6 +1,6 @@
 {
   "name": "apanavideditor",
-  "productName": "ApanaVidEditor",
+  "productName": "Apna Editor",
   "private": true,
   "version": "1.0.0",
   "description": "Lightweight offline video editor",
@@ -71,7 +71,7 @@
   },
   "build": {
     "appId": "com.clipcut.editor",
-    "productName": "ApanaVidEditor",
+    "productName": "Apna Editor",
     "copyright": "Copyright © 2026 Rakesh",
     "directories": {
       "output": "release",
@@ -111,7 +111,7 @@
         }
       ],
       "icon": "electron/icon.png",
-      "artifactName": "ApanaVidEditor-Setup-${version}.${ext}"
+      "artifactName": "Apna-Editor-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -119,7 +119,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "ApanaVidEditor"
+      "shortcutName": "Apna Editor"
     }
   }
 }

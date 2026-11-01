@@ -1,4 +1,4 @@
-"""ApanaVidEditor voice cloning Space.
+"""Apna Editor voice cloning Space.
 
 Takes a short recording of someone's voice and a line of text, and returns that
 line spoken in the same voice, using Coqui XTTS v2 (17 languages incl. Hindi).
@@ -70,7 +70,7 @@ demo = gr.Interface(
         gr.Slider(0.7, 1.5, value=1.0, step=0.05, label="Speed"),
     ],
     outputs=gr.Audio(type="filepath", label="Cloned voice"),
-    title="ApanaVidEditor Voice Clone",
+    title="Apna Editor Voice Clone",
     description="Record or upload your voice, type a line, and hear it in your own voice. Powered by Coqui XTTS v2.",
     api_name="clone",
     concurrency_limit=1,

@@ -17,8 +17,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
-        name: 'ApanaVidEditor',
-        short_name: 'ApanaVidEditor',
+        name: 'Apna Editor',
+        short_name: 'Apna Editor',
         description: 'Lightweight offline video editor',
         theme_color: '#0f1115',
         background_color: '#0f1115',

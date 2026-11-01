@@ -12,6 +12,10 @@ const here = dirname(fileURLToPath(import.meta.url))
 const distDir = join(here, '..', 'dist')
 const devUrl = process.env.ELECTRON_DEV_URL // set by `npm run electron:dev`
 const appUrl = 'app://bundle/index.html'
+// The app was renamed from "ApanaVidEditor" to "Apna Editor". Electron names the data folder
+// after productName, so keep the old folder: saved projects, settings and downloaded AI
+// models stay where they are after the update.
+app.setPath('userData', join(app.getPath('appData'), 'ApanaVidEditor'))
 const videoExts = ['mp4', 'mov', 'webm', 'mkv', 'm4v', 'avi']
 const mediaExts = [...videoExts, 'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp3', 'wav', 'm4a', 'aac', 'ogg']
 
@@ -105,7 +109,7 @@ async function openVideoDialog() {
 
 function buildMenu() {
   const about = () => dialog.showMessageBox(win, {
-    type: 'info', title: 'About ApanaVidEditor', message: `ApanaVidEditor ${app.getVersion()}`,
+    type: 'info', title: 'About Apna Editor', message: `Apna Editor ${app.getVersion()}`,
     detail: 'Lightweight offline video editor.\nEverything runs on your computer; nothing is uploaded.',
   })
   Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -136,7 +140,7 @@ function buildMenu() {
       label: '&Help',
       submenu: [
         { label: 'Website', click: () => shell.openExternal('https://rakeshmkr720042.github.io/ApanaVidEditor/') },
-        { label: 'About ApanaVidEditor', click: about },
+        { label: 'About Apna Editor', click: about },
       ],
     },
   ]))
@@ -150,7 +154,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 560,
     backgroundColor: '#0f1115',
-    title: 'ApanaVidEditor',
+    title: 'Apna Editor',
     icon: join(here, 'icon.png'),
     show: false,
     webPreferences: {
@@ -237,7 +241,7 @@ async function googleToken(params) {
 }
 
 let cancelSignIn = null
-const page = (msg) => `<!doctype html><meta charset="utf-8"><title>ApanaVidEditor</title><body style="font:16px system-ui;padding:40px;background:#0f1115;color:#eee">${msg}`
+const page = (msg) => `<!doctype html><meta charset="utf-8"><title>Apna Editor</title><body style="font:16px system-ui;padding:40px;background:#0f1115;color:#eee">${msg}`
 
 ipcMain.handle('desktop:google-signin', async (e, { clientId, clientSecret, scope }) => {
   if (e.sender !== win?.webContents) throw new Error('Not allowed')
@@ -258,7 +262,7 @@ ipcMain.handle('desktop:google-signin', async (e, { clientId, clientSecret, scop
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
         clearTimeout(timer)
         if (q.get('code')) {
-          res.end(page('Signed in to ApanaVidEditor. You can close this tab and go back to the app.'))
+          res.end(page('Signed in to Apna Editor. You can close this tab and go back to the app.'))
           resolve(q.get('code'))
         } else {
           res.end(page('Sign-in was not finished. You can close this tab.'))
