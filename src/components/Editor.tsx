@@ -41,6 +41,8 @@ import { atTime } from '../model/keyframes'
 import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../panels/LayerTools'
 import { ClipOrderPanel, type OrderMode } from '../panels/ClipOrderPanel'
 import { GreenScreenPanel } from '../panels/GreenScreenPanel'
+import { CutoutPanel } from '../panels/CutoutPanel'
+import { loadCutout } from '../engine/cutout'
 import { BACK, useBack } from '../lib/back'
 import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
 import { HabitBar, HabitsSheet } from './HabitsSheet'
@@ -81,7 +83,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
-  | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
+  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
   | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
@@ -534,6 +536,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...(photo ? [{ icon: 'image', label: 'Photo', on: () => setPanel('photo') } as Tool] : []),
       { icon: 'replace', label: 'Replace', on: () => replaceInput.current?.click() },
       // remove a green/blue screen and put a photo, video or colour behind the person
+      { icon: 'user', label: 'Remove BG', on: () => setPanel('cutout'), active: !!selClip.cutout?.enabled },
       { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!selClip.chroma?.enabled },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
@@ -613,6 +616,16 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'adjust', label: 'Style', on: () => setPanel('text-style') } as Tool,
         { icon: 'anim', label: 'Animation', on: () => setPanel('text-anim') } as Tool,
         { icon: 'subtitles', label: 'Caption style', on: () => setPanel('text-words'), active: selLayer.type === 'text' && !!selLayer.words } as Tool,
+        {
+          icon: 'user', label: 'Behind person', active: selLayer.type === 'text' && !!selLayer.behind,
+          on: () => {
+            if (selLayer.type !== 'text') return
+            const behind = !selLayer.behind
+            ed.updateLayer<TextLayer>(selLayer.id, { behind })
+            if (behind) loadCutout()
+            setToast(t(behind ? 'Text goes behind the person in the video' : 'Text is in front again'))
+          },
+        } as Tool,
       ],
       sticker: [{ icon: (selLayer as StickerLayer).shower ? 'shower' : 'sticker', label: (selLayer as StickerLayer).shower ? 'Shower' : 'Stickers', on: () => setPanel('stickers') } as Tool],
       media: [
@@ -621,6 +634,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'anim', label: 'Animation', on: () => setPanel('media-anim') } as Tool,
         { icon: 'blend', label: 'Blend', on: () => setPanel('blend') } as Tool,
         { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!(selLayer as MediaLayer).chroma?.enabled } as Tool,
+        { icon: 'user', label: 'Remove BG', on: () => setPanel('cutout'), active: !!(selLayer as MediaLayer).cutout?.enabled } as Tool,
         ...(ed.sources[(selLayer as MediaLayer).sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
         ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [{ icon: 'detach', label: 'Detach audio', on: () => detach([selLayer.id]) } as Tool] : []),
         ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [
@@ -793,6 +807,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
   else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
   else if (panel === 'chroma' && selStored?.type === 'media') panelView = <GreenScreenPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} time={time} onToast={setToast} onClose={closePanel} />
+  else if (panel === 'cutout' && selStored?.type === 'media') panelView = <CutoutPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} onToast={setToast} onClose={closePanel} />
+  else if (panel === 'cutout' && tclip) panelView = <CutoutPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} onToast={setToast} onClose={closePanel} />
   else if (panel === 'chroma' && tclip) panelView = <GreenScreenPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'order' && selClip) panelView = (
     <ClipOrderPanel key={orderMode} ed={ed} clip={selClip} start={orderMode} onPick={(id) => ed.setSel({ type: 'clip', id })}

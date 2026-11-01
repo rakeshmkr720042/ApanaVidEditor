@@ -7,6 +7,7 @@ import { sleep, stayAwake } from './background'
 import { openReader, type FrameReader } from './frames'
 import { encodeWav } from './music'
 import { backdropSource } from './chromakey'
+import { loadCutout, usesCutout } from './cutout'
 import { mediaNeeds } from './player'
 import { outputSize, Renderer, type FrameImage } from './renderer'
 import { ensureFont } from './text'
@@ -182,6 +183,7 @@ export async function exportProject(
     await renderer.prepareWatermark(project, sources)
     await renderer.prepareWaves(project, sources)
     await renderer.preparePresenter(project)
+    if (usesCutout(project)) await loadCutout()
     const readers = new Map<string, FrameReader>()
     const renderAt = async (t: number, seed: number) => {
       const needs = mediaNeeds(project, items, sources, t)

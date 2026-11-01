@@ -147,6 +147,19 @@ export interface Clip {
   gap?: number // seconds of empty (black) time before this clip, left when snap is off
   effect?: VideoEffect | null // video effect, missing = none
   grade?: Grade | null // curves, HSL, LUT; missing = none
+  cutout?: Cutout | null // background removal (person cutout), missing = off; shows `backdrop` behind
+}
+
+/**
+ * Background removal without a green screen: an on-device AI finds the person in each frame and everything else
+ * is taken away (src/engine/cutout.ts). An outline can be drawn round the person.
+ */
+export interface Cutout {
+  enabled: boolean
+  soft: number // 0..1 edge softness
+  outline?: 'none' | 'line' | 'glow' | 'scribble' // missing = none
+  color?: string // outline colour
+  width?: number // 0..1 outline thickness
 }
 
 export interface Box {
@@ -232,6 +245,7 @@ export interface TextLayer extends LayerBase, Keyed {
   loop?: LoopAnim // missing = none
   frame?: CaptionFrame | null // when set, box position/scale/rotation are ignored
   words?: WordFx | null // word-by-word highlight, missing = off
+  behind?: boolean // drawn behind the person in the main video (text behind person), missing = in front
 }
 
 /** Many copies of a sticker moving over the whole picture (falling petals, rising hearts, confetti bursts…). */
@@ -279,6 +293,7 @@ export interface MediaLayer extends LayerBase, Keyed {
   fx?: AudioFx | null
   effect?: VideoEffect | null
   grade?: Grade | null
+  cutout?: Cutout | null // background removal (person cutout), missing = off
 }
 
 export interface BlurLayer extends LayerBase {

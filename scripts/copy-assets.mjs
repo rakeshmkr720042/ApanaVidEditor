@@ -18,6 +18,12 @@ const ortDest = join(root, 'public/ort')
 mkdirSync(ortDest, { recursive: true })
 for (const f of ['ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm']) cpSync(join(nm, 'onnxruntime-web/dist', f), join(ortDest, f))
 
+// person cutout (background removal): MediaPipe's vision runtime (SIMD build) and the small selfie model
+const mpDest = join(root, 'public/mediapipe')
+mkdirSync(mpDest, { recursive: true })
+for (const f of ['vision_wasm_internal.js', 'vision_wasm_internal.wasm']) cpSync(join(nm, '@mediapipe/tasks-vision/wasm', f), join(mpDest, f))
+cpSync(join(root, 'scripts/assets/selfie_segmenter.tflite'), join(mpDest, 'selfie_segmenter.tflite'))
+
 // package id -> CSS family name
 const fonts = {
   'noto-sans-devanagari': 'Noto Sans Devanagari', poppins: 'Poppins', montserrat: 'Montserrat', hind: 'Hind',
@@ -44,4 +50,4 @@ for (const [id, family] of Object.entries(fonts)) {
   manifest.push({ family, files })
 }
 writeFileSync(join(fontDest, 'fonts.json'), JSON.stringify(manifest))
-console.log(`assets copied: ffmpeg core, onnx runtime, ${manifest.length} fonts`)
+console.log(`assets copied: ffmpeg core, onnx runtime, person cutout, ${manifest.length} fonts`)

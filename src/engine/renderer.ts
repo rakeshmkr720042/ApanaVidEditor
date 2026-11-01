@@ -7,6 +7,7 @@ import { Grader } from './gl'
 import { effectFrame } from './effects'
 import { gradeGpu } from './grade'
 import { toChroma } from './chromakey'
+import { drawOutline, keepPerson, personMask } from './cutout'
 import { defaultAdjust } from '../model/timeline'
 import { animState, drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
 import { drawWave, waveData, waveReady, waveSize } from './visualizer'
@@ -81,6 +82,8 @@ export class Renderer {
   private grader: Grader | null
   private layerGrader: Grader | null = null
   private scratch = makeCanvas()
+  private cutScratch = makeCanvas()
+  private base = makeCanvas() // the main video alone, for text behind the person
   private bgSmall = makeCanvas(48, 48)
   private wmImage: { id: string; img: CanvasImageSource | null; ready: Promise<void> } | null = null
   private prImage: { url: string; img: ImageBitmap | null; ready: Promise<void> } | null = null
@@ -102,7 +105,7 @@ export class Renderer {
     if (this.W === w && this.H === h) return
     this.W = w; this.H = h
     this.canvas.width = w; this.canvas.height = h
-    for (const f of [...this.frames, ...this.comps]) { f.width = w; f.height = h }
+    for (const f of [...this.frames, ...this.comps, this.base]) { f.width = w; f.height = h }
     this.grader?.resize(w, h)
   }
 
@@ -148,12 +151,24 @@ export class Renderer {
     const prStart = presenterAt(pr, prTotal, inp.t)
     if (prStart !== null && pr!.style === 'full') this.drawPresenter(inp, prStart, prTotal)
 
+    // text behind the person: keep the main video and find the person in it, to paint them back over that text
+    let personOver: Canvas | null = null
+    if (a && inp.project.layers.some((l) => l.type === 'text' && l.behind && inp.t >= l.start && inp.t < l.end)) {
+      const bc = ctx2d(this.base)
+      bc.globalCompositeOperation = 'copy'
+      bc.drawImage(this.canvas, 0, 0)
+      bc.globalCompositeOperation = 'source-over'
+      const mask = personMask(this.base, 'base', `${inp.t.toFixed(3)}:${a.item.clip.id}`, 0.25, this.onNeedsRedraw)
+      if (mask) personOver = mask
+    }
+
     for (const l0 of inp.project.layers) {
       if (l0.type === 'audio' || inp.t < l0.start || inp.t >= l0.end) continue
       const l = atTime(l0, inp.t)
       if (l.type === 'text') {
         if (!fontLoaded(l.style.font)) ensureFont(l.style.font).then(() => this.onNeedsRedraw?.())
         drawText(ctx, l, inp.t, W, H)
+        if (l.behind && personOver) ctx.drawImage(keepPerson(this.base, personOver, W, H), 0, 0)
       } else if (l.type === 'sticker') drawSticker(ctx, l, inp.t, W, H)
       else if (l.type === 'media') this.drawMediaLayer(l, inp, seed)
       else if (l.type === 'blur') this.drawBlur(l)
@@ -247,7 +262,25 @@ export class Renderer {
   private clipImage(i: number, clip: Clip, inp: RenderInput, progress: number, seed: number): { img: Canvas; p: ColorParams; done: boolean } {
     const p = { ...colorParams(clip.adjust, clip.filter, clip.filterAmount), gpu: gradeGpu(clip.grade, inp.project) }
     const keyed = keyOn(clip.chroma) && !!this.grader
-    const fr = this.drawClipFrame(i, clip, inp, progress, keyed)
+    const cut = !keyed && clip.cutout?.enabled && this.grader ? clip.cutout : null
+    const fr = this.drawClipFrame(i, clip, inp, progress, keyed || !!cut)
+    if (cut) {
+      const stamp = `${inp.t.toFixed(3)}:${clip.fit}:${clip.rotate}:${clip.flipH}:${clip.flipV}:${JSON.stringify(clip.crop ?? null)}:${this.W}x${this.H}`
+      const mask = personMask(fr, clipKey(clip), stamp, cut.soft, this.onNeedsRedraw)
+      const out = this.comps[i]
+      const c = ctx2d(out)
+      c.setTransform(1, 0, 0, 1, 0, 0)
+      c.globalAlpha = 1
+      const bg = inp.project.settings.background
+      c.fillStyle = bg === 'white' ? '#fff' : bg === 'black' || bg === 'blur' ? '#000' : bg
+      c.fillRect(0, 0, this.W, this.H)
+      if (clip.backdrop) this.drawBackdrop(c, clip.backdrop, backdropKey(clip), inp)
+      this.grader!.drawGraded(fr, p, seed)
+      if (!mask) { c.drawImage(this.grader!.canvas, 0, 0); return { img: out, p: NEUTRAL, done: true } } // AI still loading
+      drawOutline(c, mask, cut, 0, 0, this.W, this.H, inp.t)
+      c.drawImage(keepPerson(this.grader!.canvas, mask, this.W, this.H), 0, 0)
+      return { img: out, p: NEUTRAL, done: true }
+    }
     if (!keyed) return { img: fr, p, done: false }
     const out = this.comps[i]
     const c = ctx2d(out)
@@ -409,9 +442,22 @@ export class Renderer {
         sx = 0; sy = 0; sw = gw; sh = gh
       }
     }
+    let mask: Canvas | null = null
+    if (l.cutout?.enabled && !l.chroma.enabled) {
+      // find the person in the shown part of the layer, at about the size it is drawn
+      const cw = Math.max(2, Math.round(Math.min(fw, sw))), ch = Math.max(2, Math.round(Math.min(fh, sh)))
+      const cs = this.cutScratch
+      if (cs.width !== cw || cs.height !== ch) { cs.width = cw; cs.height = ch }
+      const cc = ctx2d(cs)
+      cc.globalCompositeOperation = 'copy'
+      cc.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch)
+      cc.globalCompositeOperation = 'source-over'
+      mask = personMask(cs, layerKey(l), `${inp.t.toFixed(3)}:${JSON.stringify(l.crop ?? null)}:${cw}x${ch}`, l.cutout.soft, this.onNeedsRedraw)
+      if (mask) { img = keepPerson(cs, mask, cw, ch); sx = 0; sy = 0; sw = cw; sh = ch }
+    }
     const a = animState({ start: l.start, end: l.end, animIn: l.animIn ?? 'none', animOut: l.animOut ?? 'none' }, inp.t)
     if (a.alpha <= 0.001 || a.scale <= 0.001) return
-    if (l.chroma.enabled && l.backdrop) {
+    if ((l.chroma.enabled || (l.cutout?.enabled && mask)) && l.backdrop) {
       // the backdrop fills the frame under the keyed layer, fading in and out with it
       ctx.save()
       ctx.globalAlpha = a.alpha
@@ -433,9 +479,13 @@ export class Renderer {
     if (l.flipH || l.flipV) {
       ctx.save()
       ctx.scale(l.flipH ? -1 : 1, l.flipV ? -1 : 1)
+      if (mask && l.cutout) drawOutline(ctx, mask, l.cutout, -fw / 2, -fh / 2, fw, fh, inp.t)
       ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh)
       ctx.restore()
-    } else ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh)
+    } else {
+      if (mask && l.cutout) drawOutline(ctx, mask, l.cutout, -fw / 2, -fh / 2, fw, fh, inp.t)
+      ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh)
+    }
     ctx.globalCompositeOperation = 'source-over'
     if (l.border > 0) {
       ctx.lineWidth = l.border * Math.min(W, H) * 0.01
