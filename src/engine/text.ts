@@ -1,3 +1,4 @@
+import { drawShower } from './shower'
 import type { CaptionFrame, CaptionFramePreset, StickerLayer, TextAnim, TextLayer, TextStyle } from '../types'
 
 export const FONTS = [
@@ -337,6 +338,7 @@ export const STICKER_BASE = 0.16
 export function drawSticker(ctx: Ctx, layer: StickerLayer, t: number, W: number, H: number) {
   const a = animState(layer, t)
   if (a.alpha <= 0.001 || a.scale <= 0.001) return
+  if (layer.shower) return drawShower(ctx, layer, t, W, H, layer.box.opacity * a.alpha)
   const px = STICKER_BASE * H
   ctx.save()
   ctx.globalAlpha = layer.box.opacity * a.alpha

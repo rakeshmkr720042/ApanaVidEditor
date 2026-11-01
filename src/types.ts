@@ -193,9 +193,18 @@ export interface TextLayer extends LayerBase, Keyed {
   frame?: CaptionFrame | null // when set, box position/scale/rotation are ignored
 }
 
+/** Many copies of a sticker moving over the whole picture (falling petals, rising hearts, confetti bursts…). */
+export interface Shower {
+  motion: 'fall' | 'rise' | 'float' | 'burst' | 'swirl'
+  count: number // 5..150
+  size: number // 0.3..2
+  speed: number // 0.3..3
+}
+
 export interface StickerLayer extends LayerBase, Keyed {
   type: 'sticker'
-  emoji: string
+  emoji: string // an emoji, or 'petal' / 'paper' (drawn rose petal / confetti, showers only)
+  shower?: Shower | null // missing = one sticker in its box
   box: Box
   animIn: TextAnim
   animOut: TextAnim

@@ -4,6 +4,7 @@ import type { Editor } from '../model/useEditor'
 import { isSub, subtitleLook } from '../model/useEditor'
 import { CaptionFrameEditor } from './CaptionFramePanel'
 import { ANIMS, FONTS, STICKERS, TEXT_PRESETS, ensureFont, prefetchFonts } from '../engine/text'
+import { SHOWER_MOTIONS, SHOWER_PRESETS } from '../engine/shower'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { parseSrt, toSrt } from '../lib/srt'
 import { fileBase, saveTextFiles } from '../lib/save'
@@ -122,20 +123,51 @@ export function AnimPicker({ inA, outA, onChange, noType }: { inA: TextAnim; out
   )
 }
 
-export function StickerPanel({ ed, layer, t: time, onClose }: P & { layer: StickerLayer | null; t: number }) {
-  const [cat, setCat] = useState(Object.keys(STICKERS)[0])
-  const [tab, setTab] = useState('stickers')
+export function StickerPanel({ ed, layer, t: time, onClose, showers }: P & { layer: StickerLayer | null; t: number; showers?: boolean }) {
+  const [cat, setCat] = useState(() => (showers || layer?.shower ? SHOWERS : Object.keys(STICKERS)[0]))
+  const [tab, setTab] = useState(() => (layer?.shower ? 'shower' : 'stickers'))
+  const set = (p: Partial<StickerLayer>) => layer && ed.updateLayer<StickerLayer>(layer.id, p)
+  const sh = layer?.shower
   return (
-    <Panel title="Stickers" onClose={onClose} tall>
-      {layer && <Chips options={[{ value: 'stickers', label: 'Stickers' }, { value: 'anim', label: 'Animation' }, { value: 'opacity', label: 'Opacity' }]} value={tab} onChange={setTab} />}
+    <Panel title={sh || (!layer && cat === SHOWERS) ? 'Showers' : 'Stickers'} onClose={onClose} tall>
+      {layer && (
+        <Chips
+          options={[...(sh ? [{ value: 'shower', label: 'Shower' }] : []), { value: 'stickers', label: sh ? 'Change' : 'Stickers' }, { value: 'anim', label: 'Animation' }, { value: 'opacity', label: 'Opacity' }]}
+          value={tab} onChange={setTab}
+        />
+      )}
       {tab === 'stickers' && (
         <>
-          <Chips options={Object.keys(STICKERS).map((c) => ({ value: c, label: c }))} value={cat} onChange={setCat} />
-          <div className="emoji-grid">
-            {STICKERS[cat].map((e) => (
-              <button key={e} onClick={() => (layer ? ed.updateLayer<StickerLayer>(layer.id, { emoji: e }) : ed.addSticker(time, e))}>{e}</button>
-            ))}
-          </div>
+          <Chips options={[SHOWERS, ...Object.keys(STICKERS)].map((c) => ({ value: c, label: c }))} value={cat} onChange={setCat} />
+          {cat === SHOWERS ? (
+            <div className="grid shower-grid">
+              {SHOWER_PRESETS.map((pr) => (
+                <button
+                  key={pr.name}
+                  className={layer?.emoji === pr.emoji && sh?.motion === pr.shower.motion ? 'on' : ''}
+                  onClick={() => (layer ? set({ emoji: pr.emoji, shower: { ...pr.shower } }) : ed.addSticker(time, pr.emoji, pr.shower))}
+                >
+                  <span className="shower-icon">{pr.emoji === 'petal' ? '🌹' : pr.emoji === 'paper' ? '🎊' : pr.emoji}</span>{t(pr.name)}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="emoji-grid">
+              {STICKERS[cat].map((e) => (
+                <button key={e} onClick={() => (layer ? set(sh ? { emoji: e } : { emoji: e }) : ed.addSticker(time, e))}>{e}</button>
+              ))}
+            </div>
+          )}
+          {!layer && cat === SHOWERS && <p className="muted small">{t('Petals, hearts or confetti over the whole video. Drag its ends on the timeline to make it longer.')}</p>}
+        </>
+      )}
+      {layer && sh && tab === 'shower' && (
+        <>
+          <span className="field-label">{t('Motion')}</span>
+          <Chips options={SHOWER_MOTIONS.map((m) => ({ value: m.value, label: m.label }))} value={sh.motion} onChange={(motion) => set({ shower: { ...sh, motion } })} wrap />
+          <Slider label="Amount" min={5} max={150} step={1} value={sh.count} format={(v) => `${Math.round(v)}`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ shower: { ...sh, count: Math.round(v) } })} />
+          <Slider label="Size" min={0.3} max={2} value={sh.size} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ shower: { ...sh, size: v } })} />
+          <Slider label="Speed" min={0.3} max={3} value={sh.speed} format={(v) => `${v.toFixed(1)}x`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ shower: { ...sh, speed: v } })} />
         </>
       )}
       {layer && tab === 'anim' && <AnimPicker inA={layer.animIn} outA={layer.animOut} onChange={(p) => ed.updateLayer<StickerLayer>(layer.id, p)} />}
@@ -146,6 +178,8 @@ export function StickerPanel({ ed, layer, t: time, onClose }: P & { layer: Stick
     </Panel>
   )
 }
+
+const SHOWERS = 'Showers'
 
 export function OverlayPanel({ ed, layer, onClose }: P & { layer: MediaLayer }) {
   const set = (patch: Partial<MediaLayer>) => ed.updateLayer<MediaLayer>(layer.id, patch)

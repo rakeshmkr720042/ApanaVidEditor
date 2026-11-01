@@ -527,8 +527,10 @@ export function useEditor(initial: Project) {
     return l
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const addSticker = useCallback((t: number, emoji: string) => {
-    const l: StickerLayer = { id: uid(), type: 'sticker', emoji, ...span(t, 3), box: centerBox(), animIn: 'pop', animOut: 'fade' }
+  const addSticker = useCallback((t: number, emoji: string, shower?: StickerLayer['shower']) => {
+    const l: StickerLayer = shower
+      ? { id: uid(), type: 'sticker', emoji, shower: { ...shower }, ...span(t, 6), box: centerBox(), animIn: 'fade', animOut: 'fade' }
+      : { id: uid(), type: 'sticker', emoji, ...span(t, 3), box: centerBox(), animIn: 'pop', animOut: 'fade' }
     addLayer(l)
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -574,6 +576,38 @@ export function useEditor(initial: Project) {
     else h.set({ ...p, layers: p.layers.filter((l) => !ids.has(l.id)) })
     setSel(null)
   }, [h, sel])
+
+  /**
+   * Freeze frame: the clip under time t stops there for `dur` seconds (a still photo of that moment, with the
+   * clip's look), then carries on. The still is selected.
+   */
+  const freezeFrame = useCallback((t: number, still: MediaSource, dur = 3): boolean => {
+    const p = ref.current
+    if (p.main?.locked) return false
+    const { items } = layoutClips(p.clips)
+    const it = items.find((x) => t >= x.start && t < x.start + x.dur) ?? (t >= (items.at(-1)?.start ?? 0) ? items.at(-1) : undefined)
+    if (!it) return false
+    const c = it.clip
+    const local = Math.max(0, Math.min(it.dur, t - it.start))
+    const at = sourceAt(c, local).time
+    const look = { rotate: c.rotate, flipH: c.flipH, flipV: c.flipV, crop: c.crop, fit: c.fit, filter: c.filter, filterAmount: c.filterAmount, adjust: { ...c.adjust }, effect: c.effect ? { ...c.effect } : null }
+    // the still shows the clip's frame as it is (crop and turn included), so it is a photo of the same size
+    const frozen: Clip = { ...newClip(still, uid()), out: dur, ...look, volume: 0 }
+    let parts: Clip[]
+    if (local < 0.1) parts = [{ ...frozen, gap: c.gap }, { ...c, gap: undefined }]
+    else if (it.dur - local < 0.1) parts = [{ ...c, transition: null }, { ...frozen, transition: c.transition }]
+    else if (c.ramp) return false
+    else parts = [{ ...c, out: at, transition: null, fadeOut: 0 }, frozen, { ...c, id: uid(), in: at, fadeIn: 0, gap: undefined }]
+    h.set({ ...p, clips: p.clips.flatMap((x) => (x.id === c.id ? parts : [x])) })
+    setSel({ type: 'clip', id: frozen.id })
+    return true
+  }, [h])
+
+  /** Puts a played-backwards copy of a clip's part (made by the caller) in its place: same length, look and spot. */
+  const reverseClip = useCallback((id: string, reversed: MediaSource) => {
+    const p = ref.current
+    commit({ ...p, clips: p.clips.map((c) => (c.id === id ? { ...c, sourceId: reversed.id, in: 0, out: Math.min(reversed.duration, c.out - c.in), ramp: null } : c)) })
+  }, [commit])
 
   const duplicate = useCallback(() => {
     const p = ref.current
@@ -712,7 +746,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, place, replaceMedia, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, setWatermark, setPresenter,
+    addSource, place, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, setWatermark, setPresenter,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,

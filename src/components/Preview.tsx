@@ -72,7 +72,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   const layers = playable(ed.project).layers
     .filter((l): l is VisualLayer => l.type !== 'audio' && visible(l) && !isLocked(ed.project, l)).map((l) => atTime(l, t))
   const selected = ed.sel?.type === 'layer' ? layers.find((l) => l.id === ed.sel!.id) : undefined
-  const rect = selected && player ? player.renderer.layerRect(selected, ed.sources) : null
+  const rect = selected && player && !(selected.type === 'sticker' && selected.shower) ? player.renderer.layerRect(selected, ed.sources) : null
   const wmRect = wmEdit && player ? player.renderer.watermarkRect(ed.project, ed.sources, t) : null
 
   const toCanvas = (e: React.PointerEvent) => {
@@ -84,6 +84,8 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
     if (!player) return null
     for (let i = layers.length - 1; i >= 0; i--) {
       const l = layers[i]
+      // a shower covers the whole picture: taps go to what is under it (it is picked on the timeline)
+      if (l.type === 'sticker' && l.shower) continue
       const r = player.renderer.layerRect(l, ed.sources)
       const a = (-r.rotation * Math.PI) / 180
       const dx = x - r.cx, dy = y - r.cy
