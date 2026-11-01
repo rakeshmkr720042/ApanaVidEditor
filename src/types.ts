@@ -153,6 +153,13 @@ export interface BoxKey { t: number; box: Box }
 interface Keyed { keys?: BoxKey[] }
 
 export type TextAnim = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'pop' | 'typewriter' | 'zoom' | 'bounce'
+  | 'blur' | 'spin' | 'drop' | 'wipe' | 'letters' // letters: text only, one letter after another
+
+/** A movement that repeats the whole time an item shows (after its entry animation). */
+export type LoopAnim = 'none' | 'pulse' | 'float' | 'swing' | 'shimmer' | 'heartbeat'
+
+/** Paint for text letters instead of a flat colour. */
+export type TextFill = 'gold' | 'rose-gold' | 'silver' | 'royal' | 'sunset' | 'love' | 'rainbow'
 
 export interface TextStyle {
   font: string
@@ -166,6 +173,8 @@ export interface TextStyle {
   bold: boolean
   italic: boolean
   letterSpacing: number
+  fill?: TextFill | null // gradient paint, missing = the flat colour
+  glow?: string | null // soft glow of this colour round the letters, missing = none
 }
 
 export type CaptionFramePreset = 'bottom' | 'top' | 'left' | 'right' | 'center' | 'custom'
@@ -190,6 +199,7 @@ export interface TextLayer extends LayerBase, Keyed {
   box: Box
   animIn: TextAnim
   animOut: TextAnim
+  loop?: LoopAnim // missing = none
   frame?: CaptionFrame | null // when set, box position/scale/rotation are ignored
 }
 
@@ -205,6 +215,7 @@ export interface StickerLayer extends LayerBase, Keyed {
   type: 'sticker'
   emoji: string // an emoji, or 'petal' / 'paper' (drawn rose petal / confetti, showers only)
   shower?: Shower | null // missing = one sticker in its box
+  loop?: LoopAnim // missing = none
   box: Box
   animIn: TextAnim
   animOut: TextAnim
@@ -221,7 +232,7 @@ export interface MediaLayer extends LayerBase, Keyed {
   volume: number
   chroma: ChromaKey
   backdrop?: Backdrop | null // full frame behind the layer, through its green screen
-  mask: 'none' | 'circle' | 'rounded'
+  mask: 'none' | 'circle' | 'rounded' | 'heart' | 'star' | 'oval'
   border: number
   adjust: Adjust
   filter: string | null

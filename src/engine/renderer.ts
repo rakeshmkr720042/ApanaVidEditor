@@ -378,7 +378,8 @@ export class Renderer {
     const base = Math.min(this.W, this.H) * 0.5 * l.box.scale
     const w = ar >= 1 ? base * ar : base
     const h = ar >= 1 ? base : base / ar
-    return { w: l.mask === 'circle' ? Math.min(w, h) : w, h: l.mask === 'circle' ? Math.min(w, h) : h, fw: w, fh: h }
+    const sq = l.mask === 'circle' || l.mask === 'heart' || l.mask === 'star'
+    return { w: sq ? Math.min(w, h) : w, h: sq ? Math.min(w, h) : h, fw: w, fh: h }
   }
 
   private drawMediaLayer(l: MediaLayer, inp: RenderInput, seed: number) {
@@ -420,12 +421,12 @@ export class Renderer {
     ctx.globalAlpha = l.box.opacity * a.alpha
     ctx.globalCompositeOperation = BLEND_OPS[l.blend ?? 'normal']
     ctx.translate(l.box.x * W + a.dx * H, l.box.y * H + a.dy * H)
-    ctx.rotate((l.box.rotation * Math.PI) / 180)
+    ctx.rotate(((l.box.rotation + a.rot) * Math.PI) / 180)
     if (a.scale !== 1) ctx.scale(a.scale, a.scale)
+    if (a.blur > 0) ctx.filter = `blur(${(a.blur * H).toFixed(1)}px)`
+    if (a.wipe < 1) { ctx.beginPath(); ctx.rect(-fw / 2, -fh / 2, fw * a.wipe, fh); ctx.clip() }
     if (l.mask !== 'none') {
-      ctx.beginPath()
-      if (l.mask === 'circle') ctx.arc(0, 0, w / 2, 0, Math.PI * 2)
-      else ctx.roundRect(-w / 2, -h / 2, w, h, Math.min(w, h) * 0.12)
+      maskPath(ctx, l.mask, w, h)
       ctx.clip()
     }
     if (l.flipH || l.flipV) {
@@ -501,4 +502,27 @@ async function decodeImage(src: MediaSource): Promise<CanvasImageSource> {
     await img.decode()
     return img
   }
+}
+
+/** The outline of an overlay's shape, centred on 0,0 (also stroked for its border). */
+function maskPath(ctx: Ctx, mask: MediaLayer['mask'], w: number, h: number) {
+  ctx.beginPath()
+  if (mask === 'circle') ctx.arc(0, 0, w / 2, 0, Math.PI * 2)
+  else if (mask === 'oval') ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2)
+  else if (mask === 'heart') {
+    const s = w / 2
+    ctx.moveTo(0, s * 0.95)
+    ctx.bezierCurveTo(-s * 1.25, s * 0.15, -s * 0.95, -s * 1.05, 0, -s * 0.45)
+    ctx.bezierCurveTo(s * 0.95, -s * 1.05, s * 1.25, s * 0.15, 0, s * 0.95)
+    ctx.closePath()
+  } else if (mask === 'star') {
+    const R = w / 2, r = R * 0.48
+    for (let i = 0; i < 10; i++) {
+      const ang = -Math.PI / 2 + (i * Math.PI) / 5
+      const rad = i % 2 ? r : R
+      if (i) ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad * 1.05 + R * 0.05)
+      else ctx.moveTo(Math.cos(ang) * rad, Math.sin(ang) * rad * 1.05 + R * 0.05)
+    }
+    ctx.closePath()
+  } else ctx.roundRect(-w / 2, -h / 2, w, h, Math.min(w, h) * 0.12)
 }

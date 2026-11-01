@@ -3,7 +3,7 @@ import type { BlurLayer, MediaLayer, StickerLayer, TextAnim, TextLayer, WaveLaye
 import type { Editor } from '../model/useEditor'
 import { isSub, subtitleLook } from '../model/useEditor'
 import { CaptionFrameEditor } from './CaptionFramePanel'
-import { ANIMS, FONTS, STICKERS, TEXT_PRESETS, ensureFont, prefetchFonts } from '../engine/text'
+import { ANIMS, FILLS, FONTS, LOOPS, STICKERS, TEXT_ONLY_ANIMS, TEXT_PRESETS, TITLE_PRESETS, ensureFont, prefetchFonts } from '../engine/text'
 import { SHOWER_MOTIONS, SHOWER_PRESETS } from '../engine/shower'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { parseSrt, toSrt } from '../lib/srt'
@@ -23,10 +23,16 @@ const MOTION_PRESETS: { label: string; animIn: TextAnim; animOut: TextAnim }[] =
   { label: 'Slide In Right', animIn: 'slide-left', animOut: 'slide-right' },
   { label: 'Fade In', animIn: 'fade', animOut: 'fade' },
   { label: 'Zoom In', animIn: 'zoom', animOut: 'fade' },
+  { label: 'Letter by letter', animIn: 'letters', animOut: 'fade' },
+  { label: 'Blur In', animIn: 'blur', animOut: 'blur' },
+  { label: 'Drop In', animIn: 'drop', animOut: 'fade' },
+  { label: 'Spin In', animIn: 'spin', animOut: 'fade' },
+  { label: 'Reveal', animIn: 'wipe', animOut: 'fade' },
   { label: 'None', animIn: 'none', animOut: 'none' },
 ]
 
-const animOptions = ANIMS.map((a) => ({ value: a, label: a === 'none' ? 'None' : a.replace('-', ' ').replace(/^\w/, (c) => c.toUpperCase()) }))
+const ANIM_LABELS: Partial<Record<TextAnim, string>> = { none: 'None', letters: 'Letter by letter', blur: 'Blur in', wipe: 'Reveal' }
+const animOptions = ANIMS.map((a) => ({ value: a, label: ANIM_LABELS[a] ?? a.replace('-', ' ').replace(/^\w/, (c) => c.toUpperCase()) }))
 
 export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer: TextLayer; startTab?: string }) {
   const [tab, setTab] = useState(startTab)
@@ -50,7 +56,7 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
           <button className="btn small" onClick={() => ed.setSel({ type: 'layer', id: layer.id, all: !all })}>{all ? t('Only this caption') : t('Select all captions')}</button>
         </div>
       )}
-      <Chips options={[{ value: 'edit', label: 'Edit' }, { value: 'font', label: 'Font' }, { value: 'style', label: 'Style' }, { value: 'frame', label: 'Position' }, { value: 'anim', label: 'Animation' }]} value={tab} onChange={setTab} />
+      <Chips options={[{ value: 'edit', label: 'Edit' }, { value: 'titles', label: 'Titles' }, { value: 'font', label: 'Font' }, { value: 'style', label: 'Style' }, { value: 'frame', label: 'Position' }, { value: 'anim', label: 'Animation' }]} value={tab} onChange={setTab} />
       {tab === 'edit' && (
         <>
           <textarea className="text-input" value={layer.text} autoFocus rows={3} onChange={(e) => set({ text: e.target.value })} placeholder={t('Type here')} />
@@ -70,6 +76,25 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
           </div>
         </>
       )}
+      {tab === 'titles' && (
+        <>
+          <p className="muted small">{t('Tap a title, then change the words in Edit.')}</p>
+          <div className="preset-grid title-grid">
+            {TITLE_PRESETS.map((p) => (
+              <button
+                key={p.name}
+                onClick={() => {
+                  if (p.style.font) ensureFont(p.style.font)
+                  ed.updateLayer<TextLayer>(layer.id, (l) => ({ text: p.text, style: { ...l.style, bold: false, italic: false, letterSpacing: 0, ...p.style }, animIn: p.animIn, animOut: p.animOut, loop: p.loop }))
+                }}
+                style={{ fontFamily: `"${p.style.font ?? 'Poppins'}"`, color: p.style.color ?? '#fff', textShadow: p.style.glow ? `0 0 8px ${p.style.glow}` : undefined }}
+              >
+                {t(p.name)}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {tab === 'font' && (
         <div className="font-grid">
           {FONTS.map((f) => (
@@ -83,6 +108,10 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
         <>
           <span className="field-label">{t('Colour')}</span>
           <ColorRow value={layer.style.color} onChange={(c) => style({ color: c ?? '#ffffff' })} />
+          <span className="field-label">{t('Shine')}</span>
+          <Chips options={[{ value: '', label: 'None' }, ...FILLS.map((f) => ({ value: f.value, label: f.label }))]} value={layer.style.fill ?? ''} onChange={(v) => style({ fill: v ? (v as TextLayer['style']['fill']) : null })} wrap />
+          <span className="field-label">{t('Glow')}</span>
+          <ColorRow value={layer.style.glow ?? null} allowNone onChange={(c) => style({ glow: c })} />
           <span className="field-label">{t('Outline')}</span>
           <ColorRow value={layer.style.stroke} allowNone onChange={(c) => style({ stroke: c })} />
           <span className="field-label">{t('Background')}</span>
@@ -107,8 +136,23 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
           }} />
         </>
       )}
-      {tab === 'anim' && <AnimPicker inA={layer.animIn} outA={layer.animOut} onChange={(p) => set(p)} />}
+      {tab === 'anim' && (
+        <>
+          <AnimPicker inA={layer.animIn} outA={layer.animOut} onChange={(p) => set(p)} />
+          <LoopPicker value={layer.loop} onChange={(loop) => set({ loop })} />
+        </>
+      )}
     </Panel>
+  )
+}
+
+/** A movement that repeats the whole time the item shows. */
+export function LoopPicker({ value, onChange }: { value: TextLayer['loop']; onChange: (v: NonNullable<TextLayer['loop']>) => void }) {
+  return (
+    <>
+      <span className="field-label">{t('While showing')}</span>
+      <Chips options={LOOPS} value={value ?? 'none'} onChange={onChange} wrap />
+    </>
   )
 }
 
@@ -116,9 +160,9 @@ export function AnimPicker({ inA, outA, onChange, noType }: { inA: TextAnim; out
   return (
     <>
       <span className="field-label">{t('In')}</span>
-      <Chips options={noType ? animOptions.filter((a) => a.value !== 'typewriter') : animOptions} value={inA} onChange={(animIn) => onChange({ animIn })} wrap />
+      <Chips options={noType ? animOptions.filter((a) => !TEXT_ONLY_ANIMS.includes(a.value)) : animOptions} value={inA} onChange={(animIn) => onChange({ animIn })} wrap />
       <span className="field-label">{t('Out')}</span>
-      <Chips options={animOptions.filter((a) => a.value !== 'typewriter')} value={outA} onChange={(animOut) => onChange({ animOut })} wrap />
+      <Chips options={animOptions.filter((a) => !TEXT_ONLY_ANIMS.includes(a.value))} value={outA} onChange={(animOut) => onChange({ animOut })} wrap />
     </>
   )
 }
@@ -170,7 +214,12 @@ export function StickerPanel({ ed, layer, t: time, onClose, showers }: P & { lay
           <Slider label="Speed" min={0.3} max={3} value={sh.speed} format={(v) => `${v.toFixed(1)}x`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ shower: { ...sh, speed: v } })} />
         </>
       )}
-      {layer && tab === 'anim' && <AnimPicker inA={layer.animIn} outA={layer.animOut} onChange={(p) => ed.updateLayer<StickerLayer>(layer.id, p)} />}
+      {layer && tab === 'anim' && (
+        <>
+          <AnimPicker noType inA={layer.animIn} outA={layer.animOut} onChange={(p) => ed.updateLayer<StickerLayer>(layer.id, p)} />
+          {!sh && <LoopPicker value={layer.loop} onChange={(loop) => ed.updateLayer<StickerLayer>(layer.id, { loop })} />}
+        </>
+      )}
       {layer && tab === 'opacity' && (
         <Slider label="Opacity" min={0} max={1} value={layer.box.opacity} onStart={ed.begin} onEnd={ed.end} format={(v) => `${Math.round(v * 100)}%`}
           onChange={(v) => ed.updateLayer<StickerLayer>(layer.id, { box: { ...layer.box, opacity: v } })} />
@@ -190,7 +239,7 @@ export function OverlayPanel({ ed, layer, onClose }: P & { layer: MediaLayer }) 
       <Slider label="Size" min={0.1} max={4} value={layer.box.scale} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ box: { ...layer.box, scale: v } })} />
       {isVideo && <Slider label="Volume" min={0} max={2} value={layer.volume} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ volume: v })} />}
       <span className="field-label">{t('Shape')}</span>
-      <Chips options={[{ value: 'none', label: 'Rectangle' }, { value: 'rounded', label: 'Rounded' }, { value: 'circle', label: 'Circle' }]} value={layer.mask} onChange={(mask) => set({ mask })} />
+      <Chips options={[{ value: 'none', label: 'Rectangle' }, { value: 'rounded', label: 'Rounded' }, { value: 'circle', label: 'Circle' }, { value: 'oval', label: 'Oval' }, { value: 'heart', label: 'Heart' }, { value: 'star', label: 'Star' }]} value={layer.mask} onChange={(mask) => set({ mask })} wrap />
       <div className="row">
         <button className={`btn small${layer.flipH ? ' primary' : ''}`} onClick={() => set({ flipH: !layer.flipH })}>⇋ {t('Flip')}</button>
         <button className={`btn small${layer.flipV ? ' primary' : ''}`} onClick={() => set({ flipV: !layer.flipV })}>⇵ {t('Flip up-down')}</button>

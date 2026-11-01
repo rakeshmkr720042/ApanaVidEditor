@@ -76,7 +76,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
   return <EditorView initial={loaded} onBack={onBack} />
 }
 
-type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
+type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim'
   | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
   | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
 
@@ -622,6 +622,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'add', label: 'Add', on: () => mainInput.current?.click() },
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
+      { icon: 'title', label: 'Titles', on: () => { ed.addText(time); setPanel('text-titles') }, disabled: empty },
       { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); openClipPanel('order') }, disabled: !targetClip || ed.project.clips.length < 2 },
       { icon: 'selectAll', label: 'Select all', on: selectAllClips, disabled: empty || !!ed.project.main?.locked },
       { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
@@ -750,8 +751,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const c = ed.project.clips.find((x) => x.id === transitionFor)
     if (c) panelView = <TransitionPanel ed={ed} clip={c} onClose={closePanel} />
   } else if (panel === 'format') panelView = <FormatPanel ed={ed} onClose={closePanel} />
-  else if ((panel === 'text' || panel === 'text-style' || panel === 'text-anim') && selLayer?.type === 'text')
-    panelView = <TextPanel key={panel} ed={ed} layer={selLayer} onClose={closePanel} startTab={panel === 'text' ? 'edit' : panel === 'text-style' ? 'style' : 'anim'} />
+  else if ((panel === 'text' || panel === 'text-titles' || panel === 'text-style' || panel === 'text-anim') && selLayer?.type === 'text')
+    panelView = <TextPanel key={panel} ed={ed} layer={selLayer} onClose={closePanel} startTab={panel === 'text' ? 'edit' : panel === 'text-titles' ? 'titles' : panel === 'text-style' ? 'style' : 'anim'} />
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
   else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
   else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
