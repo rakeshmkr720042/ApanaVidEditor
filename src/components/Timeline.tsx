@@ -1,3 +1,4 @@
+import { layerBeats } from '../engine/beats'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Clip, Layer } from '../types'
 import { MIN_CLIP } from '../types'
@@ -516,6 +517,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                   {src?.thumbs[0] && <img className="tl-wave" src={src.thumbs[0]} alt="" draggable={false} style={{ width: (src.duration * pps) / layerSpeed(l), left: -((l as { in: number }).in * pps) / layerSpeed(l) }} />}
                   <span>{l.type === 'media' && sources[l.sourceId] ? `▣ ${sources[l.sourceId].name}` : layerLabel(l)}{layerSpeed(l) !== 1 && ` · ${layerSpeed(l)}x`}</span>
                   {keysOf(l).map((k, j) => <i key={j} className="tl-key" style={{ left: k.t * pps }} />)}
+                  {l.type === 'audio' && l.beats && layerBeats(l).map((b, j) => <i key={`b${j}`} className={`tl-beat${j % 4 ? '' : ' bar'}`} style={{ left: (b - l.start) * pps }} />)}
                   {selected && (['in', 'out'] as const).map((side) => (
                     <div
                       key={side}

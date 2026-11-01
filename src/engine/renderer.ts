@@ -8,6 +8,7 @@ import { effectFrame } from './effects'
 import { gradeGpu } from './grade'
 import { toChroma } from './chromakey'
 import { drawOutline, keepPerson, personMask } from './cutout'
+import { beatLayer, beatPulse, layerBeats } from './beats'
 import { defaultAdjust } from '../model/timeline'
 import { animState, drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
 import { drawWave, waveData, waveReady, waveSize } from './visualizer'
@@ -145,6 +146,8 @@ export class Renderer {
       }
     }
 
+    if (a && inp.project.beatFx) this.applyBeat(inp)
+
     // a full-screen presenter card goes under captions and text; the strip and the corner card go on top
     const pr = inp.project.presenter
     const prTotal = pr?.enabled ? inp.items.reduce((m, it) => Math.max(m, it.start + it.dur), 0) : 0
@@ -189,6 +192,52 @@ export class Renderer {
     }
 
     if (inp.watermark) this.drawWatermark(inp.watermark)
+  }
+
+  private beatMemo: { key: string; times: number[] } = { key: '', times: [] }
+
+  /** The beat effect on the main video (before text and overlays): a zoom punch, shake, blur or flash on each beat. */
+  private applyBeat(inp: RenderInput) {
+    const fx = inp.project.beatFx!
+    const l = beatLayer(inp.project)
+    if (!l) return
+    const key = `${l.id}:${l.start}:${l.end}:${l.in}:${l.speed ?? 1}:${l.beats!.length}:${fx.every}`
+    if (this.beatMemo.key !== key) this.beatMemo = { key, times: layerBeats(l, fx.every) }
+    const p = beatPulse(this.beatMemo.times, inp.t) * fx.strength
+    if (p < 0.01) return
+    const { ctx, W, H } = this
+    if (fx.kind === 'flash') {
+      ctx.save()
+      ctx.globalAlpha = Math.min(0.85, p * 0.7)
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, W, H)
+      ctx.restore()
+      return
+    }
+    // redraw the frame moved, grown or blurred
+    const bc = ctx2d(this.base)
+    bc.globalCompositeOperation = 'copy'
+    bc.drawImage(this.canvas, 0, 0)
+    bc.globalCompositeOperation = 'source-over'
+    ctx.save()
+    if (fx.kind === 'blur') {
+      ctx.filter = `blur(${(p * Math.min(W, H) * 0.015).toFixed(1)}px)`
+      ctx.drawImage(this.base, 0, 0)
+    } else {
+      let z = 1 + 0.15 * p, dx = 0, dy = 0
+      if (fx.kind === 'shake') {
+        // a different direction on every beat, shaking back and forth while it fades
+        const n = Math.floor(inp.t * 30)
+        const ang = (Math.sin(n * 12.9898) * 43758.5453) % (Math.PI * 2)
+        dx = Math.cos(ang) * p * W * 0.035
+        dy = Math.sin(ang) * p * H * 0.035
+        z = 1 + 0.07 * p
+      }
+      ctx.translate(W / 2 + dx, H / 2 + dy)
+      ctx.scale(z, z)
+      ctx.drawImage(this.base, -W / 2, -H / 2)
+    }
+    ctx.restore()
   }
 
   private drawPresenter(inp: RenderInput, start: number, total: number) {
