@@ -93,7 +93,7 @@ export function CompressSheet({ file: given, onClose }: { file?: File; onClose: 
 
   const save = async (r: Result) => {
     if (isNative) {
-      try { await saveNative(r.blob, r.file, false); setToast(`${t('Saved to')} Documents/ApanaVidEditor/${r.file}`) } catch (e) { setToast((e as Error).message) }
+      try { await saveNative(r.blob, r.file, false); setToast(`${t('Saved to')} Documents/Apna Editor/${r.file}`) } catch (e) { setToast((e as Error).message) }
       return
     }
     const a = document.createElement('a')

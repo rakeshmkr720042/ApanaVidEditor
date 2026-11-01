@@ -59,7 +59,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   return (
     <div className="app home">
       <header className="top">
-        <div className="brand"><span className="logo"><Icon name="play" size={16} /></span> ApanaVidEditor</div>
+        <div className="brand"><span className="logo"><Icon name="play" size={16} /></span> Apna Editor</div>
         <div className="top-actions">
           <button className="btn ghost small notes-btn" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
             <Icon name="note" size={16} /><span className="wide-only"> {t('Notes')}</span>{openNotes > 0 && <span className="count">{openNotes}</span>}

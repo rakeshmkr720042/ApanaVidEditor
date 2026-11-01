@@ -1,4 +1,4 @@
-# ApanaVidEditor
+# Apna Editor
 
 Lightweight, offline-first video editor for the web (installable PWA) and Android (Capacitor).
 Everything runs on the device: rendering in WebGL, encoding with WebCodecs, muxing with ffmpeg.wasm. Nothing is uploaded.
@@ -78,7 +78,7 @@ npm run electron:build   # build the x64 NSIS installer into release/ (run on Wi
 ```
 The app is served from an `app://` scheme with COOP/COEP headers (cross-origin isolated, so
 SharedArrayBuffer is available) and a Content-Security-Policy. Every push to `main` builds the installer in
-GitHub Actions ("Build Windows installer"); download it from the run's **ApanaVidEditor-Windows-Setup** artifact.
+GitHub Actions ("Build Windows installer"); download it from the run's **Apna-Editor-Windows-Setup** artifact.
 
 ## Android
 Needs Android Studio / the Android SDK.
@@ -88,7 +88,7 @@ npx cap sync android
 npx cap open android   # then Run, or Build > Build Bundle(s) / APK(s)
 ```
 ffmpeg and fonts are bundled inside the APK, so it works offline from the first launch.
-Exports are saved to Documents/ApanaVidEditor and can be shared from the export sheet.
+Exports are saved to Documents/Apna Editor and can be shared from the export sheet.
 
 ## Live link (GitHub Pages)
 `.github/workflows/pages.yml` builds and deploys on every push to `main`.

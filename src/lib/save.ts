@@ -11,11 +11,11 @@ function toBase64(blob: Blob) {
   })
 }
 
-/** On Android, writes the video to Documents/ApanaVidEditor and opens the share sheet. */
+/** On Android, writes the video to Documents/Apna Editor and opens the share sheet. */
 export async function saveNative(blob: Blob, name: string, share: boolean) {
   const { Filesystem, Directory } = await import('@capacitor/filesystem')
   const { uri } = await Filesystem.writeFile({
-    path: `ApanaVidEditor/${name}`,
+    path: `Apna Editor/${name}`,
     data: await toBase64(blob),
     directory: Directory.Documents,
     recursive: true,
@@ -29,7 +29,7 @@ export async function saveNative(blob: Blob, name: string, share: boolean) {
 
 /**
  * Saves small text files such as subtitles. On Android they go to
- * Documents/ApanaVidEditor and the share sheet opens; elsewhere the browser downloads them.
+ * Documents/Apna Editor and the share sheet opens; elsewhere the browser downloads them.
  */
 export async function saveTextFiles(files: { name: string; text: string }[]) {
   if (isNative) {
@@ -37,7 +37,7 @@ export async function saveTextFiles(files: { name: string; text: string }[]) {
     const uris: string[] = []
     for (const f of files) {
       const { uri } = await Filesystem.writeFile({
-        path: `ApanaVidEditor/${f.name}`, data: f.text, encoding: Encoding.UTF8, directory: Directory.Documents, recursive: true,
+        path: `Apna Editor/${f.name}`, data: f.text, encoding: Encoding.UTF8, directory: Directory.Documents, recursive: true,
       })
       uris.push(uri)
     }

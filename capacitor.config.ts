@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.clipcut.editor',
-  appName: 'ApanaVidEditor',
+  appName: 'Apna Editor',
   webDir: 'dist',
   android: { allowMixedContent: false },
 }

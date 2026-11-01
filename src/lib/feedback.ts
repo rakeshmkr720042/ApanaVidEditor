@@ -88,7 +88,7 @@ export function notesText(notes: Note[]) {
     const meta = [stamp(n.at), n.where, n.by, n.device, n.shot && 'screenshot in file'].filter(Boolean).join(' | ')
     return `${i + 1}. **${n.kind === 'bug' ? 'BUG' : 'IDEA'}**: ${n.text.replace(/\n+/g, ' / ')}\n   _${meta}_`
   })
-  return `## ApanaVidEditor testing notes (${open.length})\n\n${lines.join('\n')}`
+  return `## Apna Editor testing notes (${open.length})\n\n${lines.join('\n')}`
 }
 
 const REPO = 'https://github.com/rakeshmkr720042/ApanaVidEditor'
@@ -151,7 +151,7 @@ export async function shareText(notes: Note[]) {
   const text = notesText(notes)
   if (isNative) {
     const { Share } = await import('@capacitor/share')
-    await Share.share({ title: 'ApanaVidEditor testing notes', text }).catch(() => {})
+    await Share.share({ title: 'Apna Editor testing notes', text }).catch(() => {})
     return
   }
   if (!isDesktop && navigator.share) {

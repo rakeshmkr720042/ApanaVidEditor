@@ -38,7 +38,7 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
       <div className="sheet premium" onClick={(e) => e.stopPropagation()} data-testid="premium-sheet">
         <div className="sheet-grab" />
         <SheetClose onClose={onClose} />
-        <h2><Icon name="crown" size={20} /> {t(premium ? 'You have Premium' : 'ApanaVidEditor Premium')}</h2>
+        <h2><Icon name="crown" size={20} /> {t(premium ? 'You have Premium' : 'Apna Editor Premium')}</h2>
         {feature && !premium && <p className="premium-why"><b>{t(FEATURES[feature].label)}</b> {t('is a Premium feature.')}</p>}
         {!locked && !premium && <p className="muted small">{t('Right now every feature is free for everyone.')}</p>}
         {premium && lic && (
@@ -83,7 +83,7 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
             <button className="btn small" onClick={() => setDev({ dev: false, devLock: false, devPremium: false })}>{t('Hide developer switches')}</button>
           </div>
         )}
-        <p className="muted small version" onClick={tapVersion}>ApanaVidEditor {__APP_VERSION__}</p>
+        <p className="muted small version" onClick={tapVersion}>Apna Editor {__APP_VERSION__}</p>
         <button className="btn wide ghost" onClick={onClose}>{t('Close')}</button>
       </div>
     </div>
