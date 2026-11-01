@@ -5,6 +5,7 @@ import { defaultAdjust, SPEED_RAMPS } from '../model/timeline'
 import { ADJUST_SLIDERS, colorParams, FILTER_GROUPS, FILTERS } from '../engine/filters'
 import { Grader } from '../engine/gl'
 import { TRANSITION_GROUPS, TRANSITIONS } from '../engine/transitions'
+import { EFFECT_GROUPS, EFFECTS, effectById } from '../engine/effects'
 import { cleanState, DEFAULT_DENOISE, hasSound, hearingOriginal, onCleanChange, setHearOriginal } from '../engine/denoise'
 import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
@@ -145,6 +146,72 @@ export function FilterPanel({ ed, target, onClose }: P & { target: Gradable }) {
         ))}
       </div>
       {cur.filter && <Slider label="Intensity" min={0} max={1} value={cur.filterAmount} format={(v) => `${Math.round(v * 100)}`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ filterAmount: v })} />}
+    </Panel>
+  )
+}
+
+function useEffectThumbs(src: string | undefined) {
+  const [, force] = useState(0)
+  useEffect(() => {
+    if (!src) return
+    let cancelled = false
+    const img = new Image()
+    img.onload = async () => {
+      const canvas = document.createElement('canvas')
+      const g = Grader.create(canvas)
+      if (!g) return
+      const w = 96, h = Math.round((96 * img.naturalHeight) / img.naturalWidth) || 64
+      g.resize(w, h)
+      const base = document.createElement('canvas')
+      base.width = w; base.height = h
+      base.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      const neutral = colorParams(defaultAdjust(), null, 1)
+      for (const [i, f] of EFFECTS.entries()) {
+        if (cancelled) return
+        const key = `${src}fx:${f.id}`
+        if (thumbCache.has(key)) continue
+        g.drawGraded(base, neutral, 0, undefined, { id: f.id, amount: 1, time: 1.3 })
+        thumbCache.set(key, canvas.toDataURL('image/jpeg', 0.7))
+        if (i % 8 === 7) { force((n) => n + 1); await new Promise((r) => setTimeout(r)) }
+      }
+      force((n) => n + 1)
+    }
+    img.src = src
+    return () => { cancelled = true }
+  }, [src])
+  return (id: string) => (src ? thumbCache.get(`${src}fx:${id}`) : undefined)
+}
+
+/** Moving video effects (glow, light leak, sparkles, old film, cinema bars…) on a clip or an overlay. */
+export function EffectsPanel({ ed, target, onClose }: P & { target: Gradable }) {
+  const cur = target.kind === 'clip' ? target.clip : target.layer
+  const src = ed.sources[cur.sourceId]
+  const thumbSrc = src?.thumbs[Math.floor(src.thumbs.length / 2)]
+  const thumb = useEffectThumbs(thumbSrc)
+  const on = effectById(cur.effect?.id)
+  const [group, setGroup] = useState(() => on?.group ?? EFFECT_GROUPS[0])
+  const set = (effect: Clip['effect']) =>
+    target.kind === 'clip' ? ed.updateClip(target.clip.id, { effect }) : ed.updateLayer(target.layer.id, { effect })
+  return (
+    <Panel
+      title="Effects" onClose={onClose} tall
+      actions={target.kind === 'clip' && <button className="btn small" onClick={() => ed.updateAllClips(() => ({ effect: cur.effect ? { ...cur.effect } : null }))}>{t('Apply to all')}</button>}
+    >
+      <Chips options={EFFECT_GROUPS.map((g) => ({ value: g, label: g }))} value={group} onChange={setGroup} />
+      <div className="filter-grid">
+        <button className={!on ? 'on' : ''} onClick={() => set(null)}>
+          <span className="fthumb">{thumbSrc && <img src={thumbSrc} alt="" />}</span>{t('None')}
+        </button>
+        {EFFECTS.filter((f) => f.group === group).map((f) => (
+          <button key={f.id} className={on?.id === f.id ? 'on' : ''} onClick={() => set({ id: f.id, amount: on?.id === f.id ? cur.effect!.amount : 0.7 })}>
+            <span className="fthumb">{thumb(f.id) ? <img src={thumb(f.id)} alt="" /> : <i />}</span>{t(f.name)}
+          </button>
+        ))}
+      </div>
+      {on && on.amount && cur.effect && (
+        <Slider label="Strength" min={0} max={1} value={cur.effect.amount} format={(v) => `${Math.round(v * 100)}`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ id: on.id, amount: v })} />
+      )}
+      {on && <p className="muted small">{t('Play the video to see the effect move.')}</p>}
     </Panel>
   )
 }

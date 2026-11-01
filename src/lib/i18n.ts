@@ -1,5 +1,11 @@
 /** Tiny translation layer: English strings are the keys; Hindi is optional. */
 const hi: Record<string, string> = {
+  'Effects': 'इफ़ेक्ट', 'Play the video to see the effect move.': 'इफ़ेक्ट चलता हुआ देखने के लिए वीडियो चलाएं।',
+  'Dreamy glow': 'सपनों जैसी चमक', 'Soft focus': 'सॉफ़्ट फ़ोकस', 'White edges': 'सफ़ेद किनारे', 'Heart frame': 'दिल वाला फ़्रेम',
+  'Light leak': 'लाइट लीक', 'Light rays': 'रोशनी की किरणें', 'Bokeh lights': 'बोकेह लाइटें', 'Sparkles': 'चमकते तारे', 'Gold dust': 'सुनहरी धूल',
+  'Snow': 'बर्फ़', 'Old film': 'पुरानी फ़िल्म', 'Color pop (keep red)': 'सिर्फ़ लाल रंग', 'Shake': 'हिलाना', 'Heartbeat zoom': 'धड़कन ज़ूम',
+  'Flash beat': 'फ़्लैश', 'Zoom blur': 'ज़ूम ब्लर', 'Cinema bars': 'सिनेमा पट्टियां', 'Mirror': 'आईना', 'Four mirror': 'चार आईने',
+  'Kaleidoscope': 'कैलिडोस्कोप', 'Bulge': 'उभार',
   'New project': 'नया प्रोजेक्ट', 'Projects': 'प्रोजेक्ट', 'Import video': 'वीडियो जोड़ें', 'Export': 'एक्सपोर्ट',
   'Split': 'काटें', 'Speed': 'स्पीड', 'Volume': 'आवाज़', 'Filters': 'फ़िल्टर', 'Adjust': 'एडजस्ट', 'Crop': 'क्रॉप',
   'Transition': 'ट्रांज़िशन', 'Duplicate': 'कॉपी', 'Delete': 'हटाएं', 'Audio': 'ऑडियो', 'Text': 'टेक्स्ट',
