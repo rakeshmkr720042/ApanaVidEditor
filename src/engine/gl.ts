@@ -1,5 +1,6 @@
 import type { ColorParams } from './filters'
 import { TRANSITIONS } from './transitions'
+import { EFFECTS, effectShader, type EffectFrame } from './effects'
 
 const VERT = `
 attribute vec2 a_pos;
@@ -144,6 +145,7 @@ export class Grader {
   private gl: GL
   private grade: WebGLProgram
   private mixes = new Map<string, WebGLProgram>()
+  private effects = new Map<string, WebGLProgram>()
   private srcTex: WebGLTexture[]
   private fbo: { fb: WebGLFramebuffer; tex: WebGLTexture }[] = []
   private w = 0
@@ -189,7 +191,7 @@ export class Grader {
     this.canvas.width = w; this.canvas.height = h
     const gl = this.gl
     for (const f of this.fbo) { gl.deleteFramebuffer(f.fb); gl.deleteTexture(f.tex) }
-    this.fbo = [0, 1].map(() => {
+    this.fbo = [0, 1, 2].map(() => {
       const tex = this.texture()
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
       const fb = gl.createFramebuffer()!
@@ -242,22 +244,47 @@ export class Grader {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 
-  /** Grades one image into the canvas (sized to w x h). */
-  drawGraded(src: TexImageSource, p: ColorParams, seed = 0, chroma?: Chroma) {
+  /** Runs a video effect over a texture into `target`. */
+  private runEffect(tex: WebGLTexture, fx: EffectFrame, target: WebGLFramebuffer | null) {
+    const gl = this.gl
+    const prog = this.effectProgram(fx.id)
+    gl.useProgram(prog)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target)
+    gl.viewport(0, 0, this.w, this.h)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    const u = (n: string) => this.loc(prog, n)
+    gl.uniform1i(u('u_tex'), 0)
+    gl.uniform2f(u('u_texel'), 1 / this.w, 1 / this.h)
+    gl.uniform1f(u('u_time'), fx.time)
+    gl.uniform1f(u('u_amt'), fx.amount)
+    gl.uniform1f(u('u_ratio'), this.w / this.h)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+  }
+
+  /** Grades a texture into `target`, with the video effect (if any) on top. */
+  private gradeInto(tex: WebGLTexture, p: ColorParams, target: WebGLFramebuffer | null, seed: number, chroma?: Chroma, fx?: EffectFrame | null) {
+    if (!fx) return this.runGrade(tex, p, target, seed, chroma)
+    this.runGrade(tex, p, this.fbo[2].fb, seed, chroma)
+    this.runEffect(this.fbo[2].tex, fx, target)
+  }
+
+  /** Grades one image into the canvas (sized to w x h), with an optional video effect. */
+  drawGraded(src: TexImageSource, p: ColorParams, seed = 0, chroma?: Chroma, fx?: EffectFrame | null) {
     this.upload(0, src)
     this.gl.clearColor(0, 0, 0, 0)
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null)
     this.gl.clear(this.gl.COLOR_BUFFER_BIT)
-    this.runGrade(this.srcTex[0], p, null, seed, chroma)
+    this.gradeInto(this.srcTex[0], p, null, seed, chroma, fx)
   }
 
-  /** Grades two images and blends them with a transition. */
-  drawTransition(a: TexImageSource, pa: ColorParams, b: TexImageSource, pb: ColorParams, type: string, progress: number, seed = 0) {
+  /** Grades two images (each with its own video effect) and blends them with a transition. */
+  drawTransition(a: TexImageSource, pa: ColorParams, b: TexImageSource, pb: ColorParams, type: string, progress: number, seed = 0, fxA?: EffectFrame | null, fxB?: EffectFrame | null) {
     const gl = this.gl
     this.upload(0, a)
-    this.runGrade(this.srcTex[0], pa, this.fbo[0].fb, seed)
+    this.gradeInto(this.srcTex[0], pa, this.fbo[0].fb, seed, undefined, fxA)
     this.upload(1, b)
-    this.runGrade(this.srcTex[1], pb, this.fbo[1].fb, seed)
+    this.gradeInto(this.srcTex[1], pb, this.fbo[1].fb, seed, undefined, fxB)
     const prog = this.mixProgram(type)
     gl.useProgram(prog)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
@@ -275,6 +302,16 @@ export class Grader {
     gl.activeTexture(gl.TEXTURE0)
   }
 
+  private effectProgram(id: string) {
+    let p = this.effects.get(id)
+    if (!p) {
+      const def = EFFECTS.find((e) => e.id === id) ?? EFFECTS[0]
+      p = compile(this.gl, VERT, effectShader(def.glsl))
+      this.effects.set(id, p)
+    }
+    return p
+  }
+
   private mixProgram(type: string) {
     let p = this.mixes.get(type)
     if (!p) {
@@ -290,6 +327,9 @@ export class Grader {
     const failed: string[] = []
     for (const t of TRANSITIONS) {
       try { this.mixProgram(t.id) } catch (e) { failed.push(`${t.id}: ${(e as Error).message}`) }
+    }
+    for (const fx of EFFECTS) {
+      try { this.effectProgram(fx.id) } catch (e) { failed.push(`effect ${fx.id}: ${(e as Error).message}`) }
     }
     return failed
   }

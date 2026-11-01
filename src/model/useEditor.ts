@@ -36,7 +36,7 @@ export function selectedIds(p: Project, sel: Selection): string[] {
 }
 
 // what a change to one item of a group passes on to the others: its look and sound, never its place or content
-const BULK = new Set(['speed', 'ramp', 'volume', 'fadeIn', 'fadeOut', 'denoise', 'fx', 'duck', 'filter', 'filterAmount', 'adjust', 'fit', 'transition',
+const BULK = new Set(['effect', 'speed', 'ramp', 'volume', 'fadeIn', 'fadeOut', 'denoise', 'fx', 'duck', 'filter', 'filterAmount', 'adjust', 'fit', 'transition',
   'chroma', 'blend', 'mask', 'border', 'animIn', 'animOut', 'flipH', 'flipV', 'style', 'strength', 'shape', 'mode', 'color', 'color2'])
 function bulkPatch<T extends object>(patch: Partial<T>, sound: boolean): Partial<T> {
   const out: Record<string, unknown> = {}

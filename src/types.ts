@@ -37,6 +37,9 @@ export interface Crop { x: number; y: number; w: number; h: number } // normalis
 
 export interface Transition { type: string; duration: number }
 
+/** A moving video effect on a clip or overlay (glow, light leak, sparkles, old film…), see src/engine/effects.ts. */
+export interface VideoEffect { id: string; amount: number /* 0..1 */ }
+
 /** Slow pan/zoom over a clip, mostly for photos in a slideshow. */
 export type KenBurns = 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down'
 
@@ -125,6 +128,7 @@ export interface Clip {
   chroma?: ChromaKey | null // green screen, missing = off
   backdrop?: Backdrop | null // shows through the green screen, missing = the project background
   gap?: number // seconds of empty (black) time before this clip, left when snap is off
+  effect?: VideoEffect | null // video effect, missing = none
 }
 
 export interface Box {
@@ -222,6 +226,7 @@ export interface MediaLayer extends LayerBase, Keyed {
   animOut?: TextAnim
   denoise?: Denoise | null
   fx?: AudioFx | null
+  effect?: VideoEffect | null
 }
 
 export interface BlurLayer extends LayerBase {

@@ -4,6 +4,7 @@ import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
+import { effectFrame } from './effects'
 import { toChroma } from './chromakey'
 import { defaultAdjust } from '../model/timeline'
 import { animState, drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
@@ -117,10 +118,11 @@ export class Renderer {
     if (a) {
       // a green screen clip comes back already keyed over its backdrop (and graded), so it needs no grade here
       const ka = this.clipImage(0, a.item.clip, inp, a.local / a.item.dur, seed)
+      const fxA = effectFrame(a.item.clip, a.local)
       if (b && a.item.clip.transition) {
         const kb = this.clipImage(1, b.item.clip, inp, b.local / b.item.dur, seed)
         if (this.grader) {
-          this.grader.drawTransition(ka.img, ka.p, kb.img, kb.p, a.item.clip.transition.type, progress, seed)
+          this.grader.drawTransition(ka.img, ka.p, kb.img, kb.p, a.item.clip.transition.type, progress, seed, fxA, effectFrame(b.item.clip, Math.max(0, b.local)))
           ctx.drawImage(this.grader.canvas, 0, 0)
         } else {
           this.draw2dGraded(ka.img, ka.p)
@@ -128,10 +130,11 @@ export class Renderer {
           this.draw2dGraded(kb.img, kb.p)
           ctx.globalAlpha = 1
         }
-      } else if (ka.done) {
+      } else if (ka.done && !(fxA && this.grader)) {
         ctx.drawImage(ka.img, 0, 0)
       } else if (this.grader) {
-        this.grader.drawGraded(ka.img, ka.p, seed)
+        // (a green screen clip arrives graded and keyed: the effect goes over it and its backdrop together)
+        this.grader.drawGraded(ka.img, ka.p, seed, undefined, fxA)
         ctx.drawImage(this.grader.canvas, 0, 0)
       } else {
         this.draw2dGraded(ka.img, ka.p)
@@ -386,7 +389,8 @@ export class Renderer {
     const c = l.crop
     let sx = c ? c.x * f.width : 0, sy = c ? c.y * f.height : 0, sw = c ? c.w * f.width : f.width, sh = c ? c.h * f.height : f.height
     const p = colorParams(l.adjust, l.filter, l.filterAmount)
-    const needsGrade = l.chroma.enabled || l.filter || Object.values(l.adjust).some((v) => v !== 0)
+    const fx = effectFrame(l, inp.t - l.start)
+    const needsGrade = l.chroma.enabled || l.filter || !!fx || Object.values(l.adjust).some((v) => v !== 0)
     if (needsGrade) {
       this.layerGrader ??= Grader.create(makeCanvas())
       if (this.layerGrader) {
@@ -397,7 +401,7 @@ export class Renderer {
         const s = ctx2d(sc)
         s.clearRect(0, 0, gw, gh)
         s.drawImage(f.image, sx, sy, sw, sh, 0, 0, gw, gh)
-        this.layerGrader.drawGraded(sc, p, seed, l.chroma.enabled ? toChroma(l.chroma) : undefined)
+        this.layerGrader.drawGraded(sc, p, seed, l.chroma.enabled ? toChroma(l.chroma) : undefined, fx)
         img = this.layerGrader.canvas
         sx = 0; sy = 0; sw = gw; sh = gh
       }
