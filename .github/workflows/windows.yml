@@ -24,3 +24,4 @@ jobs:
           name: ApanaVidEditor-Windows-Setup
           path: release/*.exe
           if-no-files-found: error
+          retention-days: 5

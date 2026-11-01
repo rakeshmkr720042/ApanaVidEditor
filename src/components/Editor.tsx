@@ -39,6 +39,16 @@ import { GreenScreenPanel } from '../panels/GreenScreenPanel'
 import { BACK, useBack } from '../lib/back'
 import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
 import { HabitBar, HabitsSheet } from './HabitsSheet'
+import { PremiumSheet } from './PremiumSheet'
+import { isAllowed, usePremium, type Feature } from '../lib/premium'
+
+/** Premium tools: the panel they open and their toolbar labels (crown shown while the lock is on). */
+const PREMIUM_PANELS: Partial<Record<string, Feature>> = { ai: 'dub', noise: 'audio', audiofx: 'audio', chroma: 'greenscreen', presenter: 'presenter' }
+const PREMIUM_TOOLS: Record<string, Feature> = {
+  'AI Dub': 'dub', 'Remove noise': 'audio', 'Audio effects': 'audio', 'Green screen': 'greenscreen',
+  'Slides to video': 'scenes', 'Script to video': 'scenes', 'Mind map to video': 'scenes', 'Audio to video': 'scenes',
+  'Quiz to video': 'scenes', 'Data to video': 'scenes', 'Article to video': 'scenes',
+}
 
 const SKIP = 5 // seconds jumped by fast backward / forward
 const RATES = [1, 1.5, 2, 4, 0.5]
@@ -74,6 +84,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [name, setName] = useState(initial.name)
   const [notesSheet, setNotesSheet] = useState(false)
   const [habitsSheet, setHabitsSheet] = useState(false)
+  const [paywall, setPaywall] = useState<Feature | null>(null)
+  const { premium, locked } = usePremium()
   const habitsVersion = useHabitsVersion()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [player, setPlayer] = useState<Player | null>(null)
@@ -83,12 +95,15 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [pps, setPps] = useState(40)
   const [snap, setSnap] = useState(() => { try { return localStorage.getItem('snap') !== 'off' } catch { return true } })
   const toggleSnap = () => setSnap((v) => { try { localStorage.setItem('snap', v ? 'off' : 'on') } catch { /* private mode */ } return !v })
-  const [panel, setPanel] = useState<PanelName>(null)
+  const [panel, showPanel] = useState<PanelName>(null)
+  // a locked Premium tool opens the plans instead
+  const setPanel = (p: PanelName) => { const f = p && PREMIUM_PANELS[p]; if (f && !isAllowed(f)) setPaywall(f); else showPanel(p) }
   const [transitionFor, setTransitionFor] = useState<string | null>(null)
   const [importing, setImporting] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [scenes, setScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | null>(null)
+  const [scenes, showScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | null>(null)
+  const setScenes = (v: typeof scenes) => { if (v && !isAllowed('scenes')) setPaywall('scenes'); else showScenes(v) }
   const [audioTab, setAudioTab] = useState<'mine' | 'voice'>('mine')
   const [screenRec, setScreenRec] = useState<'screen' | 'camera' | null>(null)
   // new photos/videos/recordings waiting for the user to say where they go
@@ -825,6 +840,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         {tools.map((tl) => (
           <button key={tl.label} className={`tool${tl.active ? ' on' : ''}${tl.icon === 'habit' ? ' habit' : ''}`} disabled={tl.disabled} onClick={() => runTool(tl)}>
             <Icon name={tl.icon} />
+            {locked && !premium && PREMIUM_TOOLS[tl.label] && <i className="crown-badge" aria-label={t('Premium')}><Icon name="crown" size={11} /></i>}
             <span>{t(tl.label)}</span>
           </button>
         ))}
@@ -848,6 +864,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder mode={screenRec} onClose={() => setScreenRec(null)} onDone={addRecording} />}
       {habitsSheet && <HabitsSheet onClose={() => setHabitsSheet(false)} />}
+      {paywall && <PremiumSheet feature={paywall} onClose={() => setPaywall(null)} />}
       {notesSheet && <FeedbackSheet where={`Editor: ${name}${panel ? ` › ${panel}` : ''}`} onClose={() => setNotesSheet(false)} />}
       {exporting && <ExportSheet project={output} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}
     </div>
