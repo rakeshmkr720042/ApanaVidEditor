@@ -5,6 +5,7 @@ import { kenBurnsAt } from '../model/slideshow'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
+import { gradeGpu } from './grade'
 import { toChroma } from './chromakey'
 import { defaultAdjust } from '../model/timeline'
 import { animState, drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
@@ -244,7 +245,7 @@ export class Renderer {
    * the keyed and graded picture on top (`done`: nothing left to grade).
    */
   private clipImage(i: number, clip: Clip, inp: RenderInput, progress: number, seed: number): { img: Canvas; p: ColorParams; done: boolean } {
-    const p = colorParams(clip.adjust, clip.filter, clip.filterAmount)
+    const p = { ...colorParams(clip.adjust, clip.filter, clip.filterAmount), gpu: gradeGpu(clip.grade, inp.project) }
     const keyed = keyOn(clip.chroma) && !!this.grader
     const fr = this.drawClipFrame(i, clip, inp, progress, keyed)
     if (!keyed) return { img: fr, p, done: false }
@@ -390,9 +391,9 @@ export class Renderer {
     let img: CanvasImageSource = f.image
     const c = l.crop
     let sx = c ? c.x * f.width : 0, sy = c ? c.y * f.height : 0, sw = c ? c.w * f.width : f.width, sh = c ? c.h * f.height : f.height
-    const p = colorParams(l.adjust, l.filter, l.filterAmount)
+    const p = { ...colorParams(l.adjust, l.filter, l.filterAmount), gpu: gradeGpu(l.grade, inp.project) }
     const fx = effectFrame(l, inp.t - l.start)
-    const needsGrade = l.chroma.enabled || l.filter || !!fx || Object.values(l.adjust).some((v) => v !== 0)
+    const needsGrade = l.chroma.enabled || l.filter || !!fx || !!p.gpu || Object.values(l.adjust).some((v) => v !== 0)
     if (needsGrade) {
       this.layerGrader ??= Grader.create(makeCanvas())
       if (this.layerGrader) {

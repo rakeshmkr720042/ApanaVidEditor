@@ -37,6 +37,23 @@ export interface Crop { x: number; y: number; w: number; h: number } // normalis
 
 export interface Transition { type: string; duration: number }
 
+/** A curve as points (x, y in 0..1), always including the two ends; between them it bends smoothly. */
+export type CurvePoints = [number, number][]
+
+/**
+ * Pro colour grading of a clip or overlay: tone curves, per-colour (HSL) changes and a .cube LUT.
+ * Every part is optional, missing = unchanged.
+ */
+export interface Grade {
+  curves?: { all?: CurvePoints; r?: CurvePoints; g?: CurvePoints; b?: CurvePoints } | null
+  /** Eight colour bands (red, orange, yellow, green, aqua, blue, purple, magenta): [hue shift -1..1, saturation -1..1, lightness -1..1]. */
+  hsl?: [number, number, number][] | null
+  lut?: { id: string; amount: number } | null // id of a Project.luts entry
+}
+
+/** An imported .cube colour look, kept in the project as RGB bytes (r fastest, then g, then b). */
+export interface Lut { id: string; name: string; size: number; data: string /* base64 */ }
+
 /** A moving video effect on a clip or overlay (glow, light leak, sparkles, old film…), see src/engine/effects.ts. */
 export interface VideoEffect { id: string; amount: number /* 0..1 */ }
 
@@ -129,6 +146,7 @@ export interface Clip {
   backdrop?: Backdrop | null // shows through the green screen, missing = the project background
   gap?: number // seconds of empty (black) time before this clip, left when snap is off
   effect?: VideoEffect | null // video effect, missing = none
+  grade?: Grade | null // curves, HSL, LUT; missing = none
 }
 
 export interface Box {
@@ -247,6 +265,7 @@ export interface MediaLayer extends LayerBase, Keyed {
   denoise?: Denoise | null
   fx?: AudioFx | null
   effect?: VideoEffect | null
+  grade?: Grade | null
 }
 
 export interface BlurLayer extends LayerBase {
@@ -370,6 +389,7 @@ export interface Project {
   tracks?: Track[] // top to bottom; a higher row is drawn in front. Missing in projects saved before tracks.
   main?: MainTrack
   /** The subtitles as first made (spoken language), kept when they are swapped for a translation. */
+  luts?: Lut[] // imported .cube looks used by clips and overlays
   originalSubs?: { lang: string; cues: { start: number; end: number; text: string }[] } | null
 }
 

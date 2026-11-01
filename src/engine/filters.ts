@@ -1,3 +1,4 @@
+import type { GradeGpu } from './grade'
 import type { Adjust } from '../types'
 
 type RGB = [number, number, number]
@@ -167,6 +168,7 @@ export interface ColorParams extends Adjust {
   duoDark: RGB
   duoLight: RGB
   duo: number
+  gpu?: GradeGpu | null // curves, HSL, LUT (src/engine/grade.ts)
 }
 
 const ADJ_KEYS: (keyof Adjust)[] = [

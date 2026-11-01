@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BlurLayer, Box, Clip, Layer, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AudioLayer, BlurLayer, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -36,7 +36,7 @@ export function selectedIds(p: Project, sel: Selection): string[] {
 }
 
 // what a change to one item of a group passes on to the others: its look and sound, never its place or content
-const BULK = new Set(['effect', 'speed', 'ramp', 'volume', 'fadeIn', 'fadeOut', 'denoise', 'fx', 'duck', 'filter', 'filterAmount', 'adjust', 'fit', 'transition',
+const BULK = new Set(['effect', 'grade', 'speed', 'ramp', 'volume', 'fadeIn', 'fadeOut', 'denoise', 'fx', 'duck', 'filter', 'filterAmount', 'adjust', 'fit', 'transition',
   'chroma', 'blend', 'mask', 'border', 'animIn', 'animOut', 'flipH', 'flipV', 'style', 'strength', 'shape', 'mode', 'color', 'color2'])
 function bulkPatch<T extends object>(patch: Partial<T>, sound: boolean): Partial<T> {
   const out: Record<string, unknown> = {}
@@ -171,6 +171,18 @@ export function useEditor(initial: Project) {
       layers: p.layers.map((l) => (patches[l.id] ? { ...l, ...patches[l.id] } as Layer : l)),
     })
   }, [commit])
+
+  /** Keeps an imported .cube look in the project (once per id) and puts it on a clip or overlay, in one step. */
+  const addLut = useCallback((lut: Lut, target: { type: 'clip' | 'layer'; id: string }, amount = 1) => {
+    const p = ref.current
+    const luts = p.luts?.some((x) => x.id === lut.id) ? p.luts : [...(p.luts ?? []), lut]
+    const grade = <T extends { grade?: Clip['grade'] }>(x: T): T => ({ ...x, grade: { ...(x.grade ?? {}), lut: { id: lut.id, amount } } })
+    h.set({
+      ...p, luts,
+      clips: target.type === 'clip' ? p.clips.map((c) => (c.id === target.id ? grade(c) : c)) : p.clips,
+      layers: target.type === 'layer' ? p.layers.map((l) => (l.id === target.id && l.type === 'media' ? grade(l) : l)) : p.layers,
+    })
+  }, [h])
 
   const setSettings = useCallback((patch: Partial<ProjectSettings>) => {
     const p = ref.current
@@ -746,7 +758,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, place, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, setWatermark, setPresenter,
+    addSource, place, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
