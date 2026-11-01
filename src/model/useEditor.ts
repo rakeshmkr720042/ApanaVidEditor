@@ -381,6 +381,47 @@ export function useEditor(initial: Project) {
    * silent so the sound is not heard twice. Items without sound (photos, muted videos) are skipped.
    * Returns the new audio items (empty when nothing had sound).
    */
+  /**
+   * A clone of the person in a clip or video overlay: the same video with its background removed, on a new row in
+   * front. side: beside them; mirror: beside them, flipped; echo: in the same place a moment later, half see-through.
+   */
+  const addClone = useCallback((id: string, style: 'side' | 'mirror' | 'echo') => {
+    const p = ref.current
+    const clip = p.clips.find((c) => c.id === id)
+    const layer = p.layers.find((l): l is MediaLayer => l.id === id && l.type === 'media')
+    let base: MediaLayer
+    if (clip) {
+      const it = layoutClips(p.clips).items.find((x) => x.clip.id === id)
+      const src = sourcesRef.current[clip.sourceId]
+      if (!it || !src) return null
+      const c = clip.crop ?? null
+      const ar = src.width && src.height ? (src.width * (c?.w ?? 1)) / (src.height * (c?.h ?? 1)) : 16 / 9
+      base = {
+        id: uid(), type: 'media', sourceId: clip.sourceId, in: clip.in, start: it.start, end: it.start + it.dur,
+        box: { ...centerBox(), scale: fullFrameScale(p, sourcesRef.current, ar) }, volume: 0, chroma: defaultChroma(), mask: 'none', border: 0,
+        adjust: { ...clip.adjust }, filter: clip.filter, filterAmount: clip.filterAmount, crop: c, speed: clip.ramp ? 1 : clip.speed,
+        flipH: clip.flipH, flipV: clip.flipV,
+      }
+    } else if (layer) {
+      base = { ...layer, id: uid(), volume: 0, keys: undefined, box: { ...layer.box }, track: undefined }
+    } else return null
+    const lag = 0.4
+    const shift = base.box.x > 0.5 ? -0.28 : 0.28
+    const l: MediaLayer = {
+      ...base,
+      cutout: { enabled: true, soft: 0.25, outline: 'none' },
+      ...(style === 'echo'
+        ? { start: base.start + lag, end: base.end + lag, box: { ...base.box, opacity: 0.55 } }
+        : { box: { ...base.box, x: base.box.x + shift }, flipH: style === 'mirror' ? !base.flipH : base.flipH }),
+    }
+    const tr = newTrack('visual')
+    const tracks = [...(p.tracks ?? [])]
+    tracks.splice(insertAt(tracks, 'visual', true), 0, tr)
+    h.set({ ...p, tracks, layers: [...p.layers, { ...l, track: tr.id }] })
+    setSel({ type: 'layer', id: l.id })
+    return l
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const detachAudio = useCallback((ids: string[]): AudioLayer[] => {
     const p = ref.current
     const want = new Set(ids)
@@ -798,7 +839,7 @@ export function useEditor(initial: Project) {
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
     addSource, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter,
-    addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio,
+    addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
     remove, duplicate, split, moveClip, moveClipAt, closeGap, swapClips, swapLayers, replaceProject,

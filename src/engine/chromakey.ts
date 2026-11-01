@@ -205,5 +205,5 @@ export function backdropTime(b: Backdrop, src: MediaSource, local: number) {
 }
 
 /** The backdrop photo/video that shows behind a green screen item, if any. */
-export const backdropSource = (o: { chroma?: ChromaKey | null; backdrop?: Backdrop | null }, sources: Record<string, MediaSource>) =>
-  o.chroma?.enabled && o.backdrop?.kind === 'media' && o.backdrop.sourceId ? sources[o.backdrop.sourceId] : undefined
+export const backdropSource = (o: { chroma?: ChromaKey | null; cutout?: { enabled: boolean } | null; backdrop?: Backdrop | null }, sources: Record<string, MediaSource>) =>
+  (o.chroma?.enabled || o.cutout?.enabled) && o.backdrop?.kind === 'media' && o.backdrop.sourceId ? sources[o.backdrop.sourceId] : undefined

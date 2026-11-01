@@ -36,11 +36,11 @@ export default defineConfig({
         // raised); the 32 MB ffmpeg core, the 14 MB ONNX runtime and the fonts are cached on
         // first use. AI models are kept by transformers.js in its own cache.
         globPatterns: ['**/*.{js,mjs,css,html,svg,png,woff2}'],
-        globIgnores: ['ffmpeg/**', 'fonts/**', 'ort/**', 'models/**'],
+        globIgnores: ['ffmpeg/**', 'fonts/**', 'ort/**', 'models/**', 'mediapipe/**'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => ['/ffmpeg/', '/fonts/', '/ort/'].some((d) => url.pathname.includes(d)),
+            urlPattern: ({ url }) => ['/ffmpeg/', '/fonts/', '/ort/', '/mediapipe/'].some((d) => url.pathname.includes(d)),
             handler: 'CacheFirst',
             options: { cacheName: 'clipcut-assets', cacheableResponse: { statuses: [200] } },
           },
