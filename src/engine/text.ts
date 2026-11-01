@@ -1,5 +1,5 @@
 import { drawShower } from './shower'
-import type { CaptionFrame, CaptionFramePreset, LoopAnim, StickerLayer, TextAnim, TextFill, TextLayer, TextStyle } from '../types'
+import type { CaptionFrame, CaptionFramePreset, LoopAnim, StickerLayer, TextAnim, TextFill, TextLayer, TextStyle, WordFx } from '../types'
 
 export const FONTS = [
   'Poppins', 'Montserrat', 'Noto Sans Devanagari', 'Hind', 'Bebas Neue', 'Anton', 'Oswald', 'Teko', 'Bangers',
@@ -251,10 +251,125 @@ function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: numb
   ctx.closePath()
 }
 
-export function drawText(ctx: Ctx, layer: TextLayer, t: number, W: number, H: number) {
-  if (layer.frame) { drawFramedText(ctx, layer, layer.frame, t, W, H); return }
+// ---------- word-by-word captions
+
+/**
+ * When each word of a caption starts (timeline seconds). The caption's time is shared out by word length, with a
+ * short pause after commas and full stops, so the highlight follows normal speech closely enough.
+ */
+export function wordTimes(text: string, start: number, end: number): number[] {
+  const words = text.match(/\S+/g) ?? []
+  if (!words.length) return []
+  const weight = words.map((w) => [...w].length + 2 + (/[,.!?।;:]$/.test(w) ? 3 : 0))
+  weight[weight.length - 1] = [...words[words.length - 1]].length + 2 // nothing to pause for after the last word
+  const total = weight.reduce((a, b) => a + b, 0)
+  const dur = Math.max(0.01, end - start)
+  let acc = 0
+  return words.map((_, i) => { const at = start + (acc / total) * dur; acc += weight[i]; return at })
+}
+
+/** Index of the word being said at time t (0 before the first one starts). */
+export function activeWord(times: number[], t: number) {
+  let k = 0
+  for (let i = 0; i < times.length; i++) if (times[i] <= t) k = i
+  return k
+}
+
+/** Dark or light letters, whichever reads better on a box of this colour. */
+const inkOn = (hex: string) => {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex)
+  if (!m) return '#ffffff'
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16) / 255)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#111111' : '#ffffff'
+}
+
+interface Words { fx: WordFx; times: number[]; k: number; t: number; end: number; pop: number }
+
+/**
+ * The text as shown with word captions on: in capitals if asked, or (one-word style) only the word being said,
+ * plus how far that word has popped in (0..1).
+ */
+function wordView(layer: TextLayer, t: number): { layer: TextLayer; words: Words | null } {
+  const fx = layer.words
+  if (!fx) return { layer, words: null }
+  const text = fx.caps ? layer.text.toLocaleUpperCase() : layer.text
+  const times = wordTimes(text, layer.start, layer.end)
+  const k = activeWord(times, t)
+  const pop = Math.min(1, Math.max(0, (t - (times[k] ?? layer.start)) / 0.16))
+  const words: Words = { fx, times, k, t, end: layer.end, pop }
+  if (fx.style === 'one') {
+    const word = text.match(/\S+/g)?.[k] ?? ''
+    return { layer: { ...layer, text: word, style: { ...layer.style, color: fx.color, fill: null } }, words }
+  }
+  return { layer: text === layer.text ? layer : { ...layer, text }, words }
+}
+
+const flat = (st: TextStyle, color: string): TextStyle => ({ ...st, color, fill: null })
+
+/**
+ * Paints one line word by word with the word-caption style. `first` is the index of the line's first word in the
+ * whole caption; returns how many words the line had.
+ */
+function paintWordLine(ctx: Ctx, st: TextStyle, line: string, left: number, y: number, px: number, lineW: number, w: Words, first: number) {
+  ctx.textAlign = 'left'
+  const { fx } = w
+  const base = ctx.globalAlpha
+  const items = [...line.matchAll(/\S+/g)].map((m, j) => ({
+    word: m[0], i: first + j, x: left + ctx.measureText(line.slice(0, m.index)).width, w: ctx.measureText(m[0]).width,
+  }))
+  const lineX = left + lineW / 2
+  const grow = Math.max(0, easeOutBack(w.pop))
+  // the word being said is painted last, so a grown word or its box sits over its neighbours
+  const order = [...items.filter((it) => it.i !== w.k), ...items.filter((it) => it.i === w.k)]
+  for (const it of order) {
+    const on = it.i === w.k
+    if (fx.style === 'reveal' && it.i > w.k) continue
+    if (!on || fx.style === 'color' || fx.style === 'karaoke') {
+      const said = fx.style === 'karaoke' ? it.i < w.k : on
+      paintText(ctx, said ? flat(st, fx.color) : st, it.word, it.x, y, px, lineX, lineW, 2)
+      if (on && fx.style === 'karaoke') {
+        // the colour sweeps across the word while it is said
+        const next = w.times[it.i + 1] ?? w.end
+        const p = Math.min(1, Math.max(0, (w.t - w.times[it.i]) / Math.max(0.05, next - w.times[it.i])))
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(it.x - px * 0.1, y - px, (it.w + px * 0.2) * p, px * 2)
+        ctx.clip()
+        paintText(ctx, flat(st, fx.color), it.word, it.x, y, px, lineX, lineW, 2)
+        ctx.restore()
+      }
+      continue
+    }
+    const cx = it.x + it.w / 2
+    ctx.save()
+    if (fx.style === 'box') {
+      ctx.translate(cx, y)
+      ctx.scale(0.75 + 0.25 * grow, 0.75 + 0.25 * grow)
+      ctx.fillStyle = fx.color
+      roundRect(ctx, -it.w / 2 - px * 0.18, -px * 0.62, it.w + px * 0.36, px * 1.24, px * 0.22)
+      ctx.fill()
+      paintText(ctx, { ...flat(st, inkOn(fx.color)), stroke: null, glow: null, shadow: false }, it.word, -it.w / 2, 0, px, 0, it.w, 2)
+    } else if (fx.style === 'pop') {
+      ctx.translate(cx, y)
+      const sc = 1 + 0.22 * grow
+      ctx.scale(sc, sc)
+      paintText(ctx, flat(st, fx.color), it.word, -it.w / 2, 0, px, 0, it.w, 2)
+    } else if (fx.style === 'reveal') {
+      ctx.globalAlpha = base * Math.min(1, w.pop * 1.5)
+      paintText(ctx, flat(st, fx.color), it.word, it.x, y + (1 - easeOut(w.pop)) * px * 0.35, px, lineX, lineW, 2)
+    }
+    ctx.restore()
+  }
+  ctx.globalAlpha = base
+  return items.length
+}
+
+export function drawText(ctx: Ctx, source: TextLayer, t: number, W: number, H: number) {
+  if (source.frame) { drawFramedText(ctx, source, source.frame, t, W, H); return }
+  const { layer, words } = wordView(source, t)
   const st = layer.style
   const a = animState(layer, t)
+  if (words) { a.chars = Infinity; a.letters = Infinity } // the words arrive by themselves
   if (a.alpha <= 0.001 || a.scale <= 0.001 || a.wipe <= 0.001) return
   const lp = loopState(layer.loop, t - layer.start)
   const m = measureText(ctx, layer, H)
@@ -268,7 +383,7 @@ export function drawText(ctx: Ctx, layer: TextLayer, t: number, W: number, H: nu
   ctx.globalAlpha = layer.box.opacity * a.alpha
   ctx.translate(layer.box.x * W + a.dx * H, layer.box.y * H + (a.dy + lp.dy) * H)
   ctx.rotate(((layer.box.rotation + a.rot + lp.rot) * Math.PI) / 180)
-  const sc = layer.box.scale * a.scale * lp.scale
+  const sc = layer.box.scale * a.scale * lp.scale * (words?.fx.style === 'one' ? 0.7 + 0.3 * Math.max(0, easeOutBack(words.pop)) : 1)
   ctx.scale(sc, sc)
   if (a.blur > 0) ctx.filter = `blur(${(a.blur * H).toFixed(1)}px)`
   if (a.wipe < 1) {
@@ -289,10 +404,12 @@ export function drawText(ctx: Ctx, layer: TextLayer, t: number, W: number, H: nu
   const top = -((lines.length - 1) * m.lh) / 2
   const total = Math.max(1, lines.reduce((n, l) => n + [...l].length, 0))
   let seen = 0
+  let wordAt = 0
   lines.forEach((line, i) => {
     const y = top + i * m.lh
     const lw = ctx.measureText(line).width
     const left = st.align === 'left' ? x : st.align === 'right' ? x - lw : x - lw / 2
+    if (words && words.fx.style !== 'one') { wordAt += paintWordLine(ctx, st, line, left, y, m.px, lw, words, wordAt); return }
     if (a.letters < 1) {
       // letters arrive one after another, each rising and fading in
       ctx.textAlign = 'left'
@@ -384,9 +501,11 @@ export function frameHeightFor(ctx: Ctx, layer: TextLayer, w: number, W: number,
   return Math.min(1, (fh + 2) / H)
 }
 
-function drawFramedText(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, t: number, W: number, H: number) {
+function drawFramedText(ctx: Ctx, source: TextLayer, frame: CaptionFrame, t: number, W: number, H: number) {
+  const { layer, words } = wordView(source, t)
   const st = layer.style
   const a = animState(layer, t)
+  if (words) a.chars = Infinity
   if (a.alpha <= 0.001 || a.scale <= 0.001) return
   const shine = loopState(layer.loop, t - layer.start).shine
   const x = frame.rect.x * W, y = frame.rect.y * H, w = frame.rect.w * W, h = frame.rect.h * H
@@ -428,6 +547,13 @@ function drawFramedText(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, t: numb
   const tx = st.align === 'left' ? -w / 2 + m.pad : st.align === 'right' ? w / 2 - m.pad : 0
   const blockH = (lines.length - 1) * m.lh
   const top = frame.valign === 'top' ? -h / 2 + m.pad + m.px / 2 : frame.valign === 'bottom' ? h / 2 - m.pad - m.px / 2 - blockH : -blockH / 2
+  if (words?.fx.style === 'one') {
+    const s = 0.7 + 0.3 * Math.max(0, easeOutBack(words.pop))
+    ctx.translate(tx, top + blockH / 2)
+    ctx.scale(s, s)
+    ctx.translate(-tx, -(top + blockH / 2))
+  }
+  let wordAt = 0
   lines.forEach((line, i) => {
     const ly = top + i * m.lh
     if (st.background && frame.fillOpacity === 0) {
@@ -442,6 +568,7 @@ function drawFramedText(ctx: Ctx, layer: TextLayer, frame: CaptionFrame, t: numb
     }
     const lw = ctx.measureText(line).width
     const lx = st.align === 'left' ? tx + lw / 2 : st.align === 'right' ? tx - lw / 2 : tx
+    if (words && words.fx.style !== 'one') { wordAt += paintWordLine(ctx, st, line, lx - lw / 2, ly, m.px, lw, words, wordAt); ctx.textAlign = st.align; return }
     paintText(ctx, st, line, tx, ly, m.px, lx, lw, shine)
   })
   ctx.restore()

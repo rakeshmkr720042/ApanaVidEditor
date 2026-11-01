@@ -179,6 +179,18 @@ export type LoopAnim = 'none' | 'pulse' | 'float' | 'swing' | 'shimmer' | 'heart
 /** Paint for text letters instead of a flat colour. */
 export type TextFill = 'gold' | 'rose-gold' | 'silver' | 'royal' | 'sunset' | 'love' | 'rainbow'
 
+/**
+ * Word-by-word captions: the word being spoken stands out (Reels/Shorts style). Word times are shared out over
+ * the caption's time by word length, with a little extra after commas and full stops.
+ */
+export type WordFxStyle = 'color' | 'box' | 'pop' | 'karaoke' | 'reveal' | 'one'
+export interface WordFx {
+  style: WordFxStyle // color: the word changes colour; box: a coloured box behind it; pop: it grows; karaoke: words fill as
+  // they are said; reveal: words appear one by one; one: only the word being said shows, big
+  color: string // highlight colour
+  caps?: boolean // show the words in CAPITALS
+}
+
 export interface TextStyle {
   font: string
   size: number // fraction of canvas height
@@ -219,6 +231,7 @@ export interface TextLayer extends LayerBase, Keyed {
   animOut: TextAnim
   loop?: LoopAnim // missing = none
   frame?: CaptionFrame | null // when set, box position/scale/rotation are ignored
+  words?: WordFx | null // word-by-word highlight, missing = off
 }
 
 /** Many copies of a sticker moving over the whole picture (falling petals, rising hearts, confetti bursts…). */

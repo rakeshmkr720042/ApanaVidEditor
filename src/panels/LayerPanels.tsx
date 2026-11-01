@@ -3,6 +3,7 @@ import type { BlurLayer, MediaLayer, StickerLayer, TextAnim, TextLayer, WaveLaye
 import type { Editor } from '../model/useEditor'
 import { isSub, subtitleLook } from '../model/useEditor'
 import { CaptionFrameEditor } from './CaptionFramePanel'
+import { CaptionStyle } from './CaptionStyle'
 import { ANIMS, FILLS, FONTS, LOOPS, STICKERS, TEXT_ONLY_ANIMS, TEXT_PRESETS, TITLE_PRESETS, ensureFont, prefetchFonts } from '../engine/text'
 import { SHOWER_MOTIONS, SHOWER_PRESETS } from '../engine/shower'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
@@ -56,7 +57,7 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
           <button className="btn small" onClick={() => ed.setSel({ type: 'layer', id: layer.id, all: !all })}>{all ? t('Only this caption') : t('Select all captions')}</button>
         </div>
       )}
-      <Chips options={[{ value: 'edit', label: 'Edit' }, { value: 'titles', label: 'Titles' }, { value: 'font', label: 'Font' }, { value: 'style', label: 'Style' }, { value: 'frame', label: 'Position' }, { value: 'anim', label: 'Animation' }]} value={tab} onChange={setTab} />
+      <Chips options={[{ value: 'edit', label: 'Edit' }, { value: 'titles', label: 'Titles' }, { value: 'font', label: 'Font' }, { value: 'style', label: 'Style' }, { value: 'words', label: 'Captions' }, { value: 'frame', label: 'Position' }, { value: 'anim', label: 'Animation' }]} value={tab} onChange={setTab} />
       {tab === 'edit' && (
         <>
           <textarea className="text-input" value={layer.text} autoFocus rows={3} onChange={(e) => set({ text: e.target.value })} placeholder={t('Type here')} />
@@ -127,6 +128,7 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
           </div>
         </>
       )}
+      {tab === 'words' && <CaptionStyle ed={ed} layer={layer} />}
       {tab === 'frame' && (
         <>
           {layer.subtitle && <p className="muted small">{t('Applies to all subtitles.')}</p>}
@@ -307,7 +309,7 @@ export function SubtitlePanel({ ed, name, t: time, onClose, onSeek, onSelectAll 
     const like = subtitleLook(p.layers)
     const layers: TextLayer[] = cues.map((c) => ({
       id: uid(), type: 'text', text: c.text, subtitle: true, start: c.start, end: c.end, style: like?.style ?? subtitleStyle(),
-      box: { x: 0.5, y: like?.y ?? 0.86, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none', frame: like?.frame ?? null,
+      box: { x: 0.5, y: like?.y ?? 0.86, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none', frame: like?.frame ?? null, words: like?.words ?? null,
     }))
     ed.replaceProject({ ...p, layers: [...p.layers, ...layers] })
   }
@@ -318,7 +320,7 @@ export function SubtitlePanel({ ed, name, t: time, onClose, onSeek, onSelectAll 
     const first = subs.find((s) => ed.sel?.type === 'layer' && s.id === ed.sel.id) ?? subs[0]
     if (!first) return
     const p = ed.project
-    ed.replaceProject({ ...p, layers: p.layers.map((l) => (l.type === 'text' && l.subtitle ? { ...l, style: { ...first.style }, box: { ...l.box, y: first.box.y }, frame: first.frame ?? null } : l)) })
+    ed.replaceProject({ ...p, layers: p.layers.map((l) => (l.type === 'text' && l.subtitle ? { ...l, style: { ...first.style }, box: { ...l.box, y: first.box.y }, frame: first.frame ?? null, words: first.words ? { ...first.words } : null } : l)) })
   }
   return (
     <Panel title="Subtitles" onClose={onClose} tall actions={<button className="btn small" onClick={() => ed.addText(time, true)}>+ {t('Add')}</button>}>
@@ -329,6 +331,12 @@ export function SubtitlePanel({ ed, name, t: time, onClose, onSeek, onSelectAll 
         <button className="btn small" disabled={!subs.length} onClick={onSelectAll}>{t('Select all captions')}</button>
       </div>
       <input ref={file} type="file" accept=".srt,text/plain" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importSrt(f); e.target.value = '' }} />
+      {subs.length > 0 && (
+        <details className="sub-frame" open>
+          <summary>{t('Caption style (trending)')}</summary>
+          <CaptionStyle ed={ed} layer={subs.find((s) => ed.sel?.type === 'layer' && s.id === ed.sel.id) ?? subs[0]} />
+        </details>
+      )}
       {subs.length > 0 && (
         <details className="sub-frame">
           <summary>{t('Caption position & frame')}</summary>

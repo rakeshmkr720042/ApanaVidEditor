@@ -80,7 +80,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
   return <EditorView initial={loaded} onBack={onBack} />
 }
 
-type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim'
+type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
   | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
 
@@ -612,6 +612,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'text', label: 'Edit', on: () => setPanel('text') } as Tool,
         { icon: 'adjust', label: 'Style', on: () => setPanel('text-style') } as Tool,
         { icon: 'anim', label: 'Animation', on: () => setPanel('text-anim') } as Tool,
+        { icon: 'subtitles', label: 'Caption style', on: () => setPanel('text-words'), active: selLayer.type === 'text' && !!selLayer.words } as Tool,
       ],
       sticker: [{ icon: (selLayer as StickerLayer).shower ? 'shower' : 'sticker', label: (selLayer as StickerLayer).shower ? 'Shower' : 'Stickers', on: () => setPanel('stickers') } as Tool],
       media: [
@@ -785,8 +786,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const c = ed.project.clips.find((x) => x.id === transitionFor)
     if (c) panelView = <TransitionPanel ed={ed} clip={c} onClose={closePanel} />
   } else if (panel === 'format') panelView = <FormatPanel ed={ed} onClose={closePanel} />
-  else if ((panel === 'text' || panel === 'text-titles' || panel === 'text-style' || panel === 'text-anim') && selLayer?.type === 'text')
-    panelView = <TextPanel key={panel} ed={ed} layer={selLayer} onClose={closePanel} startTab={panel === 'text' ? 'edit' : panel === 'text-titles' ? 'titles' : panel === 'text-style' ? 'style' : 'anim'} />
+  else if ((panel === 'text' || panel === 'text-titles' || panel === 'text-style' || panel === 'text-anim' || panel === 'text-words') && selLayer?.type === 'text')
+    panelView = <TextPanel key={panel} ed={ed} layer={selLayer} onClose={closePanel} startTab={panel === 'text' ? 'edit' : panel === 'text-titles' ? 'titles' : panel === 'text-style' ? 'style' : panel === 'text-words' ? 'words' : 'anim'} />
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
   else if (panel === 'split') panelView = <SplitPanel onClose={closePanel} onPick={addSplit} />
   else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
