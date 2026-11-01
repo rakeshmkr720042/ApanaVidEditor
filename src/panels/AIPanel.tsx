@@ -185,7 +185,7 @@ export function AIPanel({ ed, name, onClose }: P) {
     const layers: TextLayer[] = next.map((c) => ({
       id: uid(), type: 'text', text: c.text, subtitle: true, start: c.start, end: Math.min(c.end, total || c.end),
       style: { ...style, font }, box: { x: 0.5, y, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none',
-      frame: subs[0]?.frame ? { ...subs[0].frame, rect: { ...subs[0].frame.rect } } : null,
+      frame: subs[0]?.frame ? { ...subs[0].frame, rect: { ...subs[0].frame.rect } } : null, words: subs[0]?.words ? { ...subs[0].words } : null,
     }))
     const gone = (l: (typeof p.layers)[number]) => l.type === 'text' && l.subtitle && (!range || (l.start < range[1] && l.end > range[0]))
     ed.replaceProject({ ...p, originalSubs, layers: [...p.layers.filter((l) => !gone(l)), ...layers] })

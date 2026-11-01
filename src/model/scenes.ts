@@ -213,7 +213,7 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
       const caption = (text: string, from: number, to: number): TextLayer => ({
         id: uid(), type: 'text', text, subtitle: true, start: from, end: Math.min(total, to), style,
         box: { x: 0.5, y: capY, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none',
-        frame: frame && { ...frame, rect: { ...frame.rect } },
+        frame: frame && { ...frame, rect: { ...frame.rect } }, words: look?.words ? { ...look.words } : null,
       })
       const a = b.scene.audio
       if (a && a.cues.length && b.scene.text.trim() === a.heard.trim() && trackStart != null) {

@@ -54,7 +54,7 @@ export const emptyProject = (): Project => ({ clips: [], layers: [], settings: {
 /** Style, height and frame of the existing subtitles, for new ones to match. */
 export function subtitleLook(layers: Layer[]) {
   const s = layers.find((l): l is TextLayer => l.type === 'text' && l.subtitle)
-  return s ? { style: { ...s.style }, y: s.box.y, frame: s.frame ? { ...s.frame, rect: { ...s.frame.rect } } : null } : null
+  return s ? { style: { ...s.style }, y: s.box.y, frame: s.frame ? { ...s.frame, rect: { ...s.frame.rect } } : null, words: s.words ? { ...s.words } : null } : null
 }
 
 /** A wave layer with the default look for its style: bars and lines near the bottom, a ring in the middle. */
@@ -572,7 +572,7 @@ export function useEditor(initial: Project) {
       id: uid(), type: 'text', text, subtitle, ...span(t, subtitle ? 2.5 : 3),
       style: like?.style ?? (subtitle ? subtitleStyle() : defaultTextStyle()),
       box: { ...centerBox(), y: like?.y ?? (subtitle ? 0.86 : 0.5) }, animIn: subtitle ? 'none' : 'fade', animOut: subtitle ? 'none' : 'fade',
-      frame: like?.frame ?? null,
+      frame: like?.frame ?? null, words: like?.words ?? null,
     }
     addLayer(l)
     return l
