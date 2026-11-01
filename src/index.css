@@ -293,6 +293,10 @@ input, textarea { font: inherit; color: inherit; }
 .emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 4px; }
 .emoji-grid button { font-size: 30px; background: none; border: 0; padding: 6px; border-radius: 10px; }
 .emoji-grid button:active { background: var(--panel-2); }
+.grid.shower-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.grid.shower-grid button { display: grid; gap: 2px; justify-items: center; font-size: 12px; padding: 8px 4px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; }
+.grid.shower-grid .on { border-color: var(--accent); }
+.shower-icon { font-size: 28px; line-height: 1.1; }
 
 .track-list { display: grid; gap: 4px; }
 .track { display: grid; grid-template-columns: 40px 1fr auto; gap: 8px; align-items: center; padding: 6px 4px; border-radius: 10px; background: var(--panel-2); }

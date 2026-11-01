@@ -1,5 +1,15 @@
 /** Tiny translation layer: English strings are the keys; Hindi is optional. */
 const hi: Record<string, string> = {
+  'Showers': 'बरसात', 'Shower': 'बरसात', 'Amount': 'कितने', 'Fall': 'गिरना', 'Rise': 'उठना',
+  'Float': 'तैरना', 'Burst': 'फूटना', 'Swirl': 'घूमना', 'Rose petals': 'गुलाब की पंखुड़ियां', 'Flower shower': 'फूलों की बारिश',
+  'Marigold': 'गेंदा', 'Rising hearts': 'उड़ते दिल', 'Floating love': 'तैरता प्यार', 'Confetti': 'कॉन्फ़ेटी', 'Party burst': 'पार्टी धमाका',
+  'Confetti burst': 'कॉन्फ़ेटी धमाका', 'Balloons': 'गुब्बारे', 'Stars': 'तारे', 'Fireworks': 'आतिशबाज़ी', 'Diyas': 'दीये',
+  'Gold coins': 'सोने के सिक्के', 'Butterflies': 'तितलियां', 'Freeze frame': 'फ़्रीज़ फ़्रेम', 'Reverse': 'उल्टा चलाएं',
+  'Petals, hearts or confetti over the whole video. Drag its ends on the timeline to make it longer.': 'पूरे वीडियो पर पंखुड़ियां, दिल या कॉन्फ़ेटी। लंबा करने के लिए टाइमलाइन पर इसके किनारे खींचें।',
+  'Freeze frame added (3 s). Drag its end to change how long it holds.': 'फ़्रीज़ फ़्रेम जुड़ गया (3 सेकंड)। समय बदलने के लिए इसका किनारा खींचें।',
+  'Freeze frame needs a clip without a speed ramp': 'फ़्रीज़ फ़्रेम के लिए क्लिप पर स्पीड रैम्प नहीं होना चाहिए',
+  'Reverse works on up to 5 minutes. Split the clip first.': 'उल्टा 5 मिनट तक की क्लिप पर चलता है। पहले क्लिप काटें।',
+  'Clip reversed. Undo takes it back.': 'क्लिप उल्टी हो गई। वापस करने के लिए Undo दबाएं।',
   'Effects': 'इफ़ेक्ट', 'Play the video to see the effect move.': 'इफ़ेक्ट चलता हुआ देखने के लिए वीडियो चलाएं।',
   'Dreamy glow': 'सपनों जैसी चमक', 'Soft focus': 'सॉफ़्ट फ़ोकस', 'White edges': 'सफ़ेद किनारे', 'Heart frame': 'दिल वाला फ़्रेम',
   'Light leak': 'लाइट लीक', 'Light rays': 'रोशनी की किरणें', 'Bokeh lights': 'बोकेह लाइटें', 'Sparkles': 'चमकते तारे', 'Gold dust': 'सुनहरी धूल',

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
 import { isSub, selectedIds, useEditor, type CamBubble, type Placed, type Placement, type Selection } from '../model/useEditor'
 import { Player } from '../engine/player'
-import { activeAt } from '../model/timeline'
+import { activeAt, sourceAt } from '../model/timeline'
+import { REVERSE_MAX, reverseClip as reverseVideo, stillFrame } from '../engine/reverse'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
 import { getMedia, getProject, saveMedia, saveProject } from '../lib/db'
 import { fmtTime } from '../lib/format'
@@ -75,7 +76,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
   return <EditorView initial={loaded} onBack={onBack} />
 }
 
-type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
+type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-style' | 'text-anim'
   | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
   | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
 
@@ -307,6 +308,42 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     announce(ed.place(pending.srcs, where, time, { crop: pending.crop, dur: pending.dur, cam: pending.cam }), pending.what)
   }
 
+  /** Freeze frame: the clip under the playhead holds its picture there for 3 seconds. */
+  const freeze = async () => {
+    const c = targetClip
+    const src = c && ed.sources[c.sourceId]
+    if (!c || !src) return
+    player?.pause()
+    const it = ed.layout.items.find((x) => x.clip.id === c.id)
+    if (!it) return
+    const local = Math.max(0, Math.min(it.dur - 0.01, time - it.start))
+    try {
+      const still = await stillFrame(src, sourceAt(c, local).time)
+      ed.addSource(still)
+      await saveMedia(still)
+      if (ed.freezeFrame(Math.max(it.start, Math.min(it.start + it.dur - 0.01, time)), still)) setToast(t('Freeze frame added (3 s). Drag its end to change how long it holds.'))
+      else setToast(t('Freeze frame needs a clip without a speed ramp'))
+    } catch (e) { setToast((e as Error).message) }
+  }
+
+  /** Reverse: the clip plays backwards (picture and sound). Made once, offline. */
+  const [reversing, setReversing] = useState<number | null>(null)
+  const reverse = async () => {
+    const c = selClip
+    const src = c && ed.sources[c.sourceId]
+    if (!c || !src || src.kind !== 'video' || reversing !== null) return
+    player?.pause()
+    if (c.out - c.in > REVERSE_MAX) { setToast(t('Reverse works on up to 5 minutes. Split the clip first.')); return }
+    setReversing(0)
+    try {
+      const rev = await reverseVideo(c, src, (p) => setReversing(p))
+      ed.addSource(rev)
+      await saveMedia(rev)
+      ed.reverseClip(c.id, rev)
+      setToast(t('Clip reversed. Undo takes it back.'))
+    } catch (e) { setToast((e as Error).message) } finally { setReversing(null) }
+  }
+
   /** Puts another photo or video in place of the selected one, keeping its time, size and look. */
   const replaceWith = async (file: File) => {
     const target = ed.sel
@@ -387,7 +424,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? (ed.project.main?.locked ? null : clipAtPlayhead)
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -473,6 +510,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!selClip.chroma?.enabled },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
+      { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !!selClip.ramp },
+      ...(!photo ? [{ icon: 'reverse', label: reversing !== null ? `${Math.round(reversing * 100)}%` : 'Reverse', on: reverse, disabled: reversing !== null } as Tool] : []),
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
       // the clip's sound as its own item on an audio row (the clip goes silent)
       ...(hasSound(ed.sources[selClip.sourceId]) ? [{ icon: 'detach', label: 'Detach audio', on: () => detach([selClip.id]) } as Tool] : []),
@@ -545,7 +584,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'adjust', label: 'Style', on: () => setPanel('text-style') } as Tool,
         { icon: 'anim', label: 'Animation', on: () => setPanel('text-anim') } as Tool,
       ],
-      sticker: [{ icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers') } as Tool],
+      sticker: [{ icon: (selLayer as StickerLayer).shower ? 'shower' : 'sticker', label: (selLayer as StickerLayer).shower ? 'Shower' : 'Stickers', on: () => setPanel('stickers') } as Tool],
       media: [
         { icon: 'overlay', label: 'Size & opacity', on: () => setPanel('overlay') } as Tool,
         { icon: 'crop', label: 'Crop', on: () => setPanel('layer-crop') } as Tool,
@@ -591,6 +630,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'chroma', label: 'Green screen', on: () => openClipPanel('chroma'), disabled: !targetClip },
       { icon: 'speed', label: 'Speed', on: () => openClipPanel('speed'), disabled: !targetClip },
       { icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers'), disabled: empty },
+      { icon: 'shower', label: 'Showers', on: () => setPanel('showers'), disabled: empty },
+      { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !targetClip || !!targetClip.ramp },
       { icon: 'filter', label: 'Filters', on: () => openClipPanel('filters'), disabled: !targetClip },
       { icon: 'effects', label: 'Effects', on: () => openClipPanel('effects'), disabled: !targetClip },
       { icon: 'adjust', label: 'Adjust', on: () => openClipPanel('adjust'), disabled: !targetClip },
@@ -712,6 +753,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if ((panel === 'text' || panel === 'text-style' || panel === 'text-anim') && selLayer?.type === 'text')
     panelView = <TextPanel key={panel} ed={ed} layer={selLayer} onClose={closePanel} startTab={panel === 'text' ? 'edit' : panel === 'text-style' ? 'style' : 'anim'} />
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
+  else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
   else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
   else if (panel === 'chroma' && selStored?.type === 'media') panelView = <GreenScreenPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'chroma' && tclip) panelView = <GreenScreenPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} time={time} onToast={setToast} onClose={closePanel} />

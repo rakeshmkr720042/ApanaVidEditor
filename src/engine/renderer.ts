@@ -362,6 +362,7 @@ export class Renderer {
       const { w, h } = waveSize(l, W, H)
       return { cx: l.box.x * W, cy: l.box.y * H, w, h, rotation: l.box.rotation }
     }
+    if (l.type === 'sticker' && l.shower) return { cx: W / 2, cy: H / 2, w: W, h: H, rotation: 0 }
     if (l.type === 'sticker') {
       const s = STICKER_BASE * H * 1.15 * l.box.scale
       return { cx: l.box.x * W, cy: l.box.y * H, w: s, h: s, rotation: l.box.rotation }

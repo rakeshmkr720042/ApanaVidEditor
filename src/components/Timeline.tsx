@@ -47,7 +47,7 @@ const LAYER_COLORS: Record<Layer['type'], string> = { text: '#8b5cf6', sticker: 
 function layerLabel(l: Layer) {
   switch (l.type) {
     case 'text': return (l.subtitle ? '💬 ' : 'T  ') + l.text.replace(/\n/g, ' ')
-    case 'sticker': return l.emoji
+    case 'sticker': return l.shower ? `${l.emoji === 'petal' ? '🌹' : l.emoji === 'paper' ? '🎊' : l.emoji} ×${l.shower.count}` : l.emoji
     case 'media': return '▣ Overlay'
     case 'blur': return l.mode === 'pixelate' ? '▦ Pixelate' : '◌ Blur'
     case 'wave': return `〰 ${l.style === 'circle' ? 'Circle' : l.style === 'line' ? 'Line' : 'Bars'}`
