@@ -5,6 +5,7 @@ import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
 import { clipSegments, defaultAdjust, gapAt, insertClipsAt, layerSpeed, layoutClips, moveClipTo, newClip, removeClipKeepGap, sourceAt } from './timeline'
 import { applySlideshow, type SlideshowOptions } from './slideshow'
+import { insetCell, type SplitLayout } from './split'
 import { defaultTextStyle, subtitleStyle } from '../engine/text'
 import { defaultWatermark } from '../engine/watermark'
 import { defaultPresenter } from '../engine/presenter'
@@ -289,6 +290,44 @@ export function useEditor(initial: Project) {
     setSel(sel)
     return { sel, start, where: mode, cut: false }
   }, [h, track])
+
+  /**
+   * Split screen / collage: each photo or video fills one cell of the layout (cropped to the cell's shape), each on
+   * its own row from time t, as long as the longest video (photos 5 s when there is none). The first cell is selected.
+   */
+  const addSplit = useCallback((srcs: MediaSource[], layout: SplitLayout, t: number, gap: number, border: number): string[] => {
+    const p = ref.current
+    const visual = srcs.filter((s) => s.kind !== 'audio').slice(0, layout.cells.length)
+    if (!visual.length) return []
+    const all = { ...sourcesRef.current, ...Object.fromEntries(visual.map((s) => [s.id, s])) }
+    const { w: W, h: H } = outputSize(p, all, 1000)
+    const tot = layoutClips(p.clips).total
+    const start = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
+    const longest = Math.max(0, ...visual.map((s) => (s.kind === 'video' ? s.duration : 0)))
+    const len = longest || 5
+    const tracks = [...(p.tracks ?? [])]
+    // new rows go in front of the photo/video rows already there (text rows stay on top)
+    const firstMedia = tracks.findIndex((tr) => p.layers.some((l) => l.track === tr.id && l.type === 'media'))
+    const at = firstMedia >= 0 ? firstMedia : insertAt(tracks, 'visual', false)
+    const layers: MediaLayer[] = visual.map((src, i) => {
+      const cell = insetCell(layout.cells[i], gap, W, H)
+      const cw = cell.w * W, ch = cell.h * H, ar = cw / ch
+      const sa = src.width && src.height ? src.width / src.height : 16 / 9
+      const crop = sa > ar ? { x: (1 - ar / sa) / 2, y: 0, w: ar / sa, h: 1 } : { x: 0, y: (1 - sa / ar) / 2, w: 1, h: sa / ar }
+      const base = ar >= 1 ? ch : cw
+      const tr = newTrack('visual')
+      tracks.splice(at + i, 0, tr)
+      return {
+        id: uid(), type: 'media', sourceId: src.id, in: 0, start, end: start + (src.kind === 'video' ? src.duration : len),
+        box: { x: cell.x + cell.w / 2, y: cell.y + cell.h / 2, scale: base / (Math.min(W, H) * 0.5), rotation: 0, opacity: 1 },
+        volume: i === 0 ? 1 : 0, chroma: defaultChroma(), mask: 'none', border,
+        adjust: defaultAdjust(), filter: null, filterAmount: 1, crop, track: tr.id,
+      }
+    })
+    h.set({ ...p, tracks, layers: [...p.layers, ...layers] })
+    setSel({ type: 'layer', id: layers[0].id })
+    return layers.map((l) => l.id)
+  }, [h])
 
   /**
    * Swaps the photo or video of a main-video clip or a track item for another file, keeping where it is,
@@ -758,7 +797,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, place, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter,
+    addSource, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,

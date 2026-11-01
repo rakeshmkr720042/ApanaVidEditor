@@ -743,3 +743,12 @@ input, textarea { font: inherit; color: inherit; }
 .lut-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .lut-list button { padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; }
 .lut-list button.on { border-color: var(--accent); }
+
+/* Split screen layouts */
+.split-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.split-grid button { display: grid; gap: 4px; justify-items: center; padding: 6px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; }
+.split-grid button.on { border-color: var(--accent); }
+.split-thumb { position: relative; width: 64px; height: 36px; display: block; }
+.split-thumb i { position: absolute; box-sizing: border-box; border: 1.5px solid var(--panel-2); background: #4b5563; color: #fff; font-style: normal; font-size: 9px; display: grid; place-items: center; }
+.split-grid button.on .split-thumb i { background: var(--accent); }
+.split-grid small { font-size: 11px; }

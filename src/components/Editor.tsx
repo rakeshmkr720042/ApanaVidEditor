@@ -4,6 +4,8 @@ import { isSub, selectedIds, useEditor, type CamBubble, type Placed, type Placem
 import { Player } from '../engine/player'
 import { activeAt, sourceAt } from '../model/timeline'
 import { ColorPanel } from '../panels/ColorPanel'
+import { SplitPanel } from '../panels/SplitPanel'
+import type { SplitLayout } from '../model/split'
 import { gradeIsEmpty } from '../engine/grade'
 import { REVERSE_MAX, reverseClip as reverseVideo, stillFrame } from '../engine/reverse'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
@@ -78,7 +80,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
   return <EditorView initial={loaded} onBack={onBack} />
 }
 
-type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim'
+type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim'
   | 'stickers' | 'overlay' | 'chroma' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
   | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
 
@@ -310,6 +312,28 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     announce(ed.place(pending.srcs, where, time, { crop: pending.crop, dur: pending.dur, cam: pending.cam }), pending.what)
   }
 
+  /** Split screen / collage: loads the picked files and puts one in each cell of the layout, from the playhead. */
+  const addSplit = async (files: File[], layout: SplitLayout, gap: number, border: number) => {
+    player?.pause()
+    setImporting((n) => n + files.length)
+    const srcs: MediaSource[] = []
+    for (const f of files.slice(0, layout.cells.length)) {
+      try {
+        const src = await loadSource(f, f.name)
+        if (src.kind === 'audio') continue
+        ed.addSource(src)
+        await saveMedia(src)
+        srcs.push(src)
+      } catch (e) { setToast((e as Error).message) } finally { setImporting((n) => n - 1) }
+    }
+    setImporting((n) => Math.max(0, n - Math.max(0, files.length - layout.cells.length)))
+    if (!srcs.length) return
+    ed.addSplit(srcs, layout, time, gap, border)
+    setPanel(null)
+    const empty = layout.cells.length - srcs.length
+    setToast(empty > 0 ? `${t('Split screen added')}. ${empty} ${t('cells are empty: add more with Split screen again or move items there.')}` : t('Split screen added'))
+  }
+
   /** Freeze frame: the clip under the playhead holds its picture there for 3 seconds. */
   const freeze = async () => {
     const c = targetClip
@@ -426,7 +450,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? (ed.project.main?.locked ? null : clipAtPlayhead)
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -628,6 +652,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'add', label: 'Add', on: () => mainInput.current?.click() },
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
+      { icon: 'splitscreen', label: 'Split screen', on: () => setPanel('split'), disabled: empty },
       { icon: 'title', label: 'Titles', on: () => { ed.addText(time); setPanel('text-titles') }, disabled: empty },
       { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); openClipPanel('order') }, disabled: !targetClip || ed.project.clips.length < 2 },
       { icon: 'selectAll', label: 'Select all', on: selectAllClips, disabled: empty || !!ed.project.main?.locked },
@@ -763,6 +788,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if ((panel === 'text' || panel === 'text-titles' || panel === 'text-style' || panel === 'text-anim') && selLayer?.type === 'text')
     panelView = <TextPanel key={panel} ed={ed} layer={selLayer} onClose={closePanel} startTab={panel === 'text' ? 'edit' : panel === 'text-titles' ? 'titles' : panel === 'text-style' ? 'style' : 'anim'} />
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
+  else if (panel === 'split') panelView = <SplitPanel onClose={closePanel} onPick={addSplit} />
   else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
   else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
   else if (panel === 'chroma' && selStored?.type === 'media') panelView = <GreenScreenPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} time={time} onToast={setToast} onClose={closePanel} />
