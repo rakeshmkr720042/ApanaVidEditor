@@ -28,7 +28,7 @@ function AuthShell({ children, onLang, onClose }: { children: ReactNode; onLang:
         {children}
       </div>
       {onClose && <button className="btn ghost auth-later" onClick={onClose} data-testid="auth-later">{t('Not now, keep using it free')}</button>}
-      <p className="auth-foot muted small">{t('Your projects and videos stay on this device. Your account only keeps your name, email and plan.')}</p>
+      <p className="auth-foot muted small">{t('Your projects and videos stay on this device. Your account only keeps your name, email and plan.')} <a href="privacy.html" target="_blank" rel="noopener">{t('Privacy policy')}</a></p>
     </div>
   )
 }

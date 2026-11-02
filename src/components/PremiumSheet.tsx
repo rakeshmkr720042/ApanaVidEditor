@@ -76,9 +76,11 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
             <b>{t('Free Forever')} · ₹0</b>
             <small className="muted">{t('Basic editing, tracks, text, music, filters, captions, recording, compress, unlimited projects on this device.')}</small>
             {pro.includes('nomark') && <small className="muted">{t('Exports carry the Apna Editor mark.')}</small>}
+            <small className="muted">{t('No account needed. Shows ads.')}</small>
           </div>
           <div className="tier pro">
             <b>{t('Pro')}</b>
+            <small className="muted" data-testid="pro-noads">{t('No ads, on every device you sign in on.')}</small>
             {pro.length ? (
               <ul className="premium-list" data-testid="pro-features">
                 {pro.map((f) => (

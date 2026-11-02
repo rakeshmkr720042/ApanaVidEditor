@@ -854,3 +854,14 @@ input, textarea { font: inherit; color: inherit; }
 .btn.wide.danger:not(:disabled) { background: #ff6b6b; color: #fff; border-color: #ff6b6b; }
 .auth.auth-overlay { position: fixed; inset: 0; z-index: 200; height: auto; }
 .auth-later { margin-top: 12px; }
+
+/* Ads (Free plan): our own Pro card on web/Windows; room for the AdMob banner on Android */
+body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+.pro-ad { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px; border-radius: 14px; border: 1px solid #ffcc3355; background: linear-gradient(120deg, rgba(255, 204, 51, 0.12), rgba(79, 140, 255, 0.12)); color: var(--text); font: inherit; cursor: pointer; }
+.pro-ad > svg { color: #ffcc33; flex: none; }
+.pro-ad > span { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.pro-ad > span small { color: var(--muted); }
+.pro-ad > i { font-style: normal; font-weight: 700; white-space: nowrap; color: #ffcc33; }
+.pro-ad-tag { position: absolute; top: 4px; right: 8px; font-size: 10px; color: var(--muted); }
+.pro-ad-export { margin-top: 10px; }
+.home-foot { text-align: center; margin: 18px 0 4px; } .home-foot a { color: var(--muted); }

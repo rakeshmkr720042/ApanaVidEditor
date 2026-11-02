@@ -16,6 +16,8 @@ import { listNotes } from '../lib/feedback'
 import { localAI } from '../lib/localai'
 import { PremiumSheet } from './PremiumSheet'
 import { AccountSheet } from './AccountSheet'
+import { ProAd } from './ProAd'
+import { hideHomeBanner, showHomeBanner } from '../lib/ads'
 import { SignInOverlay } from './AuthScreen'
 import { useAccountState } from '../lib/account'
 import { usePremium } from '../lib/premium'
@@ -38,6 +40,12 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [accountSheet, setAccountSheet] = useState(false)
   const { premium } = usePremium()
   const account = useAccountState()
+  // Android, Free plan: a Google banner under Home only (never in the editor).
+  useEffect(() => {
+    if (premium) { hideHomeBanner(); return }
+    showHomeBanner()
+    return () => { hideHomeBanner() }
+  }, [premium])
 
   const openFile = async (f: File) => {
     setError(null); setOpening(true)
@@ -102,6 +110,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           {offline === 'ready' && <span className="badge">✓ {t('Offline ready')}</span>}
           {usage && <span className="muted small">{t('Storage used')}: {usage}</span>}
         </div>
+        <ProAd where="home" />
         <h3>{t('Projects')}</h3>
         {projects && !projects.length && <p className="muted">{t('No projects yet. Tap New project to start editing.')}</p>}
         <div className="project-grid">
@@ -116,6 +125,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
             </div>
           ))}
         </div>
+        <p className="home-foot muted small"><a href="privacy.html" target="_blank" rel="noopener">{t('Privacy policy')}</a></p>
       </main>
       {netSheet && <OfflineSheet onClose={() => { setNetSheet(false); checkOffline() }} />}
       {compress && <CompressSheet onClose={() => setCompress(false)} />}
