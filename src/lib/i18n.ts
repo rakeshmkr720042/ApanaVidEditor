@@ -19,6 +19,7 @@ const hi: Record<string, string> = {
   'Reverse works on up to 5 minutes. Split the clip first.': 'उल्टा 5 मिनट तक की क्लिप पर चलता है। पहले क्लिप काटें।',
   'Clip reversed. Undo takes it back.': 'क्लिप उल्टी हो गई। वापस करने के लिए Undo दबाएं।',
   'Effects': 'इफ़ेक्ट', 'Play the video to see the effect move.': 'इफ़ेक्ट चलता हुआ देखने के लिए वीडियो चलाएं।',
+  'Date stamp': 'तारीख़ का ठप्पा', 'Digicam': 'डिजिकैम',
   'Dreamy glow': 'सपनों जैसी चमक', 'Soft focus': 'सॉफ़्ट फ़ोकस', 'White edges': 'सफ़ेद किनारे', 'Heart frame': 'दिल वाला फ़्रेम',
   'Light leak': 'लाइट लीक', 'Light rays': 'रोशनी की किरणें', 'Bokeh lights': 'बोकेह लाइटें', 'Sparkles': 'चमकते तारे', 'Gold dust': 'सुनहरी धूल',
   'Snow': 'बर्फ़', 'Old film': 'पुरानी फ़िल्म', 'Color pop (keep red)': 'सिर्फ़ लाल रंग', 'Shake': 'हिलाना', 'Heartbeat zoom': 'धड़कन ज़ूम',

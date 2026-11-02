@@ -25,6 +25,19 @@ const groups: Record<string, [string, Look][]> = {
     ['Vivid Pop', { saturation: 0.55, vibrance: 0.35, contrast: 0.25, exposure: 0.05, sharpen: 0.4 }],
     ['Matte', { fade: 0.5, contrast: -0.15, saturation: -0.15, shadows: 0.1, split: { shadow: hex('#2b2f3a'), highlight: hex('#f2e9dc'), amount: 0.2 } }],
   ],
+  // 2000s pocket cameras and phones: cool white balance, hard flash, crunchy sharpening, clipped highlights
+  Digicam: [
+    ['Digicam', { temperature: -0.18, tint: 0.04, contrast: 0.22, saturation: 0.18, highlights: 0.25, sharpen: 0.6, grain: 0.2, vignette: 0.15 }],
+    ['Flash Party', { exposure: 0.22, contrast: 0.35, highlights: 0.3, shadows: -0.2, temperature: -0.1, saturation: 0.1, sharpen: 0.5, vignette: 0.45 }],
+    ['CCD', { tint: -0.08, temperature: -0.12, saturation: 0.28, contrast: 0.15, sharpen: 0.8, grain: 0.3, split: { shadow: hex('#10304a'), highlight: hex('#f2fbff'), amount: 0.25 } }],
+    ['Y2K Pink', { tint: 0.22, exposure: 0.1, saturation: 0.2, fade: 0.12, highlights: 0.15, split: { shadow: hex('#3a1550'), highlight: hex('#ffd1ec'), amount: 0.35 } }],
+    ['Y2K Blue', { temperature: -0.35, exposure: 0.08, saturation: 0.15, contrast: 0.12, highlights: 0.2, split: { shadow: hex('#0d1f66'), highlight: hex('#d6f0ff'), amount: 0.35 } }],
+    ['Old Phone', { saturation: -0.25, contrast: -0.1, fade: 0.2, sharpen: -0.3, grain: 0.55, temperature: 0.08, tint: -0.06 }],
+    ['Webcam', { saturation: -0.15, tint: -0.1, contrast: 0.2, highlights: 0.3, shadows: -0.15, grain: 0.45, sharpen: 0.3 }],
+    ['Camcorder', { saturation: 0.25, tint: 0.08, fade: 0.15, sharpen: -0.2, grain: 0.4, contrast: 0.1, temperature: 0.05 }],
+    ['Night Flash', { exposure: 0.1, contrast: 0.45, shadows: -0.35, highlights: 0.2, temperature: -0.15, vignette: 0.6, grain: 0.3 }],
+    ['Pocket Cam', { temperature: 0.08, saturation: 0.3, contrast: 0.25, sharpen: 0.7, highlights: 0.2, vignette: 0.25 }],
+  ],
   Basic: [
     ['Vivid', { saturation: 0.35, contrast: 0.15, vibrance: 0.2 }],
     ['Punch', { contrast: 0.35, saturation: 0.25, shadows: -0.1 }],
@@ -60,6 +73,12 @@ const groups: Record<string, [string, Look][]> = {
     ['Expired', { tint: 0.15, temperature: 0.2, fade: 0.4, saturation: -0.2, grain: 0.4 }],
     ['Lomo', { contrast: 0.4, saturation: 0.35, vignette: 0.7, temperature: 0.05 }],
     ['Disposable', { exposure: 0.1, contrast: 0.2, temperature: 0.12, grain: 0.5, vignette: 0.35 }],
+    ['Kodak Gold', { temperature: 0.3, tint: 0.04, saturation: 0.18, contrast: 0.1, fade: 0.12, grain: 0.25, split: { shadow: hex('#3b2a14'), highlight: hex('#ffd98a'), amount: 0.3 } }],
+    ['Agfa Vista', { tint: 0.1, saturation: 0.3, contrast: 0.15, temperature: 0.05, grain: 0.25, split: { shadow: hex('#2a1a3a'), highlight: hex('#ffe2c0'), amount: 0.2 } }],
+    ['Vision 500T', { temperature: -0.2, contrast: 0.12, fade: 0.1, grain: 0.3, split: { shadow: hex('#0e3550'), highlight: hex('#ffc59a'), amount: 0.4 } }],
+    ['Cine 800T', { temperature: -0.3, tint: 0.06, contrast: 0.18, highlights: 0.12, grain: 0.35, split: { shadow: hex('#06304a'), highlight: hex('#ff6b4a'), amount: 0.5 } }],
+    ['Tri-X', { mono: 1, contrast: 0.45, grain: 0.55, shadows: -0.1 }],
+    ['HP5', { mono: 1, contrast: 0.2, fade: 0.1, grain: 0.45 }],
   ],
   Cinematic: [
     ['Teal & Orange', { split: { shadow: hex('#0b5f6b'), highlight: hex('#ff9a3c'), amount: 0.55 }, contrast: 0.2, saturation: 0.1 }],

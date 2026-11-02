@@ -108,6 +108,18 @@ const E: [string, string, string, string, boolean?][] = [
     vec2 q = uv - 0.5;
     c.rgb *= 1.0 - smoothstep(0.3, 0.75, length(q)) * 0.6 * a;
     return c;`],
+  ['digicam', 'Digicam', 'Retro', `vec2 d = (uv - 0.5) * 0.008 * a;
+    vec4 c = src(uv);
+    c.r = src(uv + d).r;
+    c.b = src(uv - d).b;
+    // the small sensor: bright parts bloom, flat parts get coloured noise and a little banding
+    c.rgb = screen(c.rgb, max(blurAt(uv, 0.012) - 0.62, 0.0) * 1.9 * a);
+    float fr = floor(t * 15.0);
+    c.rgb += (vec3(rnd(uv * 640.0 + fr), rnd(uv * 640.0 + fr + 3.1), rnd(uv * 640.0 + fr + 7.7)) - 0.5) * 0.09 * a;
+    c.rgb = mix(c.rgb, floor(c.rgb * 28.0 + 0.5) / 28.0, 0.6 * a);
+    vec2 q = uv - 0.5;
+    c.rgb *= 1.0 - smoothstep(0.35, 0.8, length(q)) * 0.35 * a;
+    return vec4(clamp(c.rgb, 0.0, 1.0), c.a);`],
   ['vhs', 'VHS', 'Retro', `float w = (noise(vec2(uv.y * 9.0, t * 5.0)) - 0.5) * 0.012 * a;
     float sh = 0.006 * a;
     vec4 c = src(uv + vec2(w, 0.0));
