@@ -1,9 +1,10 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   authMessage, checkVerified, emailError, nameError, normalisePhone, passwordError, register, resendVerification, resetPassword,
-  signIn, signInGoogle, signOut,
+  cancelGoogle, googleProvider, signIn, signInGoogle, signOut,
 } from '../lib/account'
-import { googleAvailable } from '../lib/firebase'
+import { GoogleAuthProvider, signInWithPopup, signOut as fbSignOut } from 'firebase/auth'
+import { bridgeAuth, googleAvailable, platform } from '../lib/firebase'
 import { getLang, setLang, t } from '../lib/i18n'
 import { Icon } from './Icon'
 
@@ -76,6 +77,7 @@ export function AuthScreen({ onLang }: { onLang: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [touched, setTouched] = useState(false)
+  const [waitGoogle, setWaitGoogle] = useState(false)
 
   const go = (m: Mode) => { setMode(m); setError(null); setNote(null); setTouched(false) }
   const run = async (fn: () => Promise<unknown>) => {
@@ -113,7 +115,13 @@ export function AuthScreen({ onLang }: { onLang: () => void }) {
       {mode === 'register' && <p className="muted small">{t('Free forever. No card needed.')}</p>}
       {mode === 'forgot' && <p className="muted small">{t('Enter your email and we will send you a link to set a new password.')}</p>}
 
-      {mode !== 'forgot' && <GoogleButton busy={busy} onClick={() => run(() => signInGoogle(rememberMe))} />}
+      {mode !== 'forgot' && <GoogleButton busy={busy} onClick={() => { setWaitGoogle(platform === 'windows'); run(() => signInGoogle(rememberMe)).finally(() => setWaitGoogle(false)) }} />}
+      {waitGoogle && (
+        <p className="auth-ok" data-testid="auth-google-wait">
+          {t('Google sign-in opened in your web browser. Choose your account there, then come back here.')}{' '}
+          <button type="button" className="link" onClick={cancelGoogle}>{t('Cancel')}</button>
+        </p>
+      )}
 
       <form className="auth-form" onSubmit={submit} noValidate>
         {mode === 'register' && <Field label="Full name" value={name} onChange={setName} error={shown('name')} auto="name" testid="auth-name" />}
@@ -205,4 +213,54 @@ export function BlockedScreen({ onLang }: { onLang: () => void }) {
 
 export function LoadingScreen() {
   return <div className="auth auth-loading" data-testid="auth-loading"><span className="spinner big" /></div>
+}
+
+/** #desktop-signin?port=…&state=…: the Windows app opened this page; read once at load. */
+export function desktopSignInRequest(hash = location.hash) {
+  const m = hash.match(/^#desktop-signin\?(.*)$/)
+  if (!m) return null
+  const q = new URLSearchParams(m[1])
+  const port = Number(q.get('port'))
+  const state = q.get('state') ?? ''
+  if (!Number.isInteger(port) || port < 1024 || port > 65535 || !/^[\w-]{16,64}$/.test(state)) return null
+  return { port, state }
+}
+
+/**
+ * The website page the Windows app opens in the default browser. It signs in with Google in a
+ * throw-away session (this browser's own sign-in is left alone) and sends only the Google ID token
+ * to the app, which waits on 127.0.0.1.
+ */
+export function DesktopSignIn({ port, state, onLang }: { port: number; state: string; onLang: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  // Made ready before the tap, so the Google window opens straight from the tap (else browsers block it).
+  const [auth] = useState(bridgeAuth)
+  const [ready, setReady] = useState(false)
+  useEffect(() => { auth.authStateReady().then(() => setReady(true)) }, [auth])
+  const go = async () => {
+    setBusy(true); setError(null)
+    try {
+      const res = await signInWithPopup(auth, googleProvider())
+      const idToken = GoogleAuthProvider.credentialFromResult(res)?.idToken
+      await fbSignOut(auth).catch(() => {})
+      if (!idToken) throw new Error(t('Something went wrong. Please try again.'))
+      setDone(true)
+      location.replace(`http://127.0.0.1:${port}/?${new URLSearchParams({ state, id_token: idToken })}`)
+    } catch (e) {
+      console.warn('desktop sign-in', e)
+      setError(e instanceof Error && !(e as { code?: string }).code ? e.message : authMessage(e))
+      setBusy(false)
+    }
+  }
+  return (
+    <AuthShell onLang={onLang}>
+      <h1 className="auth-title">{t('Sign in to the Windows app')}</h1>
+      <p className="muted small">{t('Apna Editor on your computer asked to sign in with Google. Tap the button and choose your account.')}</p>
+      {!done && <GoogleButton busy={busy || !ready} onClick={go} />}
+      {done && <p className="auth-ok" role="status">{t('Signed in. Go back to the Apna Editor app.')}</p>}
+      {error && <p className="auth-alert" role="alert" data-testid="auth-error">{error}</p>}
+    </AuthShell>
+  )
 }

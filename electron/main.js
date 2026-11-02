@@ -285,6 +285,46 @@ ipcMain.handle('desktop:google-signin', async (e, { clientId, clientSecret, scop
   }
 })
 
+// Apna Editor account sign-in with Google. Google does not allow its sign-in page inside an app window,
+// so the app's website opens in the default browser (#desktop-signin), signs in with Google there (without
+// touching that browser's own session), and sends only the Google ID token back to this one-time server.
+// No client secret is needed. Firebase checks the token when the app signs in with it.
+const SITE = 'https://rakeshmkr720042.github.io/ApanaVidEditor/'
+ipcMain.handle('desktop:google-login', async (e) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  cancelSignIn?.()
+  const state = b64url(randomBytes(24))
+  const server = createServer()
+  await new Promise((ok, fail) => { server.once('error', fail); server.listen(0, '127.0.0.1', ok) })
+  const port = server.address().port
+  try {
+    const idToken = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Sign-in took too long. Try again.')), 5 * 60_000)
+      cancelSignIn = () => { clearTimeout(timer); reject(new Error('Sign-in was cancelled.')) }
+      server.on('request', (req, res) => {
+        const q = new URL(req.url, `http://127.0.0.1:${port}`).searchParams
+        if (req.method !== 'GET' || q.get('state') !== state) { res.writeHead(404).end(); return }
+        const token = q.get('id_token') ?? ''
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+        clearTimeout(timer)
+        if (/^[\w-]+\.[\w-]+\.[\w-]+$/.test(token) && token.length < 8192) {
+          res.end(page('Signed in to Apna Editor. You can close this tab and go back to the app.<br><br>Apna Editor में साइन इन हो गया। यह टैब बंद करके ऐप पर वापस जाएँ।'))
+          resolve(token)
+        } else {
+          res.end(page('Sign-in was not finished. You can close this tab.'))
+          reject(new Error('Sign-in was cancelled.'))
+        }
+      })
+      shell.openExternal(`${SITE}#desktop-signin?${new URLSearchParams({ port: String(port), state })}`).catch(reject)
+    })
+    win?.focus()
+    return { idToken }
+  } finally {
+    cancelSignIn = null
+    server.close()
+  }
+})
+
 ipcMain.on('desktop:google-cancel', (e) => { if (e.sender === win?.webContents) cancelSignIn?.() })
 
 ipcMain.handle('desktop:google-refresh', async (e, { clientId, clientSecret, refresh }) => {
