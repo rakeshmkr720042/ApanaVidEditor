@@ -830,6 +830,7 @@ input, textarea { font: inherit; color: inherit; }
 .admin-user.off { opacity: .7; }
 .admin-user-info, .admin-event { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 220px; }
 .admin-user-info small, .admin-event small { overflow-wrap: anywhere; }
+.admin-list > .admin-event { flex: none; }
 .admin-user-actions { display: flex; gap: 6px; }
 .admin-bad { color: #ff8a8a; }
 .admin-plan { display: grid; gap: 8px; }
