@@ -1,0 +1,59 @@
+rules_version = '2';
+
+// Apna Editor accounts and subscriptions.
+// Default deny. The app may only read its own records and edit two profile fields.
+// Plans, subscriptions, payments, roles and account status are written by Cloud Functions only
+// (the Admin SDK bypasses these rules), so nothing on the device can grant itself Pro.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.token.admin == true; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // users/{uid}: profile + a read-only copy of the plan for display.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, delete: if false;
+      allow update: if isOwner(uid)
+        && resource.data.accountStatus == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phoneNumber', 'updatedAt'])
+        && validName(request.resource.data.fullName)
+        && validPhone(request.resource.data.phoneNumber)
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validName(n) { return n is string && n.size() >= 1 && n.size() <= 80; }
+    // Empty, or E.164 (+ then 8-15 digits).
+    function validPhone(p) { return p is string && (p == '' || p.matches('^\\+[1-9][0-9]{7,14}$')); }
+
+    // Plans and the Free/Pro feature split: everyone signed in reads, nobody writes from the app.
+    match /subscription_plans/{planId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /config/{docId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /subscriptions/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /payments/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /security_events/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
