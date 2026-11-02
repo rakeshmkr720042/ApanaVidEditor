@@ -171,3 +171,38 @@ export function drawOutline(ctx: Ctx, mask: Canvas, cut: Cutout, x: number, y: n
   }
   ctx.restore()
 }
+
+/**
+ * Where the person's face is in a frame (0..1 of the frame), from the person mask: the middle of the top part of
+ * the person, a little below the top of the head. Null when no one is found.
+ */
+export function personSpot(img: Source): { x: number; y: number } | null {
+  if (!seg) return null
+  const iw = 'videoWidth' in img ? img.videoWidth : 'displayWidth' in img ? img.displayWidth : img.width
+  const ih = 'videoHeight' in img ? img.videoHeight : 'displayHeight' in img ? img.displayHeight : img.height
+  if (!iw || !ih) return null
+  const k = Math.min(1, 320 / Math.max(iw, ih))
+  const small = sized('in', Math.max(2, Math.round(iw * k)), Math.max(2, Math.round(ih * k)))
+  const sc = ctx2d(small)
+  sc.globalCompositeOperation = 'copy'
+  sc.drawImage(img, 0, 0, small.width, small.height)
+  let res
+  try { res = seg.segment(small as Parameters<ImageSegmenter['segment']>[0]) } catch { return null }
+  const m = res.confidenceMasks?.[0]
+  if (!m) { res.close(); return null }
+  const w = m.width, h = m.height, conf = m.getAsFloat32Array()
+  let top = -1, bottom = -1, count = 0
+  for (let y = 0; y < h; y++) {
+    let row = 0
+    for (let x = 0; x < w; x++) if (conf[y * w + x] > 0.5) row++
+    count += row
+    if (row > w * 0.02) { if (top < 0) top = y; bottom = y }
+  }
+  if (top < 0 || count < w * h * 0.01) { res.close(); return null }
+  // the head: the top fifth of the person (at most a third of the frame)
+  const headEnd = Math.min(bottom, top + Math.max(4, Math.min((bottom - top) * 0.2, h / 3)))
+  let sx = 0, n = 0
+  for (let y = top; y <= headEnd; y++) for (let x = 0; x < w; x++) if (conf[y * w + x] > 0.5) { sx += x; n++ }
+  res.close()
+  return { x: n ? sx / n / w : 0.5, y: (top + (headEnd - top) * 0.6) / h }
+}
