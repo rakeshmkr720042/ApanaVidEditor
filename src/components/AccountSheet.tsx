@@ -25,7 +25,7 @@ export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlan
   const out = async () => {
     if (!confirm(t('Sign out of Apna Editor on this device? Your projects stay on this device.'))) return
     setBusy(true)
-    try { await signOut() } finally { setBusy(false) }
+    try { await signOut(); onClose() } finally { setBusy(false) }
   }
   const back = () => setView('main')
   return (
@@ -35,7 +35,7 @@ export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlan
         <SheetClose onClose={onClose} />
         {view === 'profile' && <ProfileForm onDone={back} />}
         {view === 'payments' && <Payments onBack={back} />}
-        {view === 'delete' && <DeleteAccount onBack={back} />}
+        {view === 'delete' && <DeleteAccount onBack={back} onDone={onClose} />}
         {view === 'main' && <>
           <div className="account-head">
             {user?.photoURL ? <img className="avatar" src={user.photoURL} alt="" referrerPolicy="no-referrer" /> : <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>}
@@ -134,7 +134,7 @@ function Payments({ onBack }: { onBack: () => void }) {
 
 const statusWord = (s: string) => (s === 'success' || s === 'paid' ? 'Paid' : s === 'refunded' ? 'Refunded' : s === 'failed' ? 'Failed' : 'Pending')
 
-function DeleteAccount({ onBack }: { onBack: () => void }) {
+function DeleteAccount({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
   const kind = signInKind()
   const [password, setPassword] = useState('')
   const [word, setWord] = useState('')
@@ -145,7 +145,7 @@ function DeleteAccount({ onBack }: { onBack: () => void }) {
     e.preventDefault()
     if (!ready) return
     setBusy(true); setErr(null)
-    try { await deleteAccount(password) } catch (x) { setErr(authMessage(x)); setBusy(false) }
+    try { await deleteAccount(password); onDone() } catch (x) { setErr(authMessage(x)); setBusy(false) }
   }
   return (
     <form className="account-form" onSubmit={go} data-testid="delete-form">

@@ -852,3 +852,5 @@ input, textarea { font: inherit; color: inherit; }
 .account-pay .ok { color: #9be3b4; }
 .link.danger { color: #ff6b6b; align-self: center; font-size: 14px; margin-top: 4px; }
 .btn.wide.danger:not(:disabled) { background: #ff6b6b; color: #fff; border-color: #ff6b6b; }
+.auth.auth-overlay { position: fixed; inset: 0; z-index: 200; height: auto; }
+.auth-later { margin-top: 12px; }

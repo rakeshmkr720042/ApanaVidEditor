@@ -16,6 +16,8 @@ import { listNotes } from '../lib/feedback'
 import { localAI } from '../lib/localai'
 import { PremiumSheet } from './PremiumSheet'
 import { AccountSheet } from './AccountSheet'
+import { SignInOverlay } from './AuthScreen'
+import { useAccountState } from '../lib/account'
 import { usePremium } from '../lib/premium'
 
 export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang: () => void }) {
@@ -35,6 +37,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [premiumSheet, setPremiumSheet] = useState(false)
   const [accountSheet, setAccountSheet] = useState(false)
   const { premium } = usePremium()
+  const account = useAccountState()
 
   const openFile = async (f: File) => {
     setError(null); setOpening(true)
@@ -75,7 +78,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           <button className="btn ghost small" onClick={() => setAiSheet(true)}>{aiOn ? '✓ ' : ''}{t('Local AI')}</button>
           <button className="btn ghost small" onClick={() => { setLang(getLang() === 'hi' ? 'en' : 'hi'); onLang() }}>{getLang() === 'hi' ? 'English' : 'हिंदी'}</button>
           <button className="btn ghost small" onClick={() => setAccountSheet(true)} aria-label={t('My account')} title={t('My account')} data-testid="home-account">
-            <Icon name="user" size={16} /><span className="wide-only"> {t('Account')}</span>
+            <Icon name="user" size={16} /><span className="wide-only"> {t(account.status === 'in' ? 'Account' : 'Sign in')}</span>
           </button>
         </div>
       </header>
@@ -118,7 +121,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
       {compress && <CompressSheet onClose={() => setCompress(false)} />}
       {notesSheet && <FeedbackSheet where="Home" onClose={(n) => { setNotesSheet(false); setOpenNotes(n) }} />}
       {premiumSheet && <PremiumSheet onClose={() => setPremiumSheet(false)} />}
-      {accountSheet && <AccountSheet onClose={() => setAccountSheet(false)} onPlans={() => { setAccountSheet(false); setPremiumSheet(true) }} />}
+      {accountSheet && (account.status === 'in'
+        ? <AccountSheet onClose={() => setAccountSheet(false)} onPlans={() => { setAccountSheet(false); setPremiumSheet(true) }} />
+        : <SignInOverlay onClose={() => setAccountSheet(false)} />)}
       {habitsSheet && <HabitsSheet onClose={() => setHabitsSheet(false)} />}
       {aiSheet && <LocalAISheet onClose={() => { setAiSheet(false); setAiOn(!!localAI()) }} />}
     </div>

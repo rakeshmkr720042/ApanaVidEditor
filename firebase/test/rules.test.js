@@ -145,10 +145,13 @@ test('subscriptions and payments: read own only, never write', async () => {
   await assertFails(addDoc(collection(alice(), 'payments'), { userId: 'alice', amount: 9900, status: 'success' }))
 })
 
-test('plans and feature split: signed-in read, no app writes', async () => {
+test('plans and feature split: anyone reads (no account needed), no app writes', async () => {
   await assertSucceeds(getDoc(doc(alice(), 'subscription_plans/monthly')))
   await assertSucceeds(getDoc(doc(alice(), 'config/entitlements')))
-  await assertFails(getDoc(doc(guest(), 'subscription_plans/monthly')))
+  await assertSucceeds(getDoc(doc(guest(), 'subscription_plans/monthly')))
+  await assertSucceeds(getDoc(doc(guest(), 'config/entitlements')))
+  await assertFails(getDoc(doc(guest(), 'config/other')))
+  await assertFails(updateDoc(doc(guest(), 'config/entitlements'), { proFeatures: [] }))
   await assertFails(updateDoc(doc(alice(), 'subscription_plans/monthly'), { price: 100 }))
   await assertFails(updateDoc(doc(alice(), 'config/entitlements'), { proFeatures: [] }))
   await assertFails(updateDoc(doc(admin(), 'subscription_plans/monthly'), { price: 100 })) // admin needs an audit record, see below

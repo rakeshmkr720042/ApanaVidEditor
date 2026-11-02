@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import {
   browserLocalPersistence, browserSessionPersistence, createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider,
   onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, sendPasswordResetEmail, setPersistence,
@@ -301,13 +301,13 @@ export async function deleteAccount(password: string) {
 
 const ms = (v: unknown) => (v && typeof (v as Timestamp).toMillis === 'function' ? (v as Timestamp).toMillis() : null)
 
-/** Reads which features are Pro (admin's choice) and hands it, with the account's Pro date, to premium.ts. */
-export async function loadEntitlement(user: User, profile: Profile | null) {
+/** Reads which features are Pro (admin's choice) and hands it, with the account's Pro date, to premium.ts. No user = Free, no account. */
+export async function loadEntitlement(user: User | null, profile: Profile | null) {
   const snap = await getDoc(doc(firestore(), 'config', 'entitlements'))
   const c = (snap.exists() ? snap.data() : {}) as { proFeatures?: unknown; freeExportMaxHeight?: unknown; freeWatermark?: unknown }
   setServerEntitlement({
-    uid: user.uid,
-    proUntil: ms(profile?.proUntil),
+    uid: user?.uid ?? '',
+    proUntil: user ? ms(profile?.proUntil) : null,
     proFeatures: Array.isArray(c.proFeatures) ? c.proFeatures.filter((x): x is string => typeof x === 'string') : null,
     freeExportMaxHeight: typeof c.freeExportMaxHeight === 'number' ? c.freeExportMaxHeight : 1080,
     freeWatermark: c.freeWatermark !== false,
@@ -337,6 +337,10 @@ export async function refreshAccount() {
 
 // ---------- state for React
 
+/** The account state, shared from the top of the app (App.tsx provides it). */
+export const AccountContext = createContext<AccountState>({ status: 'loading' })
+export const useAccountState = () => useContext(AccountContext)
+
 const listeners = new Set<() => void>()
 function emit() { listeners.forEach((f) => f()) }
 
@@ -359,7 +363,8 @@ export function useAccount(): AccountState {
     listeners.add(f)
     const off = onAuthStateChanged(firebaseAuth(), (u) => {
       setUser(u); setLoaded(true); setBlocked(false)
-      if (!u) return
+      // No account (free use): still read which features the admin made Pro.
+      if (!u) { loadEntitlement(null, null).then(f, () => { /* offline: defaults */ }); return }
       // Online: refresh the profile (and learn about a suspension). Offline: keep going with the saved session.
       Promise.resolve(busy).catch(() => {}).then(() => ensureAccount(u)).then(async (p) => {
         if (p?.accountStatus === 'deleted') {

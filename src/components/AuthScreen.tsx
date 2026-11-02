@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   authMessage, checkVerified, emailError, nameError, normalisePhone, passwordError, register, resendVerification, resetPassword,
-  cancelGoogle, googleProvider, signIn, signInGoogle, signOut,
+  cancelGoogle, googleProvider, signIn, signInGoogle, signOut, useAccountState,
 } from '../lib/account'
 import { GoogleAuthProvider, signInWithPopup, signOut as fbSignOut } from 'firebase/auth'
 import { bridgeAuth, googleAvailable, platform } from '../lib/firebase'
@@ -11,9 +11,9 @@ import { Icon } from './Icon'
 type Mode = 'login' | 'register' | 'forgot'
 
 /** Shell shared by the sign-in screens: brand on top, one card, language switch. */
-function AuthShell({ children, onLang }: { children: ReactNode; onLang: () => void }) {
+function AuthShell({ children, onLang, onClose }: { children: ReactNode; onLang: () => void; onClose?: () => void }) {
   return (
-    <div className="auth" data-testid="auth">
+    <div className={`auth${onClose ? ' auth-overlay' : ''}`} data-testid="auth">
       <div className="auth-card">
         <div className="auth-brand">
           <span className="logo"><Icon name="play" size={20} /></span>
@@ -27,6 +27,7 @@ function AuthShell({ children, onLang }: { children: ReactNode; onLang: () => vo
         </div>
         {children}
       </div>
+      {onClose && <button className="btn ghost auth-later" onClick={onClose} data-testid="auth-later">{t('Not now, keep using it free')}</button>}
       <p className="auth-foot muted small">{t('Your projects and videos stay on this device. Your account only keeps your name, email and plan.')}</p>
     </div>
   )
@@ -64,7 +65,7 @@ function GoogleButton({ busy, onClick }: { busy: boolean; onClick: () => void })
 }
 
 /** Sign in, create account, forgot password. Shown instead of the app until someone is signed in. */
-export function AuthScreen({ onLang }: { onLang: () => void }) {
+export function AuthScreen({ onLang, onClose }: { onLang: () => void; onClose?: () => void }) {
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -109,9 +110,9 @@ export function AuthScreen({ onLang }: { onLang: () => void }) {
 
   const title = mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create your account' : 'Reset password'
   return (
-    <AuthShell onLang={onLang}>
+    <AuthShell onLang={onLang} onClose={onClose}>
       <h1 className="auth-title">{t(title)}</h1>
-      {mode === 'login' && <p className="muted small">{t('Sign in to open your projects and the editor.')}</p>}
+      {mode === 'login' && <p className="muted small">{t('An account is needed only for Pro: buy it once, use it on your phone and computer.')}</p>}
       {mode === 'register' && <p className="muted small">{t('Free forever. No card needed.')}</p>}
       {mode === 'forgot' && <p className="muted small">{t('Enter your email and we will send you a link to set a new password.')}</p>}
 
@@ -175,7 +176,7 @@ export function AuthScreen({ onLang }: { onLang: () => void }) {
 }
 
 /** After sign-up with email: the editor opens once the link in the email is opened. */
-export function VerifyScreen({ email, onLang }: { email: string; onLang: () => void }) {
+export function VerifyScreen({ email, onLang, onClose }: { email: string; onLang: () => void; onClose?: () => void }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const act = async (fn: () => Promise<void>) => {
@@ -183,7 +184,7 @@ export function VerifyScreen({ email, onLang }: { email: string; onLang: () => v
     try { await fn() } catch (e) { setMsg({ ok: false, text: authMessage(e) }) } finally { setBusy(false) }
   }
   return (
-    <AuthShell onLang={onLang}>
+    <AuthShell onLang={onLang} onClose={onClose}>
       <h1 className="auth-title">{t('Check your email')}</h1>
       <p>{t('We sent a link to')} <b>{email}</b>. {t('Open it to confirm your email, then come back here.')}</p>
       <p className="muted small">{t('Not there? Look in Spam or Promotions.')}</p>
@@ -263,4 +264,15 @@ export function DesktopSignIn({ port, state, onLang }: { port: number; state: st
       {error && <p className="auth-alert" role="alert" data-testid="auth-error">{error}</p>}
     </AuthShell>
   )
+}
+
+/** Sign in / create account / confirm email, over the app. Closing it keeps the free app as it is. */
+export function SignInOverlay({ onClose }: { onClose: () => void }) {
+  const account = useAccountState()
+  const [lang, setLangKey] = useState(0)
+  const onLang = () => setLangKey((k) => k + 1)
+  useEffect(() => { if (account.status === 'in') onClose() }, [account.status, onClose])
+  if (account.status === 'unverified') return <VerifyScreen key={lang} email={account.user.email ?? ''} onLang={onLang} onClose={onClose} />
+  if (account.status === 'in') return null
+  return <AuthScreen key={lang} onLang={onLang} onClose={onClose} />
 }
