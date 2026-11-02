@@ -86,7 +86,7 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
                 key={p.name}
                 onClick={() => {
                   if (p.style.font) ensureFont(p.style.font)
-                  ed.updateLayer<TextLayer>(layer.id, (l) => ({ text: p.text, style: { ...l.style, bold: false, italic: false, letterSpacing: 0, ...p.style }, animIn: p.animIn, animOut: p.animOut, loop: p.loop }))
+                  ed.updateLayer<TextLayer>(layer.id, (l) => ({ text: p.text, style: { ...l.style, bold: false, italic: false, letterSpacing: 0, ...p.style }, animIn: p.animIn, animOut: p.animOut, loop: p.loop, ...(p.at ? { box: { ...l.box, rotation: 0, ...p.at }, keys: [] } : {}) }))
                 }}
                 style={{ fontFamily: `"${p.style.font ?? 'Poppins'}"`, color: p.style.color ?? '#fff', textShadow: p.style.glow ? `0 0 8px ${p.style.glow}` : undefined }}
               >

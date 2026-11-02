@@ -91,7 +91,11 @@ export const FILLS: { value: TextFill; label: string; stops: string[] }[] = [
 ]
 
 /** Ready-made wedding and event titles: words, look and movement in one tap. */
-export const TITLE_PRESETS: { name: string; text: string; style: Partial<TextStyle>; animIn: TextAnim; animOut: TextAnim; loop: LoopAnim }[] = [
+const stampDate = () => { const d = new Date(), z = (n: number) => String(n).padStart(2, '0'); return `${z(d.getMonth() + 1)} ${z(d.getDate())} '${z(d.getFullYear() % 100)}` }
+
+export const TITLE_PRESETS: { name: string; text: string; style: Partial<TextStyle>; animIn: TextAnim; animOut: TextAnim; loop: LoopAnim; at?: { x: number; y: number; scale?: number } }[] = [
+  // the orange date in the corner of an old digicam / film camera photo
+  { name: 'Date stamp', text: stampDate(), style: { font: 'Teko', size: 0.07, fill: null, glow: '#ff6a00', color: '#ff9a2e', shadow: false, stroke: null, background: null, letterSpacing: 0.12, align: 'right' }, animIn: 'none', animOut: 'none', loop: 'none', at: { x: 0.84, y: 0.9, scale: 1 } },
   { name: 'Couple names', text: 'Rahul ❤ Priya', style: { font: 'Dancing Script', size: 0.11, fill: 'gold', glow: '#ffd36b', color: '#f7d24a', shadow: false, stroke: null, background: null }, animIn: 'letters', animOut: 'fade', loop: 'shimmer' },
   { name: 'Shubh Vivah', text: 'शुभ विवाह', style: { font: 'Yatra One', size: 0.12, fill: 'royal', glow: '#ffcc66', color: '#e0a526', shadow: false, stroke: '#4a0d1e', strokeWidth: 0.4, background: null }, animIn: 'zoom', animOut: 'fade', loop: 'shimmer' },
   { name: 'Save the Date', text: 'Save the Date\n12 . 12 . 2026', style: { font: 'Playfair Display', italic: true, size: 0.08, fill: 'rose-gold', glow: null, color: '#f4b3a2', shadow: true, stroke: null, background: null }, animIn: 'blur', animOut: 'fade', loop: 'none' },

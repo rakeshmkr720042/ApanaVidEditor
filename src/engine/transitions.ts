@@ -5,8 +5,129 @@
  */
 export interface TransitionDef { id: string; name: string; group: string; glsl: string }
 
+// value noise (fbm) of a point, inline because GLSL ES can't nest functions; leaves the result in `name`
+const fbm = (name: string, at: string, oct = 4) => `float ${name} = 0.0; { float amp = 0.5; vec2 nx = ${at};
+    for (int o = 0; o < ${oct}; o++) { vec2 ni = floor(nx), nf = fract(nx); nf = nf*nf*(3.0-2.0*nf);
+      ${name} += amp*mix(mix(rnd(ni), rnd(ni+vec2(1.0,0.0)), nf.x), mix(rnd(ni+vec2(0.0,1.0)), rnd(ni+vec2(1.0,1.0)), nf.x), nf.y);
+      nx = nx*2.03 + vec2(3.1, 1.7); amp *= 0.5; } }`
+
+/** Whip pan: the picture flies off with a strong blur along the move and the next one flies in. */
+const whip = (dx: number, dy: number) => `float e = p*p*(3.0-2.0*p); e = e*e*(3.0-2.0*e);
+    float b = sin(p*3.14159); b = b*b*0.35; vec2 D = vec2(${dx.toFixed(1)}, ${dy.toFixed(1)}); vec4 c = vec4(0.0);
+    for (int i = 0; i < 20; i++) { float k = clamp(e + (float(i)/19.0 - 0.5)*b, 0.0, 1.0); vec2 q = uv + D*k;
+      c += (q.x < 0.0 || q.y < 0.0 || q.x > 1.0 || q.y > 1.0) ? to(fract(q)) : from(q); }
+    return c/20.0;`
+
+/**
+ * Cube turning on its upright axis: the clip leaves on one face and the next comes in on the side face, with
+ * perspective. `m` = -1 mirrors it (turns the other way).
+ */
+const cube = (m: number) => `float hw = 0.5*ratio; float D = 3.0*hw; float a = p*1.5707963; float c = cos(a), s = sin(a);
+    float X = (uv.x-0.5)*ratio*${m.toFixed(1)}, Y = uv.y-0.5;
+    // corners: left of the clip's face, shared edge, right of the next face (x, z; viewer at -z)
+    vec2 L = vec2(-hw*c - hw*s, hw*s - hw*c), S = vec2(hw*c - hw*s, -hw*s - hw*c), R = vec2(hw*c + hw*s, -hw*s + hw*c);
+    float zoom = 1.0 + 0.25*sin(p*3.14159); // step back a little mid-turn, like a camera on a cube
+    float k0 = (D - hw);
+    X *= zoom; Y *= zoom;
+    // which face: project the shared edge
+    float xs = S.x*k0/(D + S.y);
+    bool first = X < xs;
+    vec2 A = first ? L : S, B = first ? S : R; vec2 d = B - A;
+    // solve X = (A.x + t d.x)*k0/(D + A.y + t d.y) for t, how far along the face
+    float t = (k0*A.x - X*(D + A.y)) / (X*d.y - k0*d.x);
+    if (t < 0.0 || t > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);
+    float z = A.y + t*d.y; float hh = 0.5*k0/(D + z);
+    if (abs(Y) > hh) return vec4(0.0, 0.0, 0.0, 1.0);
+    float u = ${m < 0 ? '1.0 - t' : 't'}; float v = Y/(2.0*hh) + 0.5;
+    float shade = first ? mix(1.0, 0.5, s*s) : mix(0.5, 1.0, 1.0 - c*c);
+    vec4 col = first ? from(vec2(u, v)) : to(vec2(u, v));
+    return vec4(col.rgb*shade, 1.0);`
+
+/** A card that flips over on its upright (or flat) axis: the clip on the front, the next one on the back. */
+const flip = (vertical: boolean) => {
+  const [U, V, R] = vertical ? ['uv.y', 'uv.x', '1.0'] : ['uv.x', 'uv.y', 'ratio']
+  return `float hw = 0.5*${R}; float D = 3.0*hw; float a = p*3.14159265; bool back = a > 1.5707963; if (back) a = 3.14159265 - a;
+    float c = cos(a), s = back ? -sin(a) : sin(a); /* the back comes round from the other side */ float X = (${U}-0.5)*${R}*(1.0 + 0.3*sin(p*3.14159)), Y = (${V}-0.5)*${vertical ? 'ratio' : '1.0'}*(1.0 + 0.3*sin(p*3.14159));
+    float den = D*c - X*s; if (den <= 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
+    float x = X*D/den; float k = D/(D + x*s); float hh = 0.5*${vertical ? 'ratio' : '1.0'}*k;
+    if (abs(x) > hw || abs(Y) > hh) return vec4(0.0, 0.0, 0.0, 1.0);
+    float u = x/(2.0*hw) + 0.5; float w = Y/(2.0*hh) + 0.5;
+    vec2 q = ${vertical ? 'vec2(w, u)' : 'vec2(u, w)'};
+    vec4 col = back ? to(q) : from(q); return vec4(col.rgb*(0.6 + 0.4*c), 1.0);`
+}
+
+const TRENDING: [string, string, string, string][] = [
+  ['whipleft', 'Whip pan left', 'Trending', whip(1, 0)],
+  ['whipright', 'Whip pan right', 'Trending', whip(-1, 0)],
+  ['whipup', 'Whip pan up', 'Trending', whip(0, -1)],
+  ['whipdown', 'Whip pan down', 'Trending', whip(0, 1)],
+  ['filmburn', 'Film burn', 'Trending', `${fbm('n', 'uv*vec2(ratio,1.0)*2.5 + vec2(floor(p*12.0)*0.07, 0.0)')}
+    float s = sin(p*3.14159); s *= 0.9 + 0.1*rnd(vec2(floor(p*24.0), 2.0));
+    float g = smoothstep(1.05 - s*1.25, 1.45 - s*1.25, n + uv.x*0.45);
+    vec3 hot = mix(vec3(0.8, 0.12, 0.02), vec3(1.0, 0.5, 0.14), smoothstep(0.2, 0.9, g));
+    vec4 base = mix(from(uv), to(uv), smoothstep(0.42, 0.58, p));
+    vec3 col = mix(base.rgb, base.rgb*0.35 + hot, g*0.85); col += vec3(1.0, 0.85, 0.6)*pow(g, 6.0)*0.25;
+    return vec4(min(col, 1.0), 1.0);`],
+  ['leak', 'Light leak', 'Trending', `float s = sin(p*3.14159);
+    vec2 A = (uv - vec2(-0.3 + p*1.6, 0.35))*vec2(ratio, 1.0), B = (uv - vec2(1.3 - p*1.5, 0.7))*vec2(ratio, 1.0);
+    vec3 leak = vec3(1.0, 0.45, 0.12)*exp(-dot(A, A)*1.6) + vec3(1.0, 0.25, 0.5)*exp(-dot(B, B)*2.2);
+    leak = clamp(leak*s*1.25, 0.0, 1.0);
+    vec4 base = mix(from(uv), to(uv), smoothstep(0.35, 0.65, p));
+    vec3 col = 1.0 - (1.0 - base.rgb)*(1.0 - leak); return vec4(col, 1.0);`],
+  ['pageturn', 'Page turn', 'Trending', `vec2 x = uv*vec2(ratio, 1.0); vec2 n = normalize(vec2(1.0, 0.35));
+    float far = dot(vec2(ratio, 1.0), n) + 0.05; float d0 = mix(far, -0.6, p);
+    float dist = dot(x, n) - d0;
+    if (dist > 0.0) { float sh = 1.0 - 0.55*exp(-dist*14.0)*step(0.001, p); return vec4(to(uv).rgb*sh, 1.0); }
+    // the folded flap lies over the page: the point of the page that folded onto here
+    vec2 m = x - 2.0*dist*n; vec2 mu = m/vec2(ratio, 1.0);
+    if (mu.x >= 0.0 && mu.y >= 0.0 && mu.x <= 1.0 && mu.y <= 1.0) {
+      vec3 backside = mix(from(mu).rgb, vec3(0.97, 0.95, 0.9), 0.82); float lit = 0.8 + 0.2*smoothstep(0.0, 0.35, -dist);
+      return vec4(backside*lit, 1.0); }
+    float sh = 1.0 - 0.35*exp(-(-dist)*10.0)*step(0.001, p); return vec4(from(uv).rgb*sh, 1.0);`],
+  ['paperrip', 'Paper rip', 'Trending', `float y1 = uv.y*9.0, y2 = uv.y*48.0;
+    float j = mix(rnd(vec2(floor(y1), 3.0)), rnd(vec2(floor(y1)+1.0, 3.0)), fract(y1)) - 0.5;
+    j += (mix(rnd(vec2(floor(y2), 7.0)), rnd(vec2(floor(y2)+1.0, 7.0)), fract(y2)) - 0.5)*0.4;
+    float edge = 0.5 + j*0.09; float e = p*p*(3.0-2.0*p); float s = e*0.62;
+    float fib = 0.006 + 0.01*rnd(vec2(floor(uv.y*160.0), 9.0));
+    float xl = uv.x + s; float tilt = s*0.12;
+    if (xl < edge) { vec2 q = vec2(xl, uv.y + tilt*(uv.x - 0.5)); return edge - xl < fib ? vec4(0.96, 0.94, 0.9, 1.0) : from(q); }
+    float xr = uv.x - s;
+    if (xr > edge) { vec2 q = vec2(xr, uv.y - tilt*(uv.x - 0.5)); return xr - edge < fib ? vec4(0.96, 0.94, 0.9, 1.0) : from(q); }
+    float sh = smoothstep(0.0, 0.06, min(edge - xr, xl - edge) + 0.0);
+    return vec4(to(uv).rgb*(0.6 + 0.4*sh), 1.0);`],
+  ['cubeleft', 'Cube left', 'Trending', cube(1)],
+  ['cuberight', 'Cube right', 'Trending', cube(-1)],
+  ['flip', 'Flip', 'Trending', flip(false)],
+  ['flipup', 'Flip up', 'Trending', flip(true)],
+  ['ink', 'Ink spread', 'Trending', `${fbm('n', 'uv*vec2(ratio,1.0)*3.0')}
+    float r = length((uv - 0.5)*vec2(ratio, 1.0))/length(vec2(ratio, 1.0)*0.5);
+    float v = r*0.75 + n*0.55; float edge = p*1.45 - 0.05;
+    float m = smoothstep(edge, edge - 0.02, v); float ring = smoothstep(0.05, 0.0, abs(v - edge))*step(0.01, p)*step(p, 0.99);
+    vec4 c = mix(from(uv), to(uv), m); return vec4(mix(c.rgb, vec3(0.02), ring*0.85), 1.0);`],
+  ['brush', 'Brush strokes', 'Trending', `float rows = 5.0; float row = floor(uv.y*rows); float fy = fract(uv.y*rows);
+    float dir = mod(row, 2.0) < 0.5 ? 1.0 : -1.0; float x = dir > 0.0 ? uv.x : 1.0 - uv.x;
+    float start = row/rows*0.45; float q = clamp((p - start)/0.55, 0.0, 1.0); q = q*q*(3.0-2.0*q);
+    ${fbm('n', 'vec2(uv.x*6.0*ratio, uv.y*30.0)', 3)}
+    float rough = (n - 0.5)*0.12; float bristle = smoothstep(0.0, 0.08, fy + rough*0.5)*smoothstep(1.0, 0.92, fy - rough*0.5);
+    float m = step(x, q*1.15 - 0.1 + rough)*max(bristle, smoothstep(0.75, 0.97, p));
+    return mix(from(uv), to(uv), clamp(m + step(0.97, p), 0.0, 1.0));`],
+  ['spinblur', 'Spin blur', 'Trending', `float e = p*p*(3.0-2.0*p); float a = e*6.2831853; float b = sin(p*3.14159)*0.9;
+    vec2 o = (uv - 0.5)*vec2(ratio, 1.0); vec4 c = vec4(0.0);
+    for (int i = 0; i < 16; i++) { float k = a + (float(i)/15.0 - 0.5)*b; vec2 q = mat2(cos(k), -sin(k), sin(k), cos(k))*o;
+      q = q/vec2(ratio, 1.0) + 0.5; q = 1.0 - abs(1.0 - abs(q)); /* mirror at the edges: no black corners */
+      c += p < 0.5 ? from(q) : to(q); }
+    return c/16.0;`],
+  ['zoompunch', 'Zoom punch', 'Trending', `float e = p < 0.5 ? p*2.0 : (p - 0.5)*2.0; float s = sin(p*3.14159); vec4 c = vec4(0.0);
+    float z = p < 0.5 ? 1.0 - e*e*0.7 : 1.0 - (1.0 - e)*(1.0 - e)*0.7;
+    for (int i = 0; i < 12; i++) { vec2 q = (uv - 0.5)*z*(1.0 - s*0.12*float(i)/11.0) + 0.5; c += p < 0.5 ? from(q) : to(q); }
+    c /= 12.0; return mix(c, vec4(1.0), pow(s, 8.0)*0.6);`],
+]
+
+
 const T: [string, string, string, string][] = [
   // id, name, group, glsl
+  ...TRENDING,
+
   ['fade', 'Fade', 'Basic', 'return mix(from(uv), to(uv), p);'],
   ['fadeblack', 'Dip to black', 'Basic', 'return p < 0.5 ? mix(from(uv), vec4(0,0,0,1), p*2.0) : mix(vec4(0,0,0,1), to(uv), p*2.0-1.0);'],
   ['fadewhite', 'Dip to white', 'Basic', 'return p < 0.5 ? mix(from(uv), vec4(1), p*2.0) : mix(vec4(1), to(uv), p*2.0-1.0);'],
