@@ -120,7 +120,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Apna Editor"
+      "shortcutName": "Apna Editor",
+      "include": "electron/installer.nsh"
     }
   }
 }
