@@ -4,9 +4,10 @@ import {
   sendEmailVerification, sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword, signInWithPopup, signOut as fbSignOut,
   updateProfile, type User,
 } from 'firebase/auth'
-import { doc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore/lite'
+import { collection, doc, getDoc, getDocs, serverTimestamp, writeBatch, type Timestamp } from 'firebase/firestore/lite'
 import { firebaseAuth, firestore, googleAvailable } from './firebase'
 import { t } from './i18n'
+import { setServerEntitlement, setServerPlans, type Plan } from './premium'
 
 /**
  * Accounts. Everyone signs in before the editor opens (AuthGate). The session is kept on the device
@@ -21,6 +22,8 @@ export interface Profile {
   role: 'user' | 'admin'
   accountStatus: 'active' | 'suspended' | 'deleted'
   planId: string
+  /** Pro paid until; written only by the server. */
+  proUntil?: Timestamp | null
 }
 
 export type AccountState =
@@ -142,6 +145,7 @@ export async function checkVerified() {
 
 export async function signOut() {
   profileCache = null
+  setServerEntitlement(null)
   await fbSignOut(firebaseAuth())
 }
 
@@ -199,6 +203,44 @@ async function readProfile(user: User): Promise<Profile | null> {
   return profileCache.profile
 }
 
+// ---------- Pro status and plans (read only; the server writes them)
+
+const ms = (v: unknown) => (v && typeof (v as Timestamp).toMillis === 'function' ? (v as Timestamp).toMillis() : null)
+
+/** Reads which features are Pro (admin's choice) and hands it, with the account's Pro date, to premium.ts. */
+export async function loadEntitlement(user: User, profile: Profile | null) {
+  const snap = await getDoc(doc(firestore(), 'config', 'entitlements'))
+  const c = (snap.exists() ? snap.data() : {}) as { proFeatures?: unknown; freeExportMaxHeight?: unknown; freeWatermark?: unknown }
+  setServerEntitlement({
+    uid: user.uid,
+    proUntil: ms(profile?.proUntil),
+    proFeatures: Array.isArray(c.proFeatures) ? c.proFeatures.filter((x): x is string => typeof x === 'string') : null,
+    freeExportMaxHeight: typeof c.freeExportMaxHeight === 'number' ? c.freeExportMaxHeight : 1080,
+    freeWatermark: c.freeWatermark !== false,
+  })
+}
+
+/** The paid plans the admin has switched on, cheapest first. Read when the upgrade screen opens. */
+export async function loadPlans(): Promise<Plan[]> {
+  const snap = await getDocs(collection(firestore(), 'subscription_plans'))
+  const list = snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<Plan, 'id'> & { isActive?: boolean }) }))
+    .filter((p) => p.isActive !== false && p.price > 0 && p.durationMonths > 0)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(({ id, planName, price, currency, durationMonths, sortOrder }) => ({ id, planName, price, currency, durationMonths, sortOrder }))
+  setServerPlans(list)
+  return list
+}
+
+/** Reads the profile and Pro status again (after a purchase, or "Check again"). */
+export async function refreshAccount() {
+  const u = firebaseAuth().currentUser
+  if (!u) return
+  const p = await readProfile(u)
+  await loadEntitlement(u, p)
+  emit()
+}
+
 // ---------- state for React
 
 const listeners = new Set<() => void>()
@@ -225,7 +267,11 @@ export function useAccount(): AccountState {
       setUser(u); setLoaded(true); setBlocked(false)
       if (!u) return
       // Online: refresh the profile (and learn about a suspension). Offline: keep going with the saved session.
-      Promise.resolve(busy).catch(() => {}).then(() => ensureAccount(u)).then((p) => { setBlocked(p?.accountStatus === 'suspended'); f() }).catch((e) => {
+      Promise.resolve(busy).catch(() => {}).then(() => ensureAccount(u)).then(async (p) => {
+        setBlocked(p?.accountStatus === 'suspended')
+        await loadEntitlement(u, p).catch(() => { /* offline: defaults */ })
+        f()
+      }).catch((e) => {
         if ((e as { code?: string }).code === 'auth/user-disabled') setBlocked(true)
       })
     })

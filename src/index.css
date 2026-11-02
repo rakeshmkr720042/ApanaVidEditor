@@ -727,7 +727,11 @@ input, textarea { font: inherit; color: inherit; }
 .premium-list li svg { flex: 0 0 auto; margin-top: 2px; }
 .premium-list li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .premium-list li small { opacity: .7; font-size: 12px; }
-.plans { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: 10px 0; }
+.tier-compare { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.tier { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); }
+.tier.pro { background: transparent; border: 1px solid #ffcc0066; }
+.tier .premium-list { margin: 4px 0 0; }
 .plan { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; border-radius: 12px; border: 2px solid var(--panel-2); background: var(--panel-2); color: var(--text); font: inherit; cursor: pointer; }
 .plan.on { border-color: var(--accent); }
 .plan .price { font-size: 22px; font-weight: 800; }
@@ -770,8 +774,11 @@ input, textarea { font: inherit; color: inherit; }
 .sc-text { margin: 0; color: var(--text); opacity: .85; }
 
 /* ---------- sign in */
-.auth { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); background: radial-gradient(1200px 500px at 50% -10%, rgba(79, 140, 255, 0.18), transparent 70%), var(--bg); }
-.auth-card { width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 20px; display: grid; gap: 10px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }
+/* the page itself does not scroll (html/body overflow hidden), so the sign-in screen scrolls on its own: on a short window every button stays reachable */
+.auth { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); background: radial-gradient(1200px 500px at 50% -10%, rgba(79, 140, 255, 0.18), transparent 70%), var(--bg); }
+.auth > :first-child { margin-top: auto; }
+.auth > :last-child { margin-bottom: auto; }
+.auth-card { flex: none; width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 20px; display: grid; gap: 10px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }
 .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .auth-brand > div { display: grid; line-height: 1.2; }
 .auth-brand b { font-size: 17px; }
