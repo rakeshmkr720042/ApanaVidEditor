@@ -317,6 +317,16 @@ export interface AudioLayer extends LayerBase {
   denoise?: Denoise | null
   fx?: AudioFx | null
   duck?: number | null // 0..1: volume while someone speaks (other sounds lower it automatically), missing = off
+  beats?: number[] // beat times in source seconds (found by src/engine/beats.ts), missing = not looked for
+  bpm?: number
+}
+
+/** A hit on the whole video on every beat of the music: zoom punch, shake, white flash or blur. */
+export interface BeatFx {
+  kind: 'zoom' | 'shake' | 'flash' | 'blur'
+  strength: number // 0..1
+  every: 1 | 2 | 4 // every beat, every 2nd, every 4th (each bar)
+  layer?: string // the music layer whose beats count, missing = the first one with beats
 }
 
 export type WaveStyle = 'bars' | 'line' | 'circle'
@@ -419,6 +429,7 @@ export interface Project {
   /** The subtitles as first made (spoken language), kept when they are swapped for a translation. */
   luts?: Lut[] // imported .cube looks used by clips and overlays
   originalSubs?: { lang: string; cues: { start: number; end: number; text: string }[] } | null
+  beatFx?: BeatFx | null // beat effects, missing = off
 }
 
 export const MIN_CLIP = 0.2

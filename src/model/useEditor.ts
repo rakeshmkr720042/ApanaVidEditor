@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BlurLayer, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AudioLayer, BeatFx, BlurLayer, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -193,6 +193,12 @@ export function useEditor(initial: Project) {
   const setWatermark = useCallback((patch: Partial<Watermark>) => {
     const p = ref.current
     commit({ ...p, watermark: { ...(p.watermark ?? defaultWatermark()), ...patch } })
+  }, [commit])
+
+  /** Beat effect on/off and its settings (null turns it off). */
+  const setBeatFx = useCallback((fx: BeatFx | null) => {
+    const p = ref.current
+    commit({ ...p, beatFx: fx })
   }, [commit])
 
   const setPresenter = useCallback((patch: Partial<Presenter>) => {
@@ -839,7 +845,7 @@ export function useEditor(initial: Project) {
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
     addSource, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter,
-    addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone,
+    addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
     track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
     remove, duplicate, split, moveClip, moveClipAt, closeGap, swapClips, swapLayers, replaceProject,
