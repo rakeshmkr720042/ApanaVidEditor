@@ -1,8 +1,9 @@
 // Firestore Security Rules: what the app may and may not do.
 import { test, before, after, beforeEach } from 'node:test'
 import { readFileSync } from 'node:fs'
+import assert from 'node:assert/strict'
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, Timestamp, writeBatch, query, orderBy, limit } from 'firebase/firestore'
 
 let env
 const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080').split(':')
@@ -30,14 +31,15 @@ beforeEach(async () => {
     await setDoc(doc(db, 'subscriptions/free_alice'), { userId: 'alice', planId: 'free', status: 'active' })
     await setDoc(doc(db, 'subscriptions/free_bob'), { userId: 'bob', planId: 'free', status: 'active' })
     await setDoc(doc(db, 'payments/pay_1'), { userId: 'alice', amount: 9900, status: 'success' })
-    await setDoc(doc(db, 'subscription_plans/monthly'), { planName: 'Monthly Pro', price: 9900 })
-    await setDoc(doc(db, 'config/entitlements'), { proFeatures: ['dub'] })
+    await setDoc(doc(db, 'subscription_plans/monthly'), { planName: 'Monthly Pro', price: 9900, currency: 'INR', durationMonths: 1, isActive: true, sortOrder: 1, playProductId: 'apna_pro', playBasePlanId: 'monthly' })
+    await setDoc(doc(db, 'subscription_plans/free'), { planName: 'Free Forever', price: 0, currency: 'INR', durationMonths: 0, isActive: true, sortOrder: 0, playProductId: null, playBasePlanId: null })
+    await setDoc(doc(db, 'config/entitlements'), { proFeatures: ['dub'], freeExportMaxHeight: 1080, freeWatermark: true, offlineGraceDays: 7 })
     await setDoc(doc(db, 'security_events/e1'), { type: 'role_change' })
   })
 })
 
 const alice = () => env.authenticatedContext('alice').firestore()
-const admin = () => env.authenticatedContext('root', { admin: true }).firestore()
+const admin = () => env.authenticatedContext('root', { admin: true, email: 'root@example.com' }).firestore()
 const guest = () => env.unauthenticatedContext().firestore()
 
 test('users: owner reads own profile, not someone else', async () => {
@@ -129,10 +131,10 @@ test('plans and feature split: signed-in read, no app writes', async () => {
   await assertFails(getDoc(doc(guest(), 'subscription_plans/monthly')))
   await assertFails(updateDoc(doc(alice(), 'subscription_plans/monthly'), { price: 100 }))
   await assertFails(updateDoc(doc(alice(), 'config/entitlements'), { proFeatures: [] }))
-  await assertFails(updateDoc(doc(admin(), 'subscription_plans/monthly'), { price: 100 }))
+  await assertFails(updateDoc(doc(admin(), 'subscription_plans/monthly'), { price: 100 })) // admin needs an audit record, see below
 })
 
-test('security events: admins read, nobody writes; admins read any user', async () => {
+test('security events: admins read, no free-form writes; admins read any user', async () => {
   await assertFails(getDoc(doc(alice(), 'security_events/e1')))
   await assertSucceeds(getDoc(doc(admin(), 'security_events/e1')))
   await assertFails(addDoc(collection(admin(), 'security_events'), { type: 'fake' }))
@@ -143,4 +145,64 @@ test('security events: admins read, nobody writes; admins read any user', async 
 test('unknown collections are closed', async () => {
   await assertFails(setDoc(doc(alice(), 'projects/p1'), { name: 'x' }))
   await assertFails(getDoc(doc(admin(), 'anything/x')))
+})
+
+// ---------- admin screen: every change goes with an audit record in the same batch
+
+/** Writes `patch` to `path` as the admin, with a security event in the same batch (as src/lib/admin.ts does). */
+async function adminChange(db, path, patch, type, { actorUid = 'root', actorEmail = 'root@example.com', withEvent = true, merge = true } = {}) {
+  const b = writeBatch(db)
+  const ev = doc(collection(db, 'security_events'))
+  if (withEvent) b.set(ev, { type, actorUid, actorEmail, targetUid: null, target: path, details: { patch: JSON.stringify(patch) }, createdAt: serverTimestamp() })
+  b.set(doc(db, path), { ...patch, updatedAt: serverTimestamp(), lastChangeId: ev.id }, { merge })
+  return b.commit()
+}
+
+test('admin: changes a price and the Pro feature list, with an audit record', async () => {
+  await assertSucceeds(adminChange(admin(), 'subscription_plans/monthly', { price: 11900 }, 'plan_change'))
+  await assertSucceeds(adminChange(admin(), 'config/entitlements', { proFeatures: ['dub', 'nomark'] }, 'entitlements_change'))
+  let evs = 0
+  await env.withSecurityRulesDisabled(async (ctx) => { evs = (await getDocs(collection(ctx.firestore(), 'security_events'))).size })
+  assert.equal(evs, 3) // e1 + the two changes
+})
+
+test('admin: no change without an audit record, or with someone else as the actor', async () => {
+  await assertFails(adminChange(admin(), 'subscription_plans/monthly', { price: 100 }, 'plan_change', { withEvent: false }))
+  await assertFails(adminChange(admin(), 'subscription_plans/monthly', { price: 100 }, 'plan_change', { actorUid: 'alice' }))
+  await assertFails(adminChange(admin(), 'subscription_plans/monthly', { price: 100 }, 'plan_change', { actorEmail: 'x@y.z' }))
+  await assertFails(updateDoc(doc(admin(), 'subscription_plans/monthly'), { price: 100, lastChangeId: 'e1', updatedAt: serverTimestamp() }))
+})
+
+test('admin: plan and feature values are checked', async () => {
+  await assertFails(adminChange(admin(), 'subscription_plans/monthly', { price: -5 }, 'plan_change'))
+  await assertFails(adminChange(admin(), 'subscription_plans/monthly', { price: 99.5 }, 'plan_change'))
+  await assertFails(adminChange(admin(), 'subscription_plans/monthly', { price: 0 }, 'plan_change'))
+  await assertFails(adminChange(admin(), 'subscription_plans/monthly', { currency: 'USD' }, 'plan_change'))
+  await assertFails(adminChange(admin(), 'subscription_plans/free', { price: 100 }, 'plan_change'))
+  await assertFails(adminChange(admin(), 'subscription_plans/monthly', { secret: 'x' }, 'plan_change'))
+  await assertFails(deleteDoc(doc(admin(), 'subscription_plans/monthly')))
+  await assertFails(adminChange(admin(), 'config/entitlements', { proFeatures: ['dub', 'everything'] }, 'entitlements_change'))
+  await assertFails(adminChange(admin(), 'config/entitlements', { offlineGraceDays: 90 }, 'entitlements_change'))
+  await assertFails(adminChange(admin(), 'config/other', { proFeatures: [] }, 'entitlements_change', { merge: false }))
+})
+
+test('admin: suspends a user and gives Pro; never suspends themself; cannot change roles', async () => {
+  await assertSucceeds(adminChange(admin(), 'users/bob', { accountStatus: 'suspended' }, 'user_suspend'))
+  await assertSucceeds(adminChange(admin(), 'users/alice', { proUntil: Timestamp.fromMillis(Date.now() + 30 * 86400000), planId: 'monthly' }, 'pro_grant'))
+  await assertSucceeds(adminChange(admin(), 'users/alice', { proUntil: null, planId: 'free' }, 'pro_remove'))
+  await assertFails(adminChange(admin(), 'users/bob', { role: 'admin' }, 'user_activate'))
+  await assertFails(adminChange(admin(), 'users/bob', { email: 'new@example.com' }, 'user_activate'))
+  await assertFails(adminChange(admin(), 'users/bob', { accountStatus: 'deleted' }, 'user_suspend'))
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'users/root'), userDoc()))
+  await assertFails(adminChange(admin(), 'users/root', { accountStatus: 'suspended' }, 'user_suspend'))
+  await assertSucceeds(adminChange(admin(), 'users/root', { proUntil: Timestamp.fromMillis(Date.now() + 86400000), planId: 'monthly' }, 'pro_grant'))
+})
+
+test('admin: lists users; a normal user cannot do any of it', async () => {
+  await assertSucceeds(getDocs(query(collection(admin(), 'users'), orderBy('createdAt', 'desc'), limit(50))))
+  await assertFails(getDocs(query(collection(alice(), 'users'), limit(50))))
+  await assertFails(adminChange(alice(), 'subscription_plans/monthly', { price: 100 }, 'plan_change', { actorUid: 'alice' }))
+  await assertFails(adminChange(alice(), 'users/alice', { proUntil: Timestamp.fromMillis(Date.now() + 86400000) }, 'pro_grant', { actorUid: 'alice' }))
+  await assertFails(updateDoc(doc(admin(), 'security_events/e1'), { type: 'changed' }))
+  await assertFails(deleteDoc(doc(admin(), 'security_events/e1')))
 })

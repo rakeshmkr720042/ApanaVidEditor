@@ -2,14 +2,24 @@ rules_version = '2';
 
 // Apna Editor accounts and subscriptions.
 // Default deny. The app may read its own records, create its own Free profile once, and edit two profile fields.
-// Plans, subscriptions, payments, roles and account status are written by Cloud Functions only
-// (the Admin SDK bypasses these rules), so nothing on the device can grant itself Pro.
+// Subscriptions, payments and roles are written by the server only (the Admin SDK bypasses these rules).
+// An admin (custom claim set by the server) may also change plans, the Free/Pro feature split, and a
+// user's status or Pro date from the admin screen; every such change must come with a security_events
+// record written in the same batch (see audited()), so nothing is changed without a trace.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
     function isAdmin() { return signedIn() && request.auth.token.admin == true; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // The change names a security event (lastChangeId) that this same admin writes in the same batch.
+    function audited() {
+      let ev = getAfter(/databases/$(database)/documents/security_events/$(request.resource.data.lastChangeId));
+      return request.resource.data.lastChangeId is string
+        && ev.data.actorUid == request.auth.uid
+        && ev.data.createdAt == request.time;
+    }
 
     // users/{uid}: profile + a read-only copy of the plan for display.
     match /users/{uid} {
@@ -37,20 +47,55 @@ service cloud.firestore {
         && validName(request.resource.data.fullName)
         && validPhone(request.resource.data.phoneNumber)
         && request.resource.data.updatedAt == request.time;
+      // Admin: suspend / activate (never their own account) and give or remove Pro.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountStatus', 'proUntil', 'planId', 'updatedAt', 'lastChangeId'])
+        && request.resource.data.accountStatus in ['active', 'suspended']
+        && (uid != request.auth.uid || request.resource.data.accountStatus == resource.data.accountStatus)
+        && (request.resource.data.proUntil == null || request.resource.data.proUntil is timestamp)
+        && request.resource.data.planId is string && request.resource.data.planId.size() <= 40
+        && request.resource.data.updatedAt == request.time
+        && audited();
     }
 
     function validName(n) { return n is string && n.size() >= 1 && n.size() <= 80; }
     // Empty, or E.164 (+ then 8-15 digits).
     function validPhone(p) { return p is string && (p == '' || p.matches('^\\+[1-9][0-9]{7,14}$')); }
 
-    // Plans and the Free/Pro feature split: everyone signed in reads, nobody writes from the app.
+    // Plans and the Free/Pro feature split: everyone signed in reads; only an admin changes them.
     match /subscription_plans/{planId} {
       allow read: if signedIn();
-      allow write: if false;
+      allow create, update: if isAdmin() && validPlan(planId, request.resource.data) && audited();
+      allow delete: if false; // switch a plan off with isActive instead, so old subscriptions keep their plan
     }
     match /config/{docId} {
       allow read: if signedIn();
-      allow write: if false;
+      allow create, update: if isAdmin() && docId == 'entitlements' && validEntitlements(request.resource.data) && audited();
+      allow delete: if false;
+    }
+
+    function validPlan(id, d) {
+      return d.keys().hasOnly(['planName', 'price', 'currency', 'durationMonths', 'isActive', 'sortOrder', 'playProductId', 'playBasePlanId', 'updatedAt', 'lastChangeId'])
+        && d.keys().hasAll(['planName', 'price', 'currency', 'durationMonths', 'isActive', 'sortOrder'])
+        && d.planName is string && d.planName.size() >= 1 && d.planName.size() <= 40
+        && d.price is int && d.price >= 0 && d.price <= 10000000
+        && d.currency == 'INR'
+        && d.durationMonths in [0, 1, 3, 6, 12]
+        && d.isActive is bool
+        && d.sortOrder is int
+        && (!('playProductId' in d) || d.playProductId == null || d.playProductId is string)
+        && (!('playBasePlanId' in d) || d.playBasePlanId == null || d.playBasePlanId is string)
+        // Free stays free and forever; a paid plan has a length.
+        && (id == 'free' ? (d.price == 0 && d.durationMonths == 0) : (d.price > 0 && d.durationMonths > 0));
+    }
+
+    function validEntitlements(d) {
+      return d.keys().hasOnly(['proFeatures', 'freeExportMaxHeight', 'freeWatermark', 'offlineGraceDays', 'updatedAt', 'lastChangeId'])
+        && d.proFeatures is list
+        && d.proFeatures.hasOnly(['export2k', 'batch', 'nomark', 'dub', 'audio', 'greenscreen', 'presenter', 'scenes'])
+        && d.freeExportMaxHeight in [720, 1080, 1440, 2160]
+        && d.freeWatermark is bool
+        && d.offlineGraceDays is int && d.offlineGraceDays >= 1 && d.offlineGraceDays <= 30;
     }
 
     match /subscriptions/{id} {
@@ -76,9 +121,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Audit trail. Only admins read it. An admin's own changes add a record (with their uid and the
+    // server time), which can never be edited or deleted.
     match /security_events/{id} {
       allow read: if isAdmin();
-      allow write: if false;
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['type', 'actorUid', 'actorEmail', 'targetUid', 'target', 'details', 'createdAt'])
+        && request.resource.data.type in ['plan_change', 'entitlements_change', 'user_suspend', 'user_activate', 'pro_grant', 'pro_remove']
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorEmail == request.auth.token.email
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.details is map;
+      allow update, delete: if false;
     }
 
     match /{document=**} {

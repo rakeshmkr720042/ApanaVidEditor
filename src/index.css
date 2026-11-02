@@ -818,3 +818,24 @@ input, textarea { font: inherit; color: inherit; }
 .account-plan { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
 .account-plan > div { display: grid; flex: 1; }
 .account-plan svg { color: #ffcc33; flex: none; }
+
+/* Admin screen (#admin) */
+.admin-main { display: flex; flex-direction: column; gap: 12px; }
+.admin-section { display: flex; flex-direction: column; gap: 10px; }
+.admin-search { display: flex; gap: 6px; }
+.admin-search input { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font-size: 15px; color: var(--text); }
+.admin-list { display: flex; flex-direction: column; gap: 8px; }
+.admin-user, .admin-event, .admin-plan { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.admin-user { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.admin-user.off { opacity: .7; }
+.admin-user-info, .admin-event { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 220px; }
+.admin-user-info small, .admin-event small { overflow-wrap: anywhere; }
+.admin-user-actions { display: flex; gap: 6px; }
+.admin-bad { color: #ff8a8a; }
+.admin-plan { display: grid; gap: 8px; }
+.admin-plan-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.admin-features { display: flex; flex-direction: column; gap: 6px; }
+.admin-feature { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; cursor: pointer; }
+.admin-feature input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+.admin-feature span { display: flex; flex-direction: column; }
+.home.admin .home-main { overflow-y: auto; }

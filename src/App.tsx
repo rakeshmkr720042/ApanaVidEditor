@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Home } from './components/Home'
 import { Editor } from './components/Editor'
+import { AdminScreen } from './components/AdminScreen'
 import { AuthScreen, BlockedScreen, LoadingScreen, VerifyScreen } from './components/AuthScreen'
 import { useAccount } from './lib/account'
 import { requestPersistence } from './lib/db'
@@ -22,6 +23,7 @@ export default function App() {
 /** Two screens: the project list and the editor. The open project is kept in the URL hash. */
 function Workspace() {
   const [projectId, setProjectId] = useState<string | null>(() => location.hash.match(/^#p=(\w+)/)?.[1] ?? null)
+  const [admin, setAdmin] = useState(() => location.hash === '#admin')
   const [langKey, setLangKey] = useState(0)
 
   useEffect(() => { requestPersistence() }, [])
@@ -33,7 +35,7 @@ function Workspace() {
     if (!projectRef.current && hasPendingFiles()) createProject().then((id) => { location.hash = `p=${id}` })
   }), [])
   useEffect(() => {
-    const onHash = () => setProjectId(location.hash.match(/^#p=(\w+)/)?.[1] ?? null)
+    const onHash = () => { setProjectId(location.hash.match(/^#p=(\w+)/)?.[1] ?? null); setAdmin(location.hash === '#admin') }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
@@ -41,6 +43,7 @@ function Workspace() {
   const open = (id: string) => { location.hash = `p=${id}` }
   const back = () => { history.length > 1 && location.hash ? history.back() : (location.hash = '') }
 
+  if (admin) return <AdminScreen onBack={back} />
   return projectId
     ? <Editor key={projectId + langKey} projectId={projectId} onBack={back} />
     : <Home key={langKey} onOpen={open} onLang={() => setLangKey((k) => k + 1)} />
