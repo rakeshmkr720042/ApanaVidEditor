@@ -91,7 +91,7 @@ export interface AudioFx {
   room: 'room' | 'hall' | 'cave'
   loudness: number | null // target loudness in LUFS (-14 YouTube…), null = as it is
   limiter: boolean // stop peaks from clipping
-  channels: 'stereo' | 'mono' | 'left' | 'right' | 'swap'
+  channels: 'stereo' | 'mono' | 'left' | 'right' | 'swap' | 'novocal' // novocal: karaoke, the singer taken out
   pan: number // -1 left .. 1 right
   reverse?: boolean // sounds on a track only: play backwards
 }

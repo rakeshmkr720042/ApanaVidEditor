@@ -221,6 +221,27 @@ function stereoStage(chs: Float32Array[], f: AudioFx): Float32Array[] {
   } else if (f.channels === 'left') r = l
   else if (f.channels === 'right') l = r
   else if (f.channels === 'swap') [l, r] = [r, l]
+  else if (f.channels === 'novocal') {
+    // karaoke: the singer is mixed in the middle (the same on both sides), so one side minus the other cancels the
+    // voice and keeps the instruments spread left and right. The deep bass is in the middle too: put it back from
+    // the low part of the middle.
+    // a steep low-pass (two Butterworth stages, 24 dB per octave at 120 Hz) so the voice doesn't leak back in
+    const w = (2 * Math.PI * 120) / RATE, cs = Math.cos(w), al = Math.sin(w) / Math.SQRT2, a0 = 1 + al
+    const b0 = (1 - cs) / 2 / a0, b1 = (1 - cs) / a0, a1 = (-2 * cs) / a0, a2 = (1 - al) / a0
+    const z = [0, 0, 0, 0, 0, 0, 0, 0] // x1 x2 y1 y2 for each stage
+    const stage = (x: number, o: number) => {
+      const y = b0 * x + b1 * z[o] + b0 * z[o + 1] - a1 * z[o + 2] - a2 * z[o + 3]
+      z[o + 1] = z[o]; z[o] = x; z[o + 3] = z[o + 2]; z[o + 2] = y
+      return y
+    }
+    const nl = new Float32Array(l.length), nr = new Float32Array(l.length)
+    for (let i = 0; i < nl.length; i++) {
+      const low = stage(stage((l[i] + r[i]) * 0.5, 0), 4)
+      const side = (l[i] - r[i]) * 0.7
+      nl[i] = side + low; nr[i] = -side + low
+    }
+    l = nl; r = nr
+  }
   if (f.pan) {
     // constant-power balance, so the middle stays as loud
     const a = ((f.pan + 1) * Math.PI) / 4

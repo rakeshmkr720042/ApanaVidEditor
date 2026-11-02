@@ -328,10 +328,17 @@ export const SFX: { id: string; name: string }[] = [
   { id: 'click', name: 'Click' }, { id: 'rise', name: 'Riser' }, { id: 'boom', name: 'Boom' },
   { id: 'shutter', name: 'Camera' }, { id: 'notify', name: 'Notification' }, { id: 'swipe', name: 'Swipe' },
   { id: 'applause', name: 'Applause' }, { id: 'heartbeat', name: 'Heartbeat' }, { id: 'coin', name: 'Coin' },
+  // trending transition sounds
+  { id: 'bassdrop', name: 'Bass drop' }, { id: 'impact', name: 'Impact' }, { id: 'revcymbal', name: 'Reverse cymbal' },
+  { id: 'whip', name: 'Whip' }, { id: 'glitch', name: 'Glitch' }, { id: 'scratch', name: 'Record scratch' },
+  { id: 'braam', name: 'Braam' }, { id: 'sparkle', name: 'Sparkle' }, { id: 'drumroll', name: 'Drum roll' },
+  { id: 'cash', name: 'Cash' },
 ]
 
+const SFX_LENGTH: Record<string, number> = { applause: 3, rise: 2.5, heartbeat: 2, bassdrop: 2, revcymbal: 2, braam: 2.6, drumroll: 2.4, impact: 1.6 }
+
 export async function renderSfx(id: string): Promise<AudioBuffer> {
-  const dur = id === 'applause' ? 3 : id === 'rise' ? 2.5 : id === 'heartbeat' ? 2 : 1.2
+  const dur = SFX_LENGTH[id] ?? 1.2
   const ctx = new OfflineAudioContext(2, Math.ceil(dur * SAMPLE_RATE), SAMPLE_RATE)
   const s = new Synth(ctx)
   const r = rng(seedOf(id))
@@ -367,6 +374,58 @@ export async function renderSfx(id: string): Promise<AudioBuffer> {
     case 'applause': for (let i = 0; i < 260; i++) s.noiseHit(r() * 2.6, 0.03, 'bandpass', 1500 + r() * 2500, 0.15 + r() * 0.2, s.out, 1.5); break
     case 'heartbeat': for (const t of [0, 0.28, 1, 1.28]) { s.kick(t, t % 1 ? 0.6 : 0.9) } break
     case 'coin': s.keys(0, 83, 0.08, 0.3, 'square'); s.keys(0.08, 88, 0.4, 0.3, 'square'); break
+    case 'bassdrop': {
+      // a deep sine falling in pitch, felt more than heard
+      const g = s.gain(0, s.out); g.gain.setValueAtTime(0.0001, 0); g.gain.exponentialRampToValueAtTime(1, 0.03); g.gain.exponentialRampToValueAtTime(0.001, 1.9)
+      const o = s.osc('sine', 120, 0, 2, g); o.frequency.setValueAtTime(120, 0); o.frequency.exponentialRampToValueAtTime(32, 1.6)
+      const o2 = s.osc('triangle', 60, 0, 1.2, s.gain(0.25, g)); o2.frequency.exponentialRampToValueAtTime(30, 1.1)
+      s.noiseHit(0, 0.5, 'lowpass', 200, 0.5)
+      break
+    }
+    case 'impact': s.kick(0, 1); s.tom(0, 45, 1); s.noiseHit(0, 1.4, 'lowpass', 700, 0.7); s.noiseHit(0, 0.08, 'bandpass', 2500, 0.6, s.out, 0.8); break
+    case 'revcymbal': {
+      // a cymbal played backwards: rises out of nothing and stops dead
+      const src = ctx.createBufferSource(); src.buffer = s.noise; src.loop = true
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, 0); g.gain.exponentialRampToValueAtTime(0.7, 1.85); g.gain.linearRampToValueAtTime(0, 1.9)
+      const f = s.filter('highpass', 5000, 0.7, g); g.connect(s.out)
+      src.connect(f); src.start(0); src.stop(1.95)
+      break
+    }
+    case 'whip': {
+      const src = ctx.createBufferSource(); src.buffer = s.noise; src.loop = true
+      const f = s.filter('bandpass', 800, 3, s.out); const g = ctx.createGain(); g.connect(f)
+      f.frequency.setValueAtTime(700, 0); f.frequency.exponentialRampToValueAtTime(9000, 0.14); f.frequency.exponentialRampToValueAtTime(2000, 0.2)
+      g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(1.6, 0.1); g.gain.linearRampToValueAtTime(0, 0.2)
+      src.connect(g); src.start(0); src.stop(0.22)
+      break
+    }
+    case 'glitch': for (let i = 0; i < 14; i++) { const t = r() * 0.6; s.keys(t, 60 + Math.floor(r() * 40), 0.02 + r() * 0.04, 0.25, 'square'); if (r() > 0.5) s.noiseHit(t, 0.03, 'highpass', 4000, 0.3) } break
+    case 'scratch': {
+      // a record pushed back and forth under the needle
+      const src = ctx.createBufferSource(); src.buffer = s.noise; src.loop = true
+      const f = s.filter('bandpass', 1000, 5, s.out); const g = ctx.createGain(); g.connect(f)
+      const steps = [600, 2600, 500, 3000, 700, 2200]
+      steps.forEach((hz, i) => f.frequency.linearRampToValueAtTime(hz, 0.02 + i * 0.07))
+      g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(1.4, 0.02); g.gain.setValueAtTime(1.4, 0.38); g.gain.linearRampToValueAtTime(0, 0.45)
+      src.connect(g); src.start(0); src.stop(0.46)
+      break
+    }
+    case 'braam': {
+      // the big low horn from movie trailers
+      const g = s.gain(0, s.out); g.gain.setValueAtTime(0.0001, 0); g.gain.exponentialRampToValueAtTime(0.35, 0.08); g.gain.setValueAtTime(0.35, 1.2); g.gain.exponentialRampToValueAtTime(0.001, 2.5)
+      const lp = s.filter('lowpass', 900, 1.5, g); lp.frequency.setValueAtTime(1400, 0); lp.frequency.exponentialRampToValueAtTime(300, 2.4)
+      for (const [hz, d] of [[55, 0], [55, 9], [82.4, -7], [110, 5]]) s.osc('sawtooth', hz, 0, 2.6, lp, d)
+      s.kick(0, 0.8)
+      break
+    }
+    case 'sparkle': [96, 100, 103, 108, 103, 108].forEach((m, i) => s.keys(i * 0.06, m, 0.25, 0.18, 'bell')); break
+    case 'drumroll': {
+      let t = 0, gap = 0.09
+      while (t < 1.9) { s.snare(t, 0.15 + 0.2 * (t / 1.9)); t += gap; gap = Math.max(0.035, gap * 0.95) }
+      s.kick(2.0, 0.8); s.noiseHit(2.0, 0.35, 'highpass', 6000, 0.35)
+      break
+    }
+    case 'cash': s.keys(0, 91, 0.6, 0.35, 'bell'); s.keys(0.02, 96, 0.5, 0.2, 'bell'); for (let i = 0; i < 10; i++) s.noiseHit(0.25 + r() * 0.5, 0.04, 'bandpass', 5000 + r() * 3000, 0.15, s.out, 3); break
   }
   return ctx.startRendering()
 }
