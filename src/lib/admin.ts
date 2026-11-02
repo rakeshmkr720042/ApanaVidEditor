@@ -13,12 +13,22 @@ import { FEATURES, type Feature } from './premium'
  * and that every change comes with a security_events record written in the same batch.
  */
 
+/**
+ * Accounts whose token was fetched fresh in this session. A saved token is renewed only once an
+ * hour, so an account made admin after signing in would not see the admin screen until then;
+ * the first check in each session therefore asks the server for a fresh token (one small request).
+ */
+const fresh = new Set<string>()
+
 /** Is the signed-in account an admin? Read from the token, so nothing on the device can fake it for the server. */
 export function useIsAdmin() {
   const [admin, setAdmin] = useState(false)
   useEffect(() => onIdTokenChanged(firebaseAuth(), (u) => {
     if (!u) { setAdmin(false); return }
-    u.getIdTokenResult().then((r) => setAdmin(r.claims.admin === true)).catch(() => setAdmin(false))
+    const force = !fresh.has(u.uid)
+    fresh.add(u.uid)
+    // (forcing fires onIdTokenChanged again; that second run reads the new token without forcing)
+    u.getIdTokenResult(force).then((r) => setAdmin(r.claims.admin === true)).catch(() => { fresh.delete(u.uid); setAdmin(false) })
   }), [])
   return admin
 }
