@@ -1,0 +1,88 @@
+name: Firebase backend
+# Tests the Firestore rules and Cloud Functions on the Firebase Emulator for every change in firebase/,
+# and deploys them to the real project from main (or by hand from the Actions tab).
+# Deploy needs: secret FIREBASE_SERVICE_ACCOUNT (service account JSON key),
+# variable FIREBASE_PROJECT_ID, optional variable ADMIN_EMAIL (gets the admin role once signed up).
+on:
+  push:
+    branches: [main]
+    paths: ['firebase/**', '.github/workflows/firebase.yml']
+  pull_request:
+    paths: ['firebase/**', '.github/workflows/firebase.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: firebase-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            firebase/functions/package-lock.json
+            firebase/test/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci && npm run build
+        working-directory: firebase/functions
+      - run: npm ci
+        working-directory: firebase/test
+      - name: Rules + functions tests (Firebase Emulator)
+        run: npm test
+        working-directory: firebase/test
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      PROJECT: ${{ vars.FIREBASE_PROJECT_ID }}
+    steps:
+      - name: Check setup
+        id: setup
+        run: |
+          if [ -z "$SA" ] || [ -z "$PROJECT" ]; then
+            echo "::notice::Firebase is not connected yet (FIREBASE_SERVICE_ACCOUNT / FIREBASE_PROJECT_ID missing). Skipping deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.setup.outputs.ready == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.setup.outputs.ready == 'true'
+        with:
+          node-version: 22
+      - name: Install
+        if: steps.setup.outputs.ready == 'true'
+        run: |
+          npm ci --prefix firebase/functions
+          npm ci --prefix firebase/test
+      - name: Deploy rules, indexes and functions
+        if: steps.setup.outputs.ready == 'true'
+        working-directory: firebase
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          ./test/node_modules/.bin/firebase deploy --only firestore,functions --project "$PROJECT" --non-interactive --force
+      - name: Seed plans and admin
+        if: steps.setup.outputs.ready == 'true'
+        working-directory: firebase/functions
+        env:
+          ADMIN_EMAIL: ${{ vars.ADMIN_EMAIL }}
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          export GCLOUD_PROJECT="$PROJECT"
+          node lib/seed.js
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

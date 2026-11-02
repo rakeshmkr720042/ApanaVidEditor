@@ -1,0 +1,19 @@
+{
+  "name": "apna-editor-functions",
+  "private": true,
+  "description": "Cloud Functions for Apna Editor accounts and subscriptions",
+  "main": "lib/index.js",
+  "type": "commonjs",
+  "engines": { "node": "22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "seed": "node lib/seed.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2"
+  }
+}
