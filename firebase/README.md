@@ -54,6 +54,17 @@ be edited or deleted; the History tab shows the latest 30.
   sets `accountStatus: 'deleted'` and `deletedAt`, and deletes the Firebase sign-in. Payment records stay, linked only by uid.
   A deleted profile can never be changed again, by the user or the admin. Projects on the device are not touched.
 
+## Google sign-in on Windows
+
+Google does not allow its sign-in page inside an app window. So the Windows app opens the website
+(`https://rakeshmkr720042.github.io/ApanaVidEditor/#desktop-signin?port=…&state=…`) in the default browser.
+That page signs in with Google in a throw-away session, so the browser's own sign-in is left alone.
+It then sends only the Google ID token to the app's one-time server on `127.0.0.1:<port>`, and the app signs in to
+Firebase with that token. No client secret and no extra setup are needed: the website's domain is already
+an authorized domain, and the token's audience is the project's own web client.
+
+Android comes later: Google sign-in there needs a fixed app signing key (the same one Play Store uses).
+
 ## Plans (defaults, editable later from the admin screen)
 
 | Plan id | Name | Price | Duration |

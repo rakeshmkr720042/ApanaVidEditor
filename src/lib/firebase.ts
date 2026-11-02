@@ -1,10 +1,11 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import {
-  browserLocalPersistence, browserPopupRedirectResolver, browserSessionPersistence, connectAuthEmulator, indexedDBLocalPersistence, initializeAuth, type Auth,
+  browserLocalPersistence, browserPopupRedirectResolver, browserSessionPersistence, connectAuthEmulator, indexedDBLocalPersistence, inMemoryPersistence,
+  initializeAuth, type Auth,
 } from 'firebase/auth'
 import { connectFirestoreEmulator, getFirestore, type Firestore } from 'firebase/firestore/lite'
 import { Capacitor } from '@capacitor/core'
-import { isDesktop } from './desktop'
+import { desktop, isDesktop } from './desktop'
 
 /**
  * Firebase for accounts only (sign-in, profile, plan). Projects and media never go here.
@@ -22,9 +23,9 @@ const config = {
   appId: env.VITE_FIREBASE_APP_ID ?? '1:778583735587:web:729efe62a311a7dbefe096',
 }
 
-/** Where Google sign-in works in this build. Android and Windows need their own OAuth setup (next step). */
 export const platform: 'web' | 'android' | 'windows' = Capacitor.isNativePlatform() ? 'android' : isDesktop ? 'windows' : 'web'
-export const googleAvailable = platform === 'web'
+/** Where Google sign-in works: the web (popup) and Windows (via the website in the default browser). Android needs the Play signing key first. */
+export const googleAvailable = platform === 'web' || (platform === 'windows' && !!desktop?.googleLogin)
 
 /** Test builds talk to the local Firebase Emulator instead (VITE_FIREBASE_EMULATOR=1). */
 const emulator = env.VITE_FIREBASE_EMULATOR === '1'
@@ -52,3 +53,18 @@ function boot() {
 
 export function firebaseAuth() { boot(); return auth! }
 export function firestore() { boot(); return db! }
+
+/**
+ * A second, throw-away sign-in used only by the website's #desktop-signin page: it gets a Google ID token
+ * for the Windows app without signing this browser in or out.
+ */
+let bridge: Auth | null = null
+export function bridgeAuth() {
+  if (bridge) return bridge
+  boot()
+  const a = initializeApp(emulator ? { ...config, projectId: 'demo-apna-editor', apiKey: 'demo-key' } : config, 'desktop-bridge')
+  const ba = initializeAuth(a, { persistence: inMemoryPersistence, popupRedirectResolver: browserPopupRedirectResolver })
+  if (emulator) connectAuthEmulator(ba, 'http://127.0.0.1:9099', { disableWarnings: true })
+  bridge = ba
+  return ba
+}

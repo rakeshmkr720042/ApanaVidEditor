@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import {
   browserLocalPersistence, browserSessionPersistence, createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider,
   onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, sendPasswordResetEmail, setPersistence,
-  signInWithEmailAndPassword, signInWithPopup, signOut as fbSignOut, updateProfile, type User,
+  signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signOut as fbSignOut, updateProfile, type AuthCredential, type User,
 } from 'firebase/auth'
 import { collection, doc, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, where, writeBatch, type Timestamp } from 'firebase/firestore/lite'
-import { firebaseAuth, firestore, googleAvailable } from './firebase'
+import { firebaseAuth, firestore, googleAvailable, platform } from './firebase'
+import { desktop } from './desktop'
 import { t } from './i18n'
 import { setServerEntitlement, setServerPlans, type Plan } from './premium'
 
@@ -125,13 +126,32 @@ export function signInGoogle(rememberMe: boolean) {
   if (!googleAvailable) return Promise.reject(new Error(t('Google sign-in comes to this app soon. Please use email for now.')))
   return track((async () => {
     await remember(rememberMe)
-    const provider = new GoogleAuthProvider()
-    provider.setCustomParameters({ prompt: 'select_account' })
-    const cred = await signInWithPopup(firebaseAuth(), provider)
+    const cred = platform === 'windows'
+      ? await signInWithCredential(firebaseAuth(), await desktopGoogleCredential())
+      : await signInWithPopup(firebaseAuth(), googleProvider())
     await ensureAccount(cred.user).catch(() => {})
     return cred.user
   })())
 }
+
+export function googleProvider() {
+  const provider = new GoogleAuthProvider()
+  provider.setCustomParameters({ prompt: 'select_account' })
+  return provider
+}
+
+/** Windows: Google sign-in happens on the website in the default browser; its Google ID token signs in here. */
+async function desktopGoogleCredential(): Promise<AuthCredential> {
+  if (!desktop?.googleLogin) throw new Error(t('Google sign-in comes to this app soon. Please use email for now.'))
+  const r = await desktop.googleLogin().catch((e: Error) => {
+    // ("Error invoking remote method '…': Error: <message>" from the shell)
+    throw new Error(t(String(e?.message ?? '').replace(/^.*Error: /, '') || 'Something went wrong. Please try again.'))
+  })
+  return GoogleAuthProvider.credential(r.idToken)
+}
+
+/** Stops a Windows Google sign-in that is waiting for the browser. */
+export const cancelGoogle = () => desktop?.googleCancel?.()
 
 export const resetPassword = (email: string) => sendPasswordResetEmail(firebaseAuth(), email.trim())
 export const resendVerification = () => { const u = firebaseAuth().currentUser; return u ? sendEmailVerification(u) : Promise.resolve() }
@@ -266,7 +286,8 @@ export async function deleteAccount(password: string) {
   const u = firebaseAuth().currentUser
   if (!u) throw new Error(t('Please sign in again.'))
   if (signInKind() === 'password') await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email ?? '', password))
-  else await reauthenticateWithPopup(u, new GoogleAuthProvider())
+  else if (platform === 'windows') await reauthenticateWithCredential(u, await desktopGoogleCredential())
+  else await reauthenticateWithPopup(u, googleProvider())
   await updateDoc(doc(firestore(), 'users', u.uid), {
     fullName: '', email: '', emailLower: '', phoneNumber: '', photoURL: '',
     accountStatus: 'deleted', deletedAt: serverTimestamp(), updatedAt: serverTimestamp(),

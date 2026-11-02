@@ -11,6 +11,8 @@ interface DesktopBridge {
   /** YouTube upload: Google sign-in in the default browser (loopback + PKCE). The refresh token comes back encrypted. */
   googleSignIn?(o: { clientId: string; clientSecret: string; scope: string }): Promise<{ access: string; expiresIn: number; refresh?: string }>
   googleCancel?(): void
+  /** Apna Editor account sign-in: Google in the default browser via the website; returns a Google ID token. */
+  googleLogin?(): Promise<{ idToken: string }>
   googleRefresh?(o: { clientId: string; clientSecret: string; refresh: string }): Promise<{ access: string; expiresIn: number }>
   /** A request to www.googleapis.com from the main process. */
   /** Stops Windows from sleeping while an export runs. */

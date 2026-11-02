@@ -2,17 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import { Home } from './components/Home'
 import { Editor } from './components/Editor'
 import { AdminScreen } from './components/AdminScreen'
-import { AuthScreen, BlockedScreen, LoadingScreen, VerifyScreen } from './components/AuthScreen'
+import { AuthScreen, BlockedScreen, DesktopSignIn, desktopSignInRequest, LoadingScreen, VerifyScreen } from './components/AuthScreen'
 import { useAccount } from './lib/account'
 import { requestPersistence } from './lib/db'
 import { hasPendingFiles, listenForOpenedFiles } from './lib/desktop'
 import { createProject } from './lib/newProject'
 
-/** Nothing of the app shows until someone is signed in with a confirmed email. */
+/** Set when the Windows app opened the website to sign in with Google (read once, before anything else). */
+const desktopSignIn = desktopSignInRequest()
+
 export default function App() {
-  const account = useAccount()
   const [langKey, setLangKey] = useState(0)
   const onLang = () => setLangKey((k) => k + 1)
+  if (desktopSignIn) return <DesktopSignIn key={langKey} {...desktopSignIn} onLang={onLang} />
+  return <Gate langKey={langKey} onLang={onLang} />
+}
+
+/** Nothing of the app shows until someone is signed in with a confirmed email. */
+function Gate({ langKey, onLang }: { langKey: number; onLang: () => void }) {
+  const account = useAccount()
   if (account.status === 'loading') return <LoadingScreen />
   if (account.status === 'out') return <AuthScreen key={langKey} onLang={onLang} />
   if (account.status === 'unverified') return <VerifyScreen key={langKey} email={account.user.email ?? ''} onLang={onLang} />
