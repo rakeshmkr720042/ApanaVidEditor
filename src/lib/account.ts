@@ -253,10 +253,12 @@ export interface Payment {
   planName: string
   status: string
   provider: string
+  /** 'test' for Razorpay test payments (no real money). */
+  mode: string
   createdAt: number | null
 }
 
-/** The signed-in user's payments, newest first. */
+/** The signed-in user's payments, newest first (checkouts that were opened but never paid are left out). */
 export async function listMyPayments(): Promise<Payment[]> {
   const u = firebaseAuth().currentUser
   if (!u) return []
@@ -265,9 +267,9 @@ export async function listMyPayments(): Promise<Payment[]> {
     const x = d.data()
     return {
       id: d.id, amount: Number(x.amount) || 0, currency: x.currency ?? 'INR', planId: x.planId ?? '', planName: x.planName ?? x.planId ?? '',
-      status: x.status ?? '', provider: x.provider ?? '', createdAt: ms(x.createdAt),
+      status: x.status ?? '', provider: x.provider ?? '', mode: x.mode ?? '', createdAt: ms(x.createdAt),
     }
-  }).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+  }).filter((p) => p.status !== 'created').sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
 }
 
 // ---------- deleting the account

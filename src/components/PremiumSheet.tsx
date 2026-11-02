@@ -47,10 +47,19 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
     setBusy(true); setNote(null)
     try { await fn() } catch (e) { setNote((e as Error).message) } finally { setBusy(false) }
   }
-  const buy = () => act(async () => { const l = await provider!.buy(plan!); if (l) { setLicence(l); await refreshAccount().catch(() => {}); setNote(t('Thank you! Pro is on.')) } })
+  const [waiting, setWaiting] = useState<string | null>(null)
+  const stop = useRef<AbortController | null>(null)
+  useEffect(() => () => stop.current?.abort(), [])
+  const buy = () => act(async () => {
+    stop.current = new AbortController()
+    const paid = await provider!.buy(plan!, { signal: stop.current.signal, waiting: setWaiting })
+    if (!paid) return
+    await refreshAccount().catch(() => {})
+    setNote(t('Thank you! Pro is on.'))
+  })
   const check = () => act(async () => { await refreshAccount(); setNote(t(serverProUntil() ? 'Pro is on.' : 'Your account is on the Free plan.')) })
   const restore = () => act(async () => {
-    const l = await provider!.restore()
+    const l = await provider!.restore!()
     if (l) { setLicence(l); setNote(t('Premium restored.')) } else setNote(t('No earlier purchase found for this account.'))
   })
   const tapVersion = () => { if (++taps.current >= 7 && !dev.dev) { setDev({ dev: true }); setNote(t('Developer switches are on.')) } }
@@ -106,7 +115,7 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
             </div>
             <p className="muted small">{t('Every Pro plan unlocks the same features.')}</p>
             {signedIn ? (
-              <button className="btn primary wide" disabled={!provider || busy || !chosen} onClick={buy}>
+              <button className="btn primary wide" disabled={!provider || busy || !chosen} onClick={buy} data-testid="pro-buy">
                 {t('Subscribe')}{chosen && <> · {rupees(chosen.price)}</>}
               </button>
             ) : (
@@ -114,19 +123,25 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
                 {t('Sign in to get Pro')}
               </button>
             )}
+            {waiting && (
+              <div className="pay-wait" data-testid="pay-wait">
+                <span className="spinner" /> <span>{waiting}</span>
+                <button className="btn small ghost" onClick={() => stop.current?.abort()}>{t('Cancel')}</button>
+              </div>
+            )}
             {!provider && <p className="muted small" data-testid="no-payments">{t('Payments are not switched on yet. You will be able to subscribe here soon.')}</p>}
           </>
         )}
         {signedIn
           ? <button className="btn small ghost" disabled={busy} onClick={check} data-testid="pro-check">{t('Check my plan again')}</button>
           : <button className="btn small ghost" onClick={() => setSignIn(true)} data-testid="pro-restore-signin">{t('Already have Pro? Sign in')}</button>}
-        {provider && (
+        {provider && (provider.restore || provider.manage) && (
           <div className="row">
-            <button className="btn" disabled={busy} onClick={restore}>{t('Restore purchase')}</button>
-            {premium && lic && <button className="btn" onClick={() => provider.manage()}>{t('Manage or cancel')}</button>}
+            {provider.restore && <button className="btn" disabled={busy} onClick={restore}>{t('Restore purchase')}</button>}
+            {premium && lic && provider.manage && <button className="btn" onClick={() => provider.manage!()}>{t('Manage or cancel')}</button>}
           </div>
         )}
-        {note && <p className="muted small" role="status">{note}</p>}
+        {note && <p className="muted small" role="status" data-testid="pro-note">{note}</p>}
         {dev.dev && (
           <div className="dev-box">
             <span className="field-label">{t('Developer switches (this device only)')}</span>

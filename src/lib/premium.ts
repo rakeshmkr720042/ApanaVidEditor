@@ -52,12 +52,16 @@ export interface Licence { plan: PlanId; until: number; token: string; checked: 
 export interface PaymentProvider {
   id: string
   name: string
-  /** Opens the store's checkout; resolves with the licence the server issued, or null if cancelled. */
-  buy(plan: PlanId): Promise<Licence | null>
-  /** Looks up an earlier purchase (new phone, reinstall). */
-  restore(): Promise<Licence | null>
-  /** Opens the store page where the user can cancel or change the plan. */
-  manage(): void
+  /**
+   * Opens the store's checkout. Resolves true once the server has checked the payment and added the
+   * Pro time to the account (the app then reads the account again), false if the buyer cancelled.
+   * `waiting` shows a note while the payment happens elsewhere (the browser, on Windows).
+   */
+  buy(plan: PlanId, o: { signal: AbortSignal; waiting: (note: string | null) => void }): Promise<boolean>
+  /** Looks up an earlier purchase (new phone, reinstall) and returns a licence; Play only. */
+  restore?(): Promise<Licence | null>
+  /** Opens the store page where the user can cancel or change the plan (stores with renewals). */
+  manage?(): void
 }
 
 /** No provider yet: buying is switched off until an account is connected. */

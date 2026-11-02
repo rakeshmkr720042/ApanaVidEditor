@@ -1,0 +1,9 @@
+{
+  "name": "apna-editor-payments",
+  "private": true,
+  "type": "module",
+  "description": "Payment server for Apna Editor Pro (Cloudflare Worker, Razorpay)",
+  "scripts": {
+    "test": "../firebase/test/node_modules/.bin/firebase emulators:exec --config ../firebase/firebase.json --project demo-apna-editor --only firestore \"node --test test/payments.test.js\""
+  }
+}

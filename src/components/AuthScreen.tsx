@@ -11,7 +11,7 @@ import { Icon } from './Icon'
 type Mode = 'login' | 'register' | 'forgot'
 
 /** Shell shared by the sign-in screens: brand on top, one card, language switch. */
-function AuthShell({ children, onLang, onClose }: { children: ReactNode; onLang: () => void; onClose?: () => void }) {
+export function AuthShell({ children, onLang, onClose }: { children: ReactNode; onLang: () => void; onClose?: () => void }) {
   return (
     <div className={`auth${onClose ? ' auth-overlay' : ''}`} data-testid="auth">
       <div className="auth-card">
