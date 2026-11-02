@@ -79,7 +79,7 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
           <div className="dev-box">
             <span className="field-label">{t('Developer switches (this device only)')}</span>
             {!LOCK_ON && <Toggle label="Preview the Premium lock" value={dev.devLock} onChange={(devLock) => setDev({ devLock })} />}
-            <Toggle label="Pretend I have Premium" value={dev.devPremium} onChange={(devPremium) => setDev({ devPremium })} />
+            {import.meta.env.DEV && <Toggle label="Pretend I have Premium" value={dev.devPremium} onChange={(devPremium) => setDev({ devPremium })} />}
             <button className="btn small" onClick={() => setDev({ dev: false, devLock: false, devPremium: false })}>{t('Hide developer switches')}</button>
           </div>
         )}

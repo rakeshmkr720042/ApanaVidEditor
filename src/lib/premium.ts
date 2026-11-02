@@ -90,9 +90,12 @@ export function activeLicence(now = Date.now()): Licence | null {
 /** The licence needs an online check soon (shown in the sheet). */
 export const needsCheck = (now = Date.now()) => { const l = load().licence; return !!l && now - l.checked > (GRACE_DAYS - 2) * 86400000 }
 
+/** "Pretend I have Premium" works only in development builds, so it can never unlock a release. */
+const DEV_BUILD = import.meta.env.DEV
+
 export function isPremium() {
   const s = load()
-  return (s.dev && s.devPremium) || !!activeLicence()
+  return (DEV_BUILD && s.dev && s.devPremium) || !!activeLicence()
 }
 
 export const isAllowed = (_f: Feature) => !lockActive() || isPremium()

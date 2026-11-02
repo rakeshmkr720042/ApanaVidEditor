@@ -3,6 +3,8 @@ name: Firebase backend
 # and deploys them to the real project from main (or by hand from the Actions tab).
 # Deploy needs: secret FIREBASE_SERVICE_ACCOUNT (service account JSON key),
 # variable FIREBASE_PROJECT_ID, optional variable ADMIN_EMAIL (gets the admin role once signed up).
+# Cloud Functions need the Blaze plan: they deploy only when variable FIREBASE_FUNCTIONS is 'on'.
+# Without them the app itself creates the Free profile (the rules allow exactly that).
 on:
   push:
     branches: [main]
@@ -67,13 +69,17 @@ jobs:
         run: |
           npm ci --prefix firebase/functions
           npm ci --prefix firebase/test
-      - name: Deploy rules, indexes and functions
+      - name: Deploy rules, indexes (and functions on Blaze)
         if: steps.setup.outputs.ready == 'true'
         working-directory: firebase
+        env:
+          FUNCTIONS: ${{ vars.FIREBASE_FUNCTIONS }}
         run: |
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          ./test/node_modules/.bin/firebase deploy --only firestore,functions --project "$PROJECT" --non-interactive --force
+          ONLY=firestore
+          if [ "$FUNCTIONS" = "on" ]; then ONLY=firestore,functions; else echo "::notice::Cloud Functions skipped (set variable FIREBASE_FUNCTIONS=on after the Blaze upgrade)."; fi
+          ./test/node_modules/.bin/firebase deploy --only "$ONLY" --project "$PROJECT" --non-interactive --force
       - name: Seed plans and admin
         if: steps.setup.outputs.ready == 'true'
         working-directory: firebase/functions
