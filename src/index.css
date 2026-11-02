@@ -757,3 +757,14 @@ input, textarea { font: inherit; color: inherit; }
 .split-thumb i { position: absolute; box-sizing: border-box; border: 1.5px solid var(--panel-2); background: #4b5563; color: #fff; font-style: normal; font-size: 9px; display: grid; place-items: center; }
 .split-grid button.on .split-thumb i { background: var(--accent); }
 .split-grid small { font-size: 11px; }
+
+/* Smart cut */
+.sc-list { max-height: 210px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.sc-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 8px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.sc-row:last-child { border-bottom: 0; }
+.sc-row > span:nth-child(3) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-row.filler > span:nth-child(3) { color: var(--sel); }
+.sc-row .link, .sc-moment .link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
+.sc-moment { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel-2); display: grid; gap: 6px; }
+.sc-moment .row { justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.sc-text { margin: 0; color: var(--text); opacity: .85; }

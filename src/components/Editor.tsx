@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
 import { isSub, selectedIds, useEditor, type CamBubble, type Placed, type Placement, type Selection } from '../model/useEditor'
 import { Player } from '../engine/player'
-import { activeAt, sourceAt } from '../model/timeline'
+import { activeAt, layoutClips, sourceAt } from '../model/timeline'
 import { ColorPanel } from '../panels/ColorPanel'
 import { SplitPanel } from '../panels/SplitPanel'
 import type { SplitLayout } from '../model/split'
@@ -10,7 +10,7 @@ import { gradeIsEmpty } from '../engine/grade'
 import { REVERSE_MAX, reverseClip as reverseVideo, stillFrame } from '../engine/reverse'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
 import { getMedia, getProject, saveMedia, saveProject } from '../lib/db'
-import { fmtTime } from '../lib/format'
+import { fmtTime, uid } from '../lib/format'
 import { projectToFile } from '../lib/projectFile'
 import { isNative, saveNative } from '../lib/save'
 import { t } from '../lib/i18n'
@@ -43,6 +43,7 @@ import { ClipOrderPanel, type OrderMode } from '../panels/ClipOrderPanel'
 import { GreenScreenPanel } from '../panels/GreenScreenPanel'
 import { CutoutPanel } from '../panels/CutoutPanel'
 import { BeatPanel } from '../panels/BeatPanel'
+import { SmartCutPanel } from '../panels/SmartCutPanel'
 import { loadCutout } from '../engine/cutout'
 import { BACK, useBack } from '../lib/back'
 import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
@@ -84,7 +85,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
-  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
+  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
   | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
@@ -165,6 +166,19 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: ed.layout.total,
     }).then(() => true, () => { setToast(t('Could not save the project (storage full?)')); return false })
   }, [ed.project, ed.sources, name, initial.id, ed.layout.total])
+
+  // a Short made by Smart cut: saved as a new project next to this one, then opened
+  const makeShort = useCallback(async (data: Project, label: string) => {
+    if (!(await saveNow())) return
+    const id = uid()
+    const first = data.clips[0]
+    const dur = layoutClips(data.clips).total
+    try {
+      await saveProject({ id, name: `${name} · ${label}`, updatedAt: Date.now(), data, mediaIds: Object.keys(ed.sources),
+        thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: dur })
+    } catch { setToast(t('Could not save the project (storage full?)')); return }
+    location.hash = `p=${id}`
+  }, [saveNow, name, ed.sources])
 
   // autosave
   useEffect(() => {
@@ -453,7 +467,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? (ed.project.main?.locked ? null : clipAtPlayhead)
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'beat', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'beat', 'smartcut', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -675,6 +689,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'selectAll', label: 'Select all', on: selectAllClips, disabled: empty || !!ed.project.main?.locked },
       { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
       { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
+      { icon: 'smartcut', label: 'Smart cut', on: () => setPanel('smartcut'), disabled: empty },
       { icon: 'music', label: 'Beat sync', on: () => setPanel('beat'), disabled: empty, active: !!ed.project.beatFx },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'chroma', label: 'Green screen', on: () => openClipPanel('chroma'), disabled: !targetClip },
@@ -810,6 +825,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
   else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
   else if (panel === 'chroma' && selStored?.type === 'media') panelView = <GreenScreenPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} time={time} onToast={setToast} onClose={closePanel} />
+  else if (panel === 'smartcut') panelView = <SmartCutPanel ed={ed} onToast={setToast} onClose={closePanel} onShort={makeShort}
+      onSeek={(tt) => { player?.seek(tt); player?.play() }} />
   else if (panel === 'beat') panelView = <BeatPanel ed={ed} onToast={setToast} onMusic={() => { setAudioTab('mine'); setPanel('audio') }} onClose={closePanel} />
   else if (panel === 'cutout' && selStored?.type === 'media') panelView = <CutoutPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} onToast={setToast} onClose={closePanel} />
   else if (panel === 'cutout' && tclip) panelView = <CutoutPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} onToast={setToast} onClose={closePanel} />
