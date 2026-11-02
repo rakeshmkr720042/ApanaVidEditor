@@ -774,8 +774,11 @@ input, textarea { font: inherit; color: inherit; }
 .sc-text { margin: 0; color: var(--text); opacity: .85; }
 
 /* ---------- sign in */
-.auth { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); background: radial-gradient(1200px 500px at 50% -10%, rgba(79, 140, 255, 0.18), transparent 70%), var(--bg); }
-.auth-card { width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 20px; display: grid; gap: 10px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }
+/* the page itself does not scroll (html/body overflow hidden), so the sign-in screen scrolls on its own: on a short window every button stays reachable */
+.auth { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); background: radial-gradient(1200px 500px at 50% -10%, rgba(79, 140, 255, 0.18), transparent 70%), var(--bg); }
+.auth > :first-child { margin-top: auto; }
+.auth > :last-child { margin-bottom: auto; }
+.auth-card { flex: none; width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 20px; display: grid; gap: 10px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }
 .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .auth-brand > div { display: grid; line-height: 1.2; }
 .auth-brand b { font-size: 17px; }
