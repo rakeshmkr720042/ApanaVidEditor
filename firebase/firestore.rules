@@ -47,8 +47,19 @@ service cloud.firestore {
         && validName(request.resource.data.fullName)
         && validPhone(request.resource.data.phoneNumber)
         && request.resource.data.updatedAt == request.time;
-      // Admin: suspend / activate (never their own account) and give or remove Pro.
+      // Owner deletes their account: the profile is emptied and marked deleted (kept only so payment
+      // records still point at something); the app then deletes the sign-in itself. No way back.
+      allow update: if isOwner(uid)
+        && resource.data.accountStatus == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'email', 'emailLower', 'phoneNumber', 'photoURL', 'accountStatus', 'deletedAt', 'updatedAt'])
+        && request.resource.data.accountStatus == 'deleted'
+        && request.resource.data.fullName == '' && request.resource.data.email == '' && request.resource.data.emailLower == ''
+        && request.resource.data.phoneNumber == '' && request.resource.data.photoURL == ''
+        && request.resource.data.deletedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      // Admin: suspend / activate (never their own account, never a deleted one) and give or remove Pro.
       allow update: if isAdmin()
+        && resource.data.accountStatus in ['active', 'suspended']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountStatus', 'proUntil', 'planId', 'updatedAt', 'lastChangeId'])
         && request.resource.data.accountStatus in ['active', 'suspended']
         && (uid != request.auth.uid || request.resource.data.accountStatus == resource.data.accountStatus)

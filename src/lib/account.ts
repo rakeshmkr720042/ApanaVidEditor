@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
-  browserLocalPersistence, browserSessionPersistence, createUserWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged,
-  sendEmailVerification, sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword, signInWithPopup, signOut as fbSignOut,
-  updateProfile, type User,
+  browserLocalPersistence, browserSessionPersistence, createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider,
+  onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, sendPasswordResetEmail, setPersistence,
+  signInWithEmailAndPassword, signInWithPopup, signOut as fbSignOut, updateProfile, type User,
 } from 'firebase/auth'
-import { collection, doc, getDoc, getDocs, serverTimestamp, writeBatch, type Timestamp } from 'firebase/firestore/lite'
+import { collection, doc, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, where, writeBatch, type Timestamp } from 'firebase/firestore/lite'
 import { firebaseAuth, firestore, googleAvailable } from './firebase'
 import { t } from './i18n'
 import { setServerEntitlement, setServerPlans, type Plan } from './premium'
@@ -77,6 +77,8 @@ export function authMessage(e: unknown): string {
     'auth/popup-blocked': 'The sign-in window was blocked. Allow pop-ups for this site and try again.',
     'auth/account-exists-with-different-credential': 'This email already has an account. Sign in with email and password first.',
     'auth/operation-not-allowed': 'This sign-in method is not switched on yet.',
+    'auth/requires-recent-login': 'Please sign out, sign in again, and try once more.',
+    'auth/user-mismatch': 'Please choose the same Google account you signed in with.',
   }
   return t(map[code] ?? 'Something went wrong. Please try again.')
 }
@@ -203,6 +205,77 @@ async function readProfile(user: User): Promise<Profile | null> {
   return profileCache.profile
 }
 
+/** The profile as last read (null before it loads, or offline on a fresh launch). */
+export const currentProfile = () => {
+  const u = firebaseAuth().currentUser
+  return u && profileCache?.uid === u.uid ? profileCache.profile : null
+}
+
+/** Changes the name and mobile number (the only profile fields a user may change). */
+export async function saveProfile(name: string, phone: string) {
+  const u = firebaseAuth().currentUser
+  if (!u) throw new Error(t('Please sign in again.'))
+  const fullName = cleanName(name)
+  await updateDoc(doc(firestore(), 'users', u.uid), { fullName, phoneNumber: phone, updatedAt: serverTimestamp() })
+  await updateProfile(u, { displayName: fullName }).catch(() => { /* the profile is what counts */ })
+  if (profileCache?.uid === u.uid) profileCache = { uid: u.uid, profile: { ...profileCache.profile, fullName, phoneNumber: phone } }
+  emit()
+}
+
+// ---------- payments history (written only by the server)
+
+export interface Payment {
+  id: string
+  /** paise */
+  amount: number
+  currency: string
+  planId: string
+  planName: string
+  status: string
+  provider: string
+  createdAt: number | null
+}
+
+/** The signed-in user's payments, newest first. */
+export async function listMyPayments(): Promise<Payment[]> {
+  const u = firebaseAuth().currentUser
+  if (!u) return []
+  const snap = await getDocs(query(collection(firestore(), 'payments'), where('userId', '==', u.uid), limit(100)))
+  return snap.docs.map((d) => {
+    const x = d.data()
+    return {
+      id: d.id, amount: Number(x.amount) || 0, currency: x.currency ?? 'INR', planId: x.planId ?? '', planName: x.planName ?? x.planId ?? '',
+      status: x.status ?? '', provider: x.provider ?? '', createdAt: ms(x.createdAt),
+    }
+  }).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+}
+
+// ---------- deleting the account
+
+/** How the account signs in, so deleting it asks for the right proof. */
+export function signInKind(): 'password' | 'google' {
+  const u = firebaseAuth().currentUser
+  return u?.providerData.some((p) => p.providerId === 'password') ? 'password' : 'google'
+}
+
+/**
+ * Deletes the signed-in account: asks for the password (or Google) again, empties the profile and
+ * marks it deleted, then deletes the sign-in. Projects on this device are not touched.
+ */
+export async function deleteAccount(password: string) {
+  const u = firebaseAuth().currentUser
+  if (!u) throw new Error(t('Please sign in again.'))
+  if (signInKind() === 'password') await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email ?? '', password))
+  else await reauthenticateWithPopup(u, new GoogleAuthProvider())
+  await updateDoc(doc(firestore(), 'users', u.uid), {
+    fullName: '', email: '', emailLower: '', phoneNumber: '', photoURL: '',
+    accountStatus: 'deleted', deletedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  })
+  profileCache = null
+  setServerEntitlement(null)
+  await deleteUser(u)
+}
+
 // ---------- Pro status and plans (read only; the server writes them)
 
 const ms = (v: unknown) => (v && typeof (v as Timestamp).toMillis === 'function' ? (v as Timestamp).toMillis() : null)
@@ -268,6 +341,11 @@ export function useAccount(): AccountState {
       if (!u) return
       // Online: refresh the profile (and learn about a suspension). Offline: keep going with the saved session.
       Promise.resolve(busy).catch(() => {}).then(() => ensureAccount(u)).then(async (p) => {
+        if (p?.accountStatus === 'deleted') {
+          // Deleted earlier but the sign-in was left over (the last step failed): finish the job.
+          await deleteUser(u).catch(() => fbSignOut(firebaseAuth()))
+          return
+        }
         setBlocked(p?.accountStatus === 'suspended')
         await loadEntitlement(u, p).catch(() => { /* offline: defaults */ })
         f()

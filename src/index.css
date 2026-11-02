@@ -839,3 +839,15 @@ input, textarea { font: inherit; color: inherit; }
 .admin-feature input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex: none; }
 .admin-feature span { display: flex; flex-direction: column; }
 .home.admin .home-main { overflow-y: auto; }
+
+/* Account sheet: profile, payments, delete */
+.account-links { display: flex; flex-direction: column; gap: 8px; }
+.account-links .btn { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.account-form { display: flex; flex-direction: column; gap: 10px; }
+.account-title { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.account-pay { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.account-pay > div { display: grid; }
+.account-pay-amt { text-align: right; }
+.account-pay .ok { color: #9be3b4; }
+.link.danger { color: #ff6b6b; align-self: center; font-size: 14px; margin-top: 4px; }
+.btn.wide.danger:not(:disabled) { background: #ff6b6b; color: #fff; border-color: #ff6b6b; }

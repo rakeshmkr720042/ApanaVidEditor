@@ -31,7 +31,7 @@ function AuthShell({ children, onLang }: { children: ReactNode; onLang: () => vo
   )
 }
 
-function Field(p: { label: string; type?: string; value: string; onChange: (v: string) => void; error?: string | null; auto?: string; placeholder?: string; testid?: string }) {
+export function Field(p: { label: string; type?: string; value: string; onChange: (v: string) => void; error?: string | null; auto?: string; placeholder?: string; testid?: string }) {
   return (
     <label className="auth-field">
       <span>{t(p.label)}</span>
