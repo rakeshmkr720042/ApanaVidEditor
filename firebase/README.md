@@ -46,6 +46,12 @@ require a `security_events` record by the same admin, with the server time, in t
 (`audited()` in firestore.rules, field `lastChangeId` on the changed document). Records can never
 be edited or deleted; the History tab shows the latest 30.
 
+## No account needed for free use
+
+The app opens without signing in (Free, with ads). An account is asked for only to buy or restore Pro
+(Pro screen: "Sign in to get Pro", or the Sign in button on Home). So `subscription_plans` and
+`config/entitlements` can be read by anyone; everything else still needs a signed-in user.
+
 ## Account sheet (every user)
 
 - **Edit name and mobile number**: the only profile fields a user may change (the rules check them).

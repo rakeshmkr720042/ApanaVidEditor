@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Home } from './components/Home'
 import { Editor } from './components/Editor'
 import { AdminScreen } from './components/AdminScreen'
-import { AuthScreen, BlockedScreen, DesktopSignIn, desktopSignInRequest, LoadingScreen, VerifyScreen } from './components/AuthScreen'
-import { useAccount } from './lib/account'
+import { BlockedScreen, DesktopSignIn, desktopSignInRequest, LoadingScreen } from './components/AuthScreen'
+import { AccountContext, useAccount } from './lib/account'
 import { requestPersistence } from './lib/db'
 import { hasPendingFiles, listenForOpenedFiles } from './lib/desktop'
 import { createProject } from './lib/newProject'
@@ -18,14 +18,16 @@ export default function App() {
   return <Gate langKey={langKey} onLang={onLang} />
 }
 
-/** Nothing of the app shows until someone is signed in with a confirmed email. */
+/**
+ * The app works without an account (Free, with ads). An account is needed only to buy or restore Pro;
+ * signing in happens from the Account button or the Pro screen. A suspended account sees only its notice
+ * (signing out there goes back to free use).
+ */
 function Gate({ langKey, onLang }: { langKey: number; onLang: () => void }) {
   const account = useAccount()
   if (account.status === 'loading') return <LoadingScreen />
-  if (account.status === 'out') return <AuthScreen key={langKey} onLang={onLang} />
-  if (account.status === 'unverified') return <VerifyScreen key={langKey} email={account.user.email ?? ''} onLang={onLang} />
   if (account.status === 'blocked') return <BlockedScreen key={langKey} onLang={onLang} />
-  return <Workspace key={account.user.uid} />
+  return <AccountContext.Provider value={account}><Workspace /></AccountContext.Provider>
 }
 
 /** Two screens: the project list and the editor. The open project is kept in the URL hash. */

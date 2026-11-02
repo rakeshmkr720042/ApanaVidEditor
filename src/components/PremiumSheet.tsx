@@ -3,7 +3,8 @@ import {
   activeLicence, DEFAULT_PLANS, devSettings, FEATURES, LOCK_ON, needsCheck, paymentProvider, proFeatureList, rupees, serverPlans, serverProUntil,
   setDev, setLicence, storedLicence, usePremium, type Feature, type Plan, type PlanId,
 } from '../lib/premium'
-import { loadPlans, refreshAccount } from '../lib/account'
+import { loadPlans, refreshAccount, useAccountState } from '../lib/account'
+import { SignInOverlay } from './AuthScreen'
 import { SheetClose, Toggle } from '../ui/kit'
 import { Icon } from './Icon'
 import { t } from '../lib/i18n'
@@ -39,6 +40,8 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
   const dev = devSettings()
   const lic = activeLicence() ?? storedLicence()
   const provider = paymentProvider()
+  const signedIn = useAccountState().status === 'in'
+  const [signIn, setSignIn] = useState(false)
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true); setNote(null)
@@ -53,6 +56,7 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
   const tapVersion = () => { if (++taps.current >= 7 && !dev.dev) { setDev({ dev: true }); setNote(t('Developer switches are on.')) } }
 
   return (
+    <>
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet premium" onClick={(e) => e.stopPropagation()} data-testid="premium-sheet">
         <div className="sheet-grab" />
@@ -99,13 +103,21 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
               })}
             </div>
             <p className="muted small">{t('Every Pro plan unlocks the same features.')}</p>
-            <button className="btn primary wide" disabled={!provider || busy || !chosen} onClick={buy}>
-              {t('Subscribe')}{chosen && <> · {rupees(chosen.price)}</>}
-            </button>
+            {signedIn ? (
+              <button className="btn primary wide" disabled={!provider || busy || !chosen} onClick={buy}>
+                {t('Subscribe')}{chosen && <> · {rupees(chosen.price)}</>}
+              </button>
+            ) : (
+              <button className="btn primary wide" onClick={() => setSignIn(true)} data-testid="pro-signin">
+                {t('Sign in to get Pro')}
+              </button>
+            )}
             {!provider && <p className="muted small" data-testid="no-payments">{t('Payments are not switched on yet. You will be able to subscribe here soon.')}</p>}
           </>
         )}
-        <button className="btn small ghost" disabled={busy} onClick={check} data-testid="pro-check">{t('Check my plan again')}</button>
+        {signedIn
+          ? <button className="btn small ghost" disabled={busy} onClick={check} data-testid="pro-check">{t('Check my plan again')}</button>
+          : <button className="btn small ghost" onClick={() => setSignIn(true)} data-testid="pro-restore-signin">{t('Already have Pro? Sign in')}</button>}
         {provider && (
           <div className="row">
             <button className="btn" disabled={busy} onClick={restore}>{t('Restore purchase')}</button>
@@ -125,5 +137,7 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
         <button className="btn wide ghost" onClick={onClose}>{t('Close')}</button>
       </div>
     </div>
+    {signIn && <SignInOverlay onClose={() => setSignIn(false)} />}
+    </>
   )
 }

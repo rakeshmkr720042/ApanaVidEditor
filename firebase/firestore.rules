@@ -74,13 +74,14 @@ service cloud.firestore {
     function validPhone(p) { return p is string && (p == '' || p.matches('^\\+[1-9][0-9]{7,14}$')); }
 
     // Plans and the Free/Pro feature split: everyone signed in reads; only an admin changes them.
+    // Prices and the Free/Pro split are public: the app is used without an account until someone buys Pro.
     match /subscription_plans/{planId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create, update: if isAdmin() && validPlan(planId, request.resource.data) && audited();
       allow delete: if false; // switch a plan off with isActive instead, so old subscriptions keep their plan
     }
     match /config/{docId} {
-      allow read: if signedIn();
+      allow read: if docId == 'entitlements' || signedIn();
       allow create, update: if isAdmin() && docId == 'entitlements' && validEntitlements(request.resource.data) && audited();
       allow delete: if false;
     }
