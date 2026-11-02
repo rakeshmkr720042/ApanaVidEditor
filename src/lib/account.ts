@@ -100,7 +100,8 @@ export function register(o: { name: string; email: string; password: string; pho
     await remember(o.remember)
     const cred = await createUserWithEmailAndPassword(firebaseAuth(), o.email.trim(), o.password)
     await updateProfile(cred.user, { displayName: cleanName(o.name) })
-    await ensureAccount(cred.user, { fullName: cleanName(o.name), phoneNumber: o.phone })
+    // The account exists now: a profile write that fails (offline, server busy) is retried on the next sign-in.
+    await ensureAccount(cred.user, { fullName: cleanName(o.name), phoneNumber: o.phone }).catch(() => {})
     await sendEmailVerification(cred.user).catch(() => {})
     return cred.user
   })())
