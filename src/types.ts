@@ -148,6 +148,30 @@ export interface Clip {
   effect?: VideoEffect | null // video effect, missing = none
   grade?: Grade | null // curves, HSL, LUT; missing = none
   cutout?: Cutout | null // background removal (person cutout), missing = off; shows `backdrop` behind
+  stabilize?: Stabilize | null // shake taken out (found by src/engine/motion.ts), missing = off
+  motionBlur?: number | null // 0..1 smear of movement (frames blend into each other), missing = off
+  smoothSlow?: number | null // source frames per second: slow motion blends neighbouring frames, missing = off
+  photo3d?: Photo3D | null // photos: 3D zoom (near things move more than far ones), missing = off
+}
+
+/**
+ * Shake removal: the camera's path as found in the video (how far the picture has moved, in fractions of the
+ * frame), sampled `fps` times a second from source time `from`. The renderer smooths it by `strength` and moves
+ * each frame back onto the smooth path, zoomed in just enough to hide the moved edges.
+ */
+export interface Stabilize {
+  strength: number // 0..1 how smooth the camera path becomes
+  fps: number
+  from: number
+  x: number[]
+  y: number[]
+}
+
+/** A photo that moves in 3D: split into layers by distance, and the near layers move more as the camera moves. */
+export interface Photo3D {
+  motion: 'in' | 'out' | 'left' | 'right' | 'up' | 'orbit'
+  amount: number // 0..1
+  depth: string // small greyscale PNG data URL: white = near
 }
 
 /**
@@ -178,7 +202,7 @@ interface LayerBase {
 }
 
 /** A saved pose of a layer at a moment, counted from the layer's start. Between keyframes the layer glides. */
-export interface BoxKey { t: number; box: Box }
+export interface BoxKey { t: number; box: Box; lin?: boolean } // lin: glides straight to the next one (motion tracking)
 
 /** Layers with a box can move, grow, turn and fade over time with keyframes. */
 interface Keyed { keys?: BoxKey[] }

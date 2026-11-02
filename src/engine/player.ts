@@ -16,7 +16,7 @@ export function fadeGain(local: number, dur: number, fadeIn: number, fadeOut: nu
 }
 
 /** What media is needed at time t, with source times, rates and volumes. */
-export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<string, MediaSource>, t: number, lookahead = 0): Need[] {
+export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<string, MediaSource>, t: number, lookahead = 0, smooth = false): Need[] {
   const needs: Need[] = []
   const { a, b, progress } = activeAt(items, t)
   for (const [act, g] of [[a, b ? 1 - progress : 1], [b, progress]] as const) {
@@ -31,6 +31,10 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     const clean = job ? previewSource(c.sourceId, job.dn, job.fx) : null
     needs.push({ key: clipKey(c), source: src, time, rate: speed, volume: clean ? 0 : volume })
     if (clean) needs.push({ key: clipKey(c) + '~clean', source: clean, time, rate: speed, volume })
+    // smooth slow motion (export): the next source frame too, to blend with
+    if (smooth && c.smoothSlow && speed < 1 && src.kind === 'video') {
+      needs.push({ key: clipKey(c) + '~next', source: src, time: Math.min(src.duration, (Math.floor(time * c.smoothSlow + 1e-3) + 1) / c.smoothSlow + 1e-4), rate: speed, volume: 0 })
+    }
     const bd = backdropSource(c, sources)
     if (bd) needs.push({ key: backdropKey(c), source: bd, time: backdropTime(c.backdrop!, bd, act.local), rate: 1, volume: 0 })
   }

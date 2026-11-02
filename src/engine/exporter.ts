@@ -9,6 +9,7 @@ import { encodeWav } from './music'
 import { backdropSource } from './chromakey'
 import { loadCutout, usesCutout } from './cutout'
 import { mediaNeeds } from './player'
+import { prepare3d } from './photo3d'
 import { outputSize, Renderer, type FrameImage } from './renderer'
 import { ensureFont } from './text'
 
@@ -184,9 +185,10 @@ export async function exportProject(
     await renderer.prepareWaves(project, sources)
     await renderer.preparePresenter(project)
     if (usesCutout(project)) await loadCutout()
+    await prepare3d(project, sources)
     const readers = new Map<string, FrameReader>()
     const renderAt = async (t: number, seed: number) => {
-      const needs = mediaNeeds(project, items, sources, t)
+      const needs = mediaNeeds(project, items, sources, t, 0, true)
       const frames = new Map<string, FrameImage | null>()
       for (const n of needs) {
         if (n.source.kind === 'audio') continue

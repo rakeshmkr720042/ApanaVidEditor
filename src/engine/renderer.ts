@@ -1,5 +1,7 @@
 import type { Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
-import { activeAt, type LaidClip } from '../model/timeline'
+import { activeAt, sourceAt, type LaidClip } from '../model/timeline'
+import { stabAt } from './motion'
+import { drawPhoto3d, photo3dKey } from './photo3d'
 import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
 import { colorParams, type ColorParams } from './filters'
@@ -122,10 +124,10 @@ export class Renderer {
     const { a, b, progress } = activeAt(inp.items, inp.t)
     if (a) {
       // a green screen clip comes back already keyed over its backdrop (and graded), so it needs no grade here
-      const ka = this.clipImage(0, a.item.clip, inp, a.local / a.item.dur, seed)
+      const ka = this.clipImage(0, a.item.clip, inp, a.local / a.item.dur, seed, a.local)
       const fxA = effectFrame(a.item.clip, a.local)
       if (b && a.item.clip.transition) {
-        const kb = this.clipImage(1, b.item.clip, inp, b.local / b.item.dur, seed)
+        const kb = this.clipImage(1, b.item.clip, inp, b.local / b.item.dur, seed, Math.max(0, b.local))
         if (this.grader) {
           this.grader.drawTransition(ka.img, ka.p, kb.img, kb.p, a.item.clip.transition.type, progress, seed, fxA, effectFrame(b.item.clip, Math.max(0, b.local)))
           ctx.drawImage(this.grader.canvas, 0, 0)
@@ -308,11 +310,11 @@ export class Renderer {
    * A main-video clip ready to show: its frame and colour settings, or, with green screen on, its backdrop with
    * the keyed and graded picture on top (`done`: nothing left to grade).
    */
-  private clipImage(i: number, clip: Clip, inp: RenderInput, progress: number, seed: number): { img: Canvas; p: ColorParams; done: boolean } {
+  private clipImage(i: number, clip: Clip, inp: RenderInput, progress: number, seed: number, local: number): { img: Canvas; p: ColorParams; done: boolean } {
     const p = { ...colorParams(clip.adjust, clip.filter, clip.filterAmount), gpu: gradeGpu(clip.grade, inp.project) }
     const keyed = keyOn(clip.chroma) && !!this.grader
     const cut = !keyed && clip.cutout?.enabled && this.grader ? clip.cutout : null
-    const fr = this.drawClipFrame(i, clip, inp, progress, keyed || !!cut)
+    const fr = this.drawClipFrame(i, clip, inp, progress, keyed || !!cut, local)
     if (cut) {
       const stamp = `${inp.t.toFixed(3)}:${clip.fit}:${clip.rotate}:${clip.flipH}:${clip.flipV}:${JSON.stringify(clip.crop ?? null)}:${this.W}x${this.H}`
       const mask = personMask(fr, clipKey(clip), stamp, cut.soft, this.onNeedsRedraw)
@@ -363,7 +365,7 @@ export class Renderer {
   }
 
   /** Draws a clip (crop, rotate, flip, fit/fill, background) into frames[i]; `clear` leaves the empty parts see-through. */
-  private drawClipFrame(i: number, clip: Clip, inp: RenderInput, progress: number, clear = false): Canvas {
+  private drawClipFrame(i: number, clip: Clip, inp: RenderInput, progress: number, clear = false, local = 0): Canvas {
     const out = this.frames[i]
     const c = ctx2d(out)
     const { W, H } = this
@@ -386,11 +388,72 @@ export class Renderer {
       c.drawImage(s, 0, 0, W, H)
       c.filter = 'none'
     }
-    this.placeFrame(c, f, clip, W, H, clip.fit, Math.min(1, Math.max(0, progress)))
+    const p = Math.min(1, Math.max(0, progress))
+    const srcT = clip.stabilize || clip.smoothSlow ? sourceAt(clip, local).time : 0
+    const stab = clip.stabilize ? stabAt(clip.stabilize, srcT) : null
+    if (!(clip.photo3d && this.drawPhoto3d(c, f, clip, p))) this.placeFrame(c, f, clip, W, H, clip.fit, p, stab)
+    // smooth slow motion: the next source frame shows through by how far the moment is between the two
+    if (clip.smoothSlow) {
+      const f2 = inp.frame(clipKey(clip) + '~next')
+      if (f2) {
+        const pos = srcT * clip.smoothSlow
+        const frac = pos - Math.floor(pos + 1e-3)
+        if (frac > 0.02) {
+          c.globalAlpha = Math.min(1, frac)
+          this.placeFrame(c, f2, clip, W, H, clip.fit, p, stab)
+          c.globalAlpha = 1
+        }
+      }
+    }
+    if (clip.motionBlur) this.smear(i, clip, out, inp.t)
     return out
   }
 
-  private placeFrame(c: Ctx, f: FrameImage, clip: Clip, W: number, H: number, fit: 'fit' | 'fill', progress?: number) {
+  private trails = new Map<string, { t: number; c: Canvas }>()
+
+  /**
+   * Motion blur: each frame is mixed with the frames just before it, so anything moving leaves a soft trail.
+   * A still or jumped-to frame (paused, seeking) shows sharp.
+   */
+  private smear(i: number, clip: Clip, out: Canvas, t: number) {
+    const { W, H } = this
+    let tr = this.trails.get(clip.id)
+    if (!tr) { tr = { t: -1, c: makeCanvas(W, H) }; this.trails.set(clip.id, tr) }
+    if (tr.c.width !== W || tr.c.height !== H) { tr.c.width = W; tr.c.height = H; tr.t = -1 }
+    const tc = ctx2d(tr.c)
+    tc.setTransform(1, 0, 0, 1, 0, 0)
+    const dt = t - tr.t
+    if (dt > 1e-4 && dt < 0.2) {
+      // how much of the old picture stays, per 1/30 s
+      const keep = Math.pow(0.3 + 0.55 * Math.min(1, clip.motionBlur!), dt * 30)
+      tc.globalCompositeOperation = 'source-over'
+      tc.globalAlpha = 1 - keep
+      tc.drawImage(out, 0, 0)
+      tc.globalAlpha = 1
+      const oc = ctx2d(out)
+      oc.setTransform(1, 0, 0, 1, 0, 0)
+      oc.globalCompositeOperation = 'copy'
+      oc.drawImage(tr.c, 0, 0)
+      oc.globalCompositeOperation = 'source-over'
+    } else if (Math.abs(dt) > 1e-4 || tr.t < 0) {
+      tc.globalCompositeOperation = 'copy'
+      tc.drawImage(out, 0, 0)
+      tc.globalCompositeOperation = 'source-over'
+    }
+    tr.t = t
+    void i
+  }
+
+  /** A photo with 3D motion, placed like placeFrame does it. False until its layers are ready. */
+  private drawPhoto3d(c: Ctx, f: FrameImage, clip: Clip, p: number) {
+    const { W, H } = this
+    const cr = clip.crop ?? { x: 0, y: 0, w: 1, h: 1 }
+    const sw = cr.w * f.width, sh = cr.h * f.height
+    const s = clip.fit === 'fit' ? Math.min(W / sw, H / sh) : Math.max(W / sw, H / sh)
+    return drawPhoto3d(c, photo3dKey(clip.sourceId, clip.photo3d!), f.image, f.width, f.height, clip.photo3d!, p, W, H, cr, s, this.onNeedsRedraw)
+  }
+
+  private placeFrame(c: Ctx, f: FrameImage, clip: Clip, W: number, H: number, fit: 'fit' | 'fill', progress?: number, stab?: { dx: number; dy: number; zoom: number } | null) {
     const cr = clip.crop ?? { x: 0, y: 0, w: 1, h: 1 }
     const sx = cr.x * f.width, sy = cr.y * f.height, sw = cr.w * f.width, sh = cr.h * f.height
     const rot = clip.rotate % 180 !== 0
@@ -405,6 +468,11 @@ export class Renderer {
     }
     c.rotate((clip.rotate * Math.PI) / 180)
     c.scale(clip.flipH ? -1 : 1, clip.flipV ? -1 : 1)
+    if (stab) {
+      // shake taken out: the frame moves back onto the smooth path, a little zoomed so its edges stay hidden
+      c.scale(stab.zoom, stab.zoom)
+      c.translate(stab.dx * f.width * s, stab.dy * f.height * s)
+    }
     c.drawImage(f.image, sx, sy, sw, sh, (-sw * s) / 2, (-sh * s) / 2, sw * s, sh * s)
     c.restore()
   }

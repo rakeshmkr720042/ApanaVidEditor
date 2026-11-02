@@ -44,6 +44,8 @@ import { GreenScreenPanel } from '../panels/GreenScreenPanel'
 import { CutoutPanel } from '../panels/CutoutPanel'
 import { BeatPanel } from '../panels/BeatPanel'
 import { SmartCutPanel } from '../panels/SmartCutPanel'
+import { MotionPanel, TrackPanel } from '../panels/MotionPanel'
+import { isTracked } from '../engine/tracker'
 import { loadCutout } from '../engine/cutout'
 import { BACK, useBack } from '../lib/back'
 import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
@@ -85,7 +87,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
-  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
+  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
   | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
@@ -555,6 +557,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!selClip.chroma?.enabled },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
+      { icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
       { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !!selClip.ramp },
       ...(!photo ? [{ icon: 'reverse', label: reversing !== null ? `${Math.round(reversing * 100)}%` : 'Reverse', on: reverse, disabled: reversing !== null } as Tool] : []),
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
@@ -615,6 +618,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...(!isSub(selLayer) ? [{ icon: 'selectAll', label: 'Select all', on: () => selectRow(selLayer.id) } as Tool] : []),
       { icon: 'swap', label: 'Swap', on: () => { setPanel(null); setSwapFrom({ type: 'layer', id: selLayer.id }) }, active: swapFrom?.id === selLayer.id },
       ...('box' in selLayer ? [{ icon: 'keyframe', label: 'Keyframes', on: () => setPanel('keys'), active: !!selLayer.keys?.length } as Tool] : []),
+      ...('box' in selLayer ? [{ icon: 'track', label: 'Track', on: () => setPanel('track'), active: !!selStored && isTracked(selStored) } as Tool] : []),
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
       { icon: 'trash', label: 'Delete', on: removeSel },
@@ -829,6 +833,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       onSeek={(tt) => { player?.seek(tt); player?.play() }} />
   else if (panel === 'beat') panelView = <BeatPanel ed={ed} onToast={setToast} onMusic={() => { setAudioTab('mine'); setPanel('audio') }} onClose={closePanel} />
   else if (panel === 'cutout' && selStored?.type === 'media') panelView = <CutoutPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} onToast={setToast} onClose={closePanel} />
+  else if (panel === 'motion' && tclip) panelView = <MotionPanel key={tclip.id} ed={ed} clip={tclip} onToast={setToast} onClose={closePanel} />
+  else if (panel === 'track' && selStored) panelView = <TrackPanel key={selStored.id} ed={ed} layer={selStored} time={time} onSeek={seek} onClose={closePanel} />
   else if (panel === 'cutout' && tclip) panelView = <CutoutPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} onToast={setToast} onClose={closePanel} />
   else if (panel === 'chroma' && tclip) panelView = <GreenScreenPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'order' && selClip) panelView = (
