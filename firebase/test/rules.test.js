@@ -3,7 +3,7 @@ import { test, before, after, beforeEach } from 'node:test'
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing'
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, Timestamp, writeBatch, query, orderBy, limit } from 'firebase/firestore'
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, Timestamp, writeBatch, query, orderBy, limit, where } from 'firebase/firestore'
 
 let env
 const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080').split(':')
@@ -69,6 +69,26 @@ test('users: name and phone are validated', async () => {
 test('users: suspended account cannot edit, nobody deletes profiles', async () => {
   await assertFails(updateDoc(doc(env.authenticatedContext('sus').firestore(), 'users/sus'), { fullName: 'Back', updatedAt: serverTimestamp() }))
   await assertFails(deleteDoc(doc(alice(), 'users/alice')))
+})
+
+const wipe = (o = {}) => ({ fullName: '', email: '', emailLower: '', phoneNumber: '', photoURL: '', accountStatus: 'deleted', deletedAt: serverTimestamp(), updatedAt: serverTimestamp(), ...o })
+
+test('users: owner deletes own account by emptying the profile; no way back', async () => {
+  await assertFails(updateDoc(doc(alice(), 'users/bob'), wipe()))
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), wipe({ fullName: 'Asha' })))
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), wipe({ email: 'asha@example.com' })))
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), wipe({ planId: 'annual' })))
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), wipe({ accountStatus: 'active' })))
+  await assertFails(updateDoc(doc(env.authenticatedContext('sus').firestore(), 'users/sus'), wipe()))
+  await assertSucceeds(updateDoc(doc(alice(), 'users/alice'), wipe()))
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), { fullName: 'Back', updatedAt: serverTimestamp() }))
+  await assertFails(adminChange(admin(), 'users/alice', { accountStatus: 'active' }, 'user_activate'))
+  await assertFails(adminChange(admin(), 'users/alice', { accountStatus: 'deleted', proUntil: Timestamp.now(), planId: 'monthly' }, 'pro_grant'))
+})
+
+test('payments: a user lists only their own', async () => {
+  await assertSucceeds(getDocs(query(collection(alice(), 'payments'), where('userId', '==', 'alice'), limit(50))))
+  await assertFails(getDocs(query(collection(alice(), 'payments'), limit(50))))
 })
 
 const carol = () => env.authenticatedContext('carol', { email: 'Carol@Example.com' }).firestore()

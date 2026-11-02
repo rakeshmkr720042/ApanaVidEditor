@@ -46,6 +46,14 @@ require a `security_events` record by the same admin, with the server time, in t
 (`audited()` in firestore.rules, field `lastChangeId` on the changed document). Records can never
 be edited or deleted; the History tab shows the latest 30.
 
+## Account sheet (every user)
+
+- **Edit name and mobile number**: the only profile fields a user may change (the rules check them).
+- **My payments**: the user's own `payments` records (`where userId == uid`), newest first. Only the server writes them.
+- **Delete my account**: asks for the password (or Google) again, then empties `users/{uid}` (name, email, mobile, photo),
+  sets `accountStatus: 'deleted'` and `deletedAt`, and deletes the Firebase sign-in. Payment records stay, linked only by uid.
+  A deleted profile can never be changed again, by the user or the admin. Projects on the device are not touched.
+
 ## Plans (defaults, editable later from the admin screen)
 
 | Plan id | Name | Price | Duration |

@@ -102,24 +102,24 @@ function UsersTab() {
         {users?.map((u) => {
           const isPro = !!u.proUntil && u.proUntil > Date.now()
           return (
-            <div key={u.uid} className={`admin-user${u.accountStatus === 'suspended' ? ' off' : ''}`} data-testid="admin-user">
+            <div key={u.uid} className={`admin-user${u.accountStatus !== 'active' ? ' off' : ''}`} data-testid="admin-user">
               <div className="admin-user-info">
-                <b>{u.fullName || '—'}</b>
+                <b>{u.accountStatus === 'deleted' ? t('Deleted account') : u.fullName || '—'}</b>
                 <small>{u.email}{u.phoneNumber && ` · ${u.phoneNumber}`}</small>
                 <small className="muted">
                   {isPro ? `${t('Pro until')} ${day(u.proUntil)}` : t('Free')}
-                  {' · '}{u.accountStatus === 'suspended' ? <span className="admin-bad">{t('Suspended')}</span> : t('Active')}
+                  {' · '}{u.accountStatus === 'suspended' ? <span className="admin-bad">{t('Suspended')}</span> : u.accountStatus === 'deleted' ? <span className="admin-bad">{t('Deleted')}</span> : t('Active')}
                   {' · '}{t('Joined')} {day(u.createdAt)}
                 </small>
               </div>
-              <div className="admin-user-actions">
+              {u.accountStatus !== 'deleted' && <div className="admin-user-actions">
                 <button className="btn small" disabled={busy} onClick={() => setPro(u)} data-testid="admin-pro">{t('Pro…')}</button>
                 {u.uid !== me && (
                   <button className={`btn small${u.accountStatus === 'suspended' ? '' : ' danger'}`} disabled={busy} onClick={() => status(u)} data-testid="admin-status">
                     {t(u.accountStatus === 'suspended' ? 'Activate' : 'Suspend')}
                   </button>
                 )}
-              </div>
+              </div>}
             </div>
           )
         })}
