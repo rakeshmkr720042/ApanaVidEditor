@@ -64,10 +64,53 @@ test('users: name and phone are validated', async () => {
   await assertSucceeds(updateDoc(ref, { phoneNumber: '', updatedAt: serverTimestamp() }))
 })
 
-test('users: suspended account cannot edit, nobody creates or deletes profiles', async () => {
+test('users: suspended account cannot edit, nobody deletes profiles', async () => {
   await assertFails(updateDoc(doc(env.authenticatedContext('sus').firestore(), 'users/sus'), { fullName: 'Back', updatedAt: serverTimestamp() }))
-  await assertFails(setDoc(doc(env.authenticatedContext('carol').firestore(), 'users/carol'), userDoc()))
   await assertFails(deleteDoc(doc(alice(), 'users/alice')))
+})
+
+const carol = () => env.authenticatedContext('carol', { email: 'Carol@Example.com' }).firestore()
+const newProfile = (o = {}) => ({
+  fullName: 'Carol', email: 'Carol@Example.com', emailLower: 'carol@example.com', phoneNumber: '', photoURL: '',
+  role: 'user', accountStatus: 'active', planId: 'free', proUntil: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...o,
+})
+
+test('users: a new user creates only their own active Free profile', async () => {
+  await assertSucceeds(setDoc(doc(carol(), 'users/carol'), newProfile()))
+  await env.clearFirestore()
+  for (const bad of [
+    { role: 'admin' }, { accountStatus: 'suspended' }, { planId: 'annual' }, { proUntil: Timestamp.now() },
+    { email: 'other@example.com' }, { emailLower: 'other@example.com' }, { createdAt: Timestamp.fromMillis(0) },
+    { phoneNumber: '123' }, { fullName: 'x'.repeat(81) }, { extra: true },
+  ]) {
+    await assertFails(setDoc(doc(carol(), 'users/carol'), newProfile(bad)))
+  }
+  await assertFails(setDoc(doc(carol(), 'users/dave'), newProfile()))
+  await assertFails(setDoc(doc(guest(), 'users/carol'), newProfile()))
+  // Once it exists, a second create (overwrite) is an update and is refused for these fields.
+  await assertSucceeds(setDoc(doc(carol(), 'users/carol'), newProfile()))
+  await assertFails(setDoc(doc(carol(), 'users/carol'), newProfile({ planId: 'free', role: 'user', fullName: 'C' })))
+})
+
+const freeSub = (o = {}) => ({
+  userId: 'carol', planId: 'free', planName: 'Free Forever', provider: 'free', status: 'active',
+  startDate: serverTimestamp(), expiryDate: null, autoRenewal: false, providerRef: null, ...o,
+})
+
+test('subscriptions: a user creates only their own Free record, never a paid one', async () => {
+  for (const bad of [
+    { planId: 'annual' }, { planName: 'Annual Pro' }, { provider: 'razorpay' }, { status: 'pending' },
+    { expiryDate: Timestamp.fromMillis(Date.now() + 1e10) }, { autoRenewal: true }, { providerRef: 'x' }, { userId: 'dave' },
+  ]) {
+    await assertFails(setDoc(doc(carol(), 'subscriptions/free_carol'), freeSub(bad)))
+  }
+  await assertFails(setDoc(doc(carol(), 'subscriptions/pro_carol'), freeSub()))
+  await assertFails(setDoc(doc(carol(), 'subscriptions/free_dave'), freeSub({ userId: 'dave' })))
+  await assertSucceeds(getDoc(doc(carol(), 'subscriptions/free_carol')))
+  await assertFails(getDoc(doc(carol(), 'subscriptions/free_dave')))
+  await assertSucceeds(setDoc(doc(carol(), 'subscriptions/free_carol'), freeSub()))
+  await assertFails(updateDoc(doc(carol(), 'subscriptions/free_carol'), { planId: 'annual' }))
+  await assertFails(deleteDoc(doc(carol(), 'subscriptions/free_carol')))
 })
 
 test('subscriptions and payments: read own only, never write', async () => {

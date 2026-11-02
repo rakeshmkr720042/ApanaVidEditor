@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // Apna Editor accounts and subscriptions.
-// Default deny. The app may only read its own records and edit two profile fields.
+// Default deny. The app may read its own records, create its own Free profile once, and edit two profile fields.
 // Plans, subscriptions, payments, roles and account status are written by Cloud Functions only
 // (the Admin SDK bypasses these rules), so nothing on the device can grant itself Pro.
 service cloud.firestore {
@@ -14,7 +14,23 @@ service cloud.firestore {
     // users/{uid}: profile + a read-only copy of the plan for display.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create, delete: if false;
+      // The app may create its own profile once, only as an active Free user with its own email.
+      // (The Cloud Function does the same when it runs; whichever is first wins.)
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['fullName', 'email', 'emailLower', 'phoneNumber', 'photoURL', 'role', 'accountStatus', 'planId', 'proUntil', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['fullName', 'email', 'emailLower', 'phoneNumber', 'photoURL', 'role', 'accountStatus', 'planId', 'proUntil', 'createdAt', 'updatedAt'])
+        && request.resource.data.fullName is string && request.resource.data.fullName.size() <= 80
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailLower == request.auth.token.email.lower()
+        && validPhone(request.resource.data.phoneNumber)
+        && request.resource.data.photoURL is string && request.resource.data.photoURL.size() <= 1000
+        && request.resource.data.role == 'user'
+        && request.resource.data.accountStatus == 'active'
+        && request.resource.data.planId == 'free'
+        && request.resource.data.proUntil == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
       allow update: if isOwner(uid)
         && resource.data.accountStatus == 'active'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phoneNumber', 'updatedAt'])
@@ -38,8 +54,21 @@ service cloud.firestore {
     }
 
     match /subscriptions/{id} {
-      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-      allow write: if false;
+      // (The own Free id is readable even before it exists, so the app can check for it.)
+      allow read: if isAdmin() || (signedIn() && (id == 'free_' + request.auth.uid || resource.data.userId == request.auth.uid));
+      // Only the caller's own Free record, exactly as the server would write it. Paid plans: server only.
+      allow create: if signedIn() && id == 'free_' + request.auth.uid
+        && request.resource.data.keys().hasOnly(['userId', 'planId', 'planName', 'provider', 'status', 'startDate', 'expiryDate', 'autoRenewal', 'providerRef'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.planId == 'free'
+        && request.resource.data.planName == 'Free Forever'
+        && request.resource.data.provider == 'free'
+        && request.resource.data.status == 'active'
+        && request.resource.data.startDate == request.time
+        && request.resource.data.expiryDate == null
+        && request.resource.data.autoRenewal == false
+        && request.resource.data.providerRef == null;
+      allow update, delete: if false;
     }
 
     match /payments/{id} {

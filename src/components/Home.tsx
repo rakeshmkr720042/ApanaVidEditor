@@ -15,6 +15,7 @@ import { FeedbackSheet } from './FeedbackSheet'
 import { listNotes } from '../lib/feedback'
 import { localAI } from '../lib/localai'
 import { PremiumSheet } from './PremiumSheet'
+import { AccountSheet } from './AccountSheet'
 import { usePremium } from '../lib/premium'
 
 export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang: () => void }) {
@@ -32,6 +33,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [notesSheet, setNotesSheet] = useState(false)
   const [openNotes, setOpenNotes] = useState(0)
   const [premiumSheet, setPremiumSheet] = useState(false)
+  const [accountSheet, setAccountSheet] = useState(false)
   const { premium } = usePremium()
 
   const openFile = async (f: File) => {
@@ -72,6 +74,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           </button>
           <button className="btn ghost small" onClick={() => setAiSheet(true)}>{aiOn ? '✓ ' : ''}{t('Local AI')}</button>
           <button className="btn ghost small" onClick={() => { setLang(getLang() === 'hi' ? 'en' : 'hi'); onLang() }}>{getLang() === 'hi' ? 'English' : 'हिंदी'}</button>
+          <button className="btn ghost small" onClick={() => setAccountSheet(true)} aria-label={t('My account')} title={t('My account')} data-testid="home-account">
+            <Icon name="user" size={16} /><span className="wide-only"> {t('Account')}</span>
+          </button>
         </div>
       </header>
       <main className="home-main">
@@ -113,6 +118,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
       {compress && <CompressSheet onClose={() => setCompress(false)} />}
       {notesSheet && <FeedbackSheet where="Home" onClose={(n) => { setNotesSheet(false); setOpenNotes(n) }} />}
       {premiumSheet && <PremiumSheet onClose={() => setPremiumSheet(false)} />}
+      {accountSheet && <AccountSheet onClose={() => setAccountSheet(false)} onPlans={() => { setAccountSheet(false); setPremiumSheet(true) }} />}
       {habitsSheet && <HabitsSheet onClose={() => setHabitsSheet(false)} />}
       {aiSheet && <LocalAISheet onClose={() => { setAiSheet(false); setAiOn(!!localAI()) }} />}
     </div>

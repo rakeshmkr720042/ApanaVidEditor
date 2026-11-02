@@ -20,14 +20,16 @@ firebase/
 ## Collections
 
 Money is integer paise (₹99 = 9900). Times are Firestore timestamps. Everything except the two
-profile fields is written by Cloud Functions only.
+profile fields and the user's own Free records is written by Cloud Functions only. The app creates
+the Free records itself after sign-up (src/lib/account.ts), so accounts work on the free Spark plan
+too; the `onUserCreated` function does the same once the project is on Blaze.
 
 | Collection | Fields | App can write | App can read |
 |---|---|---|---|
-| `users/{uid}` | fullName, email, emailLower, phoneNumber, photoURL, role, accountStatus, planId, proUntil, createdAt, updatedAt | fullName, phoneNumber (+ updatedAt = server time) while active | own; admins all |
+| `users/{uid}` | fullName, email, emailLower, phoneNumber, photoURL, role, accountStatus, planId, proUntil, createdAt, updatedAt | create once as an active Free user with its own token email; then fullName, phoneNumber (+ updatedAt = server time) while active | own; admins all |
 | `subscription_plans/{planId}` | planName, price, currency, durationMonths, isActive, sortOrder, playProductId, playBasePlanId | no | any signed-in user |
 | `config/entitlements` | proFeatures (feature keys that need Pro), freeExportMaxHeight, freeWatermark, offlineGraceDays | no | any signed-in user |
-| `subscriptions/{id}` | userId, planId, planName, provider (free/razorpay/play), status, startDate, expiryDate, autoRenewal, providerRef | no | own; admins all |
+| `subscriptions/{id}` | userId, planId, planName, provider (free/razorpay/play), status, startDate, expiryDate, autoRenewal, providerRef | only its own `free_<uid>` record with fixed Free values | own; admins all |
 | `payments/{paymentId}` | userId, subscriptionId, amount, currency, method, provider, status, createdAt | no | own; admins all |
 | `security_events/{id}` | type, actorUid, targetUid, details, createdAt | no | admins only |
 
@@ -74,4 +76,5 @@ Repository settings it needs (Settings > Secrets and variables > Actions):
 The service account needs these roles in Google Cloud IAM: Firebase Admin, Cloud Functions Admin,
 Cloud Run Admin, Service Account User, Service Usage Admin, Artifact Registry Administrator.
 Without the secret and variable the deploy job skips itself with a notice. Cloud Functions need
-the Blaze plan.
+the Blaze plan, so they deploy only when the variable `FIREBASE_FUNCTIONS` is `on`; otherwise only
+the rules and indexes are deployed.

@@ -1,0 +1,234 @@
+import { useEffect, useState } from 'react'
+import {
+  browserLocalPersistence, browserSessionPersistence, createUserWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged,
+  sendEmailVerification, sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword, signInWithPopup, signOut as fbSignOut,
+  updateProfile, type User,
+} from 'firebase/auth'
+import { doc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore/lite'
+import { firebaseAuth, firestore, googleAvailable } from './firebase'
+import { t } from './i18n'
+
+/**
+ * Accounts. Everyone signs in before the editor opens (AuthGate). The session is kept on the device
+ * and restored on the next launch, also offline. A new account gets its profile and the Free plan;
+ * the server (Cloud Function) does the same, and the Firestore rules allow only exactly that from the app.
+ */
+
+export interface Profile {
+  fullName: string
+  email: string
+  phoneNumber: string
+  role: 'user' | 'admin'
+  accountStatus: 'active' | 'suspended' | 'deleted'
+  planId: string
+}
+
+export type AccountState =
+  | { status: 'loading' }
+  | { status: 'out' }
+  | { status: 'unverified'; user: User }
+  | { status: 'blocked'; user: User }
+  | { status: 'in'; user: User; profile: Profile | null }
+
+// ---------- validation (the rules check the same on the server)
+
+export const cleanName = (s: string) => s.replace(/\s+/g, ' ').trim()
+export function nameError(s: string) {
+  const n = cleanName(s)
+  if (!n) return t('Please enter your name')
+  if (n.length > 80) return t('Name is too long')
+  return null
+}
+export const emailError = (s: string) => (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim()) ? null : t('Please enter a valid email'))
+export function passwordError(s: string) {
+  if (s.length < 8) return t('Password needs at least 8 characters')
+  if (!/[A-Za-z]/.test(s) || !/\d/.test(s)) return t('Use letters and numbers in the password')
+  if (s.length > 128) return t('Password is too long')
+  return null
+}
+/** Optional mobile number, saved as +<country><number>. A 10-digit number is taken as Indian (+91). */
+export function normalisePhone(s: string): string | null {
+  const d = s.replace(/[\s()-]/g, '')
+  if (!d) return ''
+  if (/^[6-9]\d{9}$/.test(d)) return `+91${d}`
+  if (/^0[6-9]\d{9}$/.test(d)) return `+91${d.slice(1)}`
+  if (/^\+[1-9]\d{7,14}$/.test(d)) return d
+  return null
+}
+
+/** Firebase error codes in plain words. */
+export function authMessage(e: unknown): string {
+  const code = (e as { code?: string }).code ?? ''
+  const map: Record<string, string> = {
+    'auth/email-already-in-use': 'An account with this email already exists. Sign in instead, or reset the password.',
+    'auth/invalid-credential': 'Email or password is wrong.',
+    'auth/wrong-password': 'Email or password is wrong.',
+    'auth/user-not-found': 'Email or password is wrong.',
+    'auth/invalid-email': 'Please enter a valid email',
+    'auth/weak-password': 'Password needs at least 8 characters',
+    'auth/user-disabled': 'This account is suspended. Please contact support.',
+    'auth/too-many-requests': 'Too many tries. Please wait a few minutes and try again.',
+    'auth/network-request-failed': 'No internet. Signing in needs internet the first time.',
+    'auth/popup-closed-by-user': 'Google sign-in was closed.',
+    'auth/cancelled-popup-request': 'Google sign-in was closed.',
+    'auth/popup-blocked': 'The sign-in window was blocked. Allow pop-ups for this site and try again.',
+    'auth/account-exists-with-different-credential': 'This email already has an account. Sign in with email and password first.',
+    'auth/operation-not-allowed': 'This sign-in method is not switched on yet.',
+  }
+  return t(map[code] ?? 'Something went wrong. Please try again.')
+}
+
+// ---------- session
+
+async function remember(on: boolean) {
+  await setPersistence(firebaseAuth(), on ? browserLocalPersistence : browserSessionPersistence)
+}
+
+/**
+ * A sign-in or sign-up in progress. The auth listener waits for it, so the profile is written once,
+ * with the name and mobile number from the form (not an empty one from the listener).
+ */
+let busy: Promise<unknown> | null = null
+function track<T>(p: Promise<T>): Promise<T> {
+  const done = p.finally(() => { if (busy === done) busy = null })
+  busy = done
+  return done
+}
+
+export function register(o: { name: string; email: string; password: string; phone: string; remember: boolean }) {
+  return track((async () => {
+    await remember(o.remember)
+    const cred = await createUserWithEmailAndPassword(firebaseAuth(), o.email.trim(), o.password)
+    await updateProfile(cred.user, { displayName: cleanName(o.name) })
+    await ensureAccount(cred.user, { fullName: cleanName(o.name), phoneNumber: o.phone })
+    await sendEmailVerification(cred.user).catch(() => {})
+    return cred.user
+  })())
+}
+
+export function signIn(email: string, password: string, rememberMe: boolean) {
+  return track((async () => {
+    await remember(rememberMe)
+    const cred = await signInWithEmailAndPassword(firebaseAuth(), email.trim(), password)
+    await ensureAccount(cred.user).catch(() => {})
+    return cred.user
+  })())
+}
+
+export function signInGoogle(rememberMe: boolean) {
+  if (!googleAvailable) return Promise.reject(new Error(t('Google sign-in comes to this app soon. Please use email for now.')))
+  return track((async () => {
+    await remember(rememberMe)
+    const provider = new GoogleAuthProvider()
+    provider.setCustomParameters({ prompt: 'select_account' })
+    const cred = await signInWithPopup(firebaseAuth(), provider)
+    await ensureAccount(cred.user).catch(() => {})
+    return cred.user
+  })())
+}
+
+export const resetPassword = (email: string) => sendPasswordResetEmail(firebaseAuth(), email.trim())
+export const resendVerification = () => { const u = firebaseAuth().currentUser; return u ? sendEmailVerification(u) : Promise.resolve() }
+/** After the user opened the link in the email: fetch the fresh state from the server. */
+export async function checkVerified() {
+  const u = firebaseAuth().currentUser
+  if (!u) return false
+  await u.reload()
+  await u.getIdToken(true)
+  emit()
+  return u.emailVerified
+}
+
+export async function signOut() {
+  profileCache = null
+  await fbSignOut(firebaseAuth())
+}
+
+// ---------- profile + Free plan
+
+let profileCache: { uid: string; profile: Profile } | null = null
+
+/**
+ * Makes sure users/{uid} and the Free subscription exist (the rules allow the app to create only
+ * these, with a Free plan and no role), and returns the profile. Offline it returns null.
+ */
+export async function ensureAccount(user: User, extra?: { fullName?: string; phoneNumber?: string }): Promise<Profile | null> {
+  const db = firestore()
+  const ref = doc(db, 'users', user.uid)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) {
+    const email = user.email ?? ''
+    const b = writeBatch(db)
+    b.set(ref, {
+      fullName: (extra?.fullName ?? cleanName(user.displayName ?? '')).slice(0, 80),
+      email,
+      emailLower: email.toLowerCase(),
+      phoneNumber: extra?.phoneNumber ?? '',
+      photoURL: (user.photoURL ?? '').slice(0, 1000),
+      role: 'user',
+      accountStatus: 'active',
+      planId: 'free',
+      proUntil: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+    const subRef = doc(db, 'subscriptions', `free_${user.uid}`)
+    const sub = await getDoc(subRef)
+    if (!sub.exists()) {
+      b.set(subRef, {
+        userId: user.uid, planId: 'free', planName: 'Free Forever', provider: 'free', status: 'active',
+        startDate: serverTimestamp(), expiryDate: null, autoRenewal: false, providerRef: null,
+      })
+    }
+    try { await b.commit() } catch (e) {
+      // The server may have created them a moment earlier: read again before giving up.
+      if (!(await getDoc(ref)).exists()) throw e
+    }
+    return readProfile(user)
+  }
+  const p = snap.data() as Profile
+  profileCache = { uid: user.uid, profile: p }
+  return p
+}
+
+async function readProfile(user: User): Promise<Profile | null> {
+  const s = await getDoc(doc(firestore(), 'users', user.uid))
+  if (!s.exists()) return null
+  profileCache = { uid: user.uid, profile: s.data() as Profile }
+  return profileCache.profile
+}
+
+// ---------- state for React
+
+const listeners = new Set<() => void>()
+function emit() { listeners.forEach((f) => f()) }
+
+function stateFor(user: User | null, loaded: boolean, blocked: boolean): AccountState {
+  if (!loaded) return { status: 'loading' }
+  if (!user) return { status: 'out' }
+  if (blocked) return { status: 'blocked', user }
+  if (!user.emailVerified) return { status: 'unverified', user }
+  return { status: 'in', user, profile: profileCache?.uid === user.uid ? profileCache.profile : null }
+}
+
+/** The signed-in account. Restores the saved session on launch; works offline once signed in. */
+export function useAccount(): AccountState {
+  const [user, setUser] = useState<User | null>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const f = () => setTick((n) => n + 1)
+    listeners.add(f)
+    const off = onAuthStateChanged(firebaseAuth(), (u) => {
+      setUser(u); setLoaded(true); setBlocked(false)
+      if (!u) return
+      // Online: refresh the profile (and learn about a suspension). Offline: keep going with the saved session.
+      Promise.resolve(busy).catch(() => {}).then(() => ensureAccount(u)).then((p) => { setBlocked(p?.accountStatus === 'suspended'); f() }).catch((e) => {
+        if ((e as { code?: string }).code === 'auth/user-disabled') setBlocked(true)
+      })
+    })
+    return () => { off(); listeners.delete(f) }
+  }, [])
+  return stateFor(user, loaded, blocked)
+}
