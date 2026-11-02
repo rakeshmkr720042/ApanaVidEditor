@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { firebaseAuth } from '../lib/firebase'
 import { signOut } from '../lib/account'
-import { usePremium } from '../lib/premium'
+import { serverProUntil, usePremium } from '../lib/premium'
 import { SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { Icon } from './Icon'
@@ -33,7 +33,7 @@ export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlan
           <Icon name="crown" size={18} />
           <div>
             <b>{premium ? t('Pro') : t('Free Forever')}</b>
-            <small className="muted">{premium ? t('All Pro features are on.') : t('Basic editing, unlimited projects, exports up to 1080p.')}</small>
+            <small className="muted" data-testid="account-plan">{premium && serverProUntil() ? `${t('Pro until')} ${new Date(serverProUntil()!).toLocaleDateString()}` : premium ? t('All Pro features are on.') : t('Basic editing, unlimited projects, exports up to 1080p.')}</small>
           </div>
           {!premium && <button className="btn small primary" onClick={onPlans}>{t('See plans')}</button>}
         </div>

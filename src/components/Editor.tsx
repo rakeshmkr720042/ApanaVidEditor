@@ -96,7 +96,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [notesSheet, setNotesSheet] = useState(false)
   const [habitsSheet, setHabitsSheet] = useState(false)
   const [paywall, setPaywall] = useState<Feature | null>(null)
-  const { premium, locked } = usePremium()
+  usePremium()
   const habitsVersion = useHabitsVersion()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [player, setPlayer] = useState<Player | null>(null)
@@ -969,7 +969,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         {tools.map((tl) => (
           <button key={tl.label} className={`tool${tl.active ? ' on' : ''}${tl.icon === 'habit' ? ' habit' : ''}`} disabled={tl.disabled} onClick={() => runTool(tl)}>
             <Icon name={tl.icon} />
-            {locked && !premium && PREMIUM_TOOLS[tl.label] && <i className="crown-badge" aria-label={t('Premium')}><Icon name="crown" size={11} /></i>}
+            {PREMIUM_TOOLS[tl.label] && !isAllowed(PREMIUM_TOOLS[tl.label]) && <i className="crown-badge" aria-label={t('Premium')}><Icon name="crown" size={11} /></i>}
             <span>{t(tl.label)}</span>
           </button>
         ))}

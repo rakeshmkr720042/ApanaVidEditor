@@ -727,7 +727,11 @@ input, textarea { font: inherit; color: inherit; }
 .premium-list li svg { flex: 0 0 auto; margin-top: 2px; }
 .premium-list li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .premium-list li small { opacity: .7; font-size: 12px; }
-.plans { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: 10px 0; }
+.tier-compare { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.tier { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); }
+.tier.pro { background: transparent; border: 1px solid #ffcc0066; }
+.tier .premium-list { margin: 4px 0 0; }
 .plan { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; border-radius: 12px; border: 2px solid var(--panel-2); background: var(--panel-2); color: var(--text); font: inherit; cursor: pointer; }
 .plan.on { border-color: var(--accent); }
 .plan .price { font-size: 22px; font-weight: 800; }
