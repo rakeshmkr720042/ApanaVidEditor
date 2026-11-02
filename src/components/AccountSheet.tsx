@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { firebaseAuth } from '../lib/firebase'
 import { signOut } from '../lib/account'
 import { serverProUntil, usePremium } from '../lib/premium'
+import { useIsAdmin } from '../lib/admin'
 import { SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { Icon } from './Icon'
@@ -10,6 +11,7 @@ import { Icon } from './Icon'
 export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlans: () => void }) {
   const user = firebaseAuth().currentUser
   const { premium } = usePremium()
+  const admin = useIsAdmin()
   const [busy, setBusy] = useState(false)
   const name = user?.displayName || user?.email?.split('@')[0] || ''
   const out = async () => {
@@ -38,6 +40,7 @@ export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlan
           {!premium && <button className="btn small primary" onClick={onPlans}>{t('See plans')}</button>}
         </div>
         <p className="muted small">{t('Projects and videos are saved only on this device. Uninstalling the app or clearing its data deletes them, so save important projects as .avp files.')}</p>
+        {admin && <button className="btn wide" onClick={() => { onClose(); location.hash = 'admin' }} data-testid="account-admin"><Icon name="user" size={16} /> {t('Admin: users, plans, Pro features')}</button>}
         <button className="btn wide" disabled={busy} onClick={out} data-testid="account-signout">{t('Sign out')}</button>
       </div>
     </div>

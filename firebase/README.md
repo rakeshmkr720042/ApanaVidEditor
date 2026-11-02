@@ -26,15 +26,25 @@ too; the `onUserCreated` function does the same once the project is on Blaze.
 
 | Collection | Fields | App can write | App can read |
 |---|---|---|---|
-| `users/{uid}` | fullName, email, emailLower, phoneNumber, photoURL, role, accountStatus, planId, proUntil, createdAt, updatedAt | create once as an active Free user with its own token email; then fullName, phoneNumber (+ updatedAt = server time) while active | own; admins all |
-| `subscription_plans/{planId}` | planName, price, currency, durationMonths, isActive, sortOrder, playProductId, playBasePlanId | no | any signed-in user |
-| `config/entitlements` | proFeatures (feature keys that need Pro), freeExportMaxHeight, freeWatermark, offlineGraceDays | no | any signed-in user |
+| `users/{uid}` | fullName, email, emailLower, phoneNumber, photoURL, role, accountStatus, planId, proUntil, createdAt, updatedAt | create once as an active Free user with its own token email; then fullName, phoneNumber (+ updatedAt = server time) while active; admin: accountStatus, proUntil, planId (audited) | own; admins all |
+| `subscription_plans/{planId}` | planName, price, currency, durationMonths, isActive, sortOrder, playProductId, playBasePlanId | admin (audited) | any signed-in user |
+| `config/entitlements` | proFeatures (feature keys that need Pro), freeExportMaxHeight, freeWatermark, offlineGraceDays | admin (audited) | any signed-in user |
 | `subscriptions/{id}` | userId, planId, planName, provider (free/razorpay/play), status, startDate, expiryDate, autoRenewal, providerRef | only its own `free_<uid>` record with fixed Free values | own; admins all |
 | `payments/{paymentId}` | userId, subscriptionId, amount, currency, method, provider, status, createdAt | no | own; admins all |
-| `security_events/{id}` | type, actorUid, targetUid, details, createdAt | no | admins only |
+| `security_events/{id}` | type, actorUid, actorEmail, targetUid, target, details, createdAt | admin: own audit records only | admins only |
 
 The Free subscription id is `free_<uid>`, so it can only exist once per user. Admin is the custom
 claim `admin: true` on the Firebase Auth token (the `role` field is a display copy).
+
+## Admin screen
+
+The app's admin screen (`#admin`, button in the Account sheet for the admin) lets the admin:
+see and search users, suspend / activate an account (never their own), give Pro for 1, 3 or 12
+months or take it away, change plan names, prices and whether a plan is shown, and choose which
+features need Pro. The rules allow these writes only with the `admin` claim, check the values, and
+require a `security_events` record by the same admin, with the server time, in the same batch
+(`audited()` in firestore.rules, field `lastChangeId` on the changed document). Records can never
+be edited or deleted; the History tab shows the latest 30.
 
 ## Plans (defaults, editable later from the admin screen)
 
