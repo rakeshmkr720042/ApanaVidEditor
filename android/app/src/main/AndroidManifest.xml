@@ -10,6 +10,11 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/AppTheme">
 
+        <!-- AdMob (Free plan ads). Google's test app id until the real one is set at build time (ADMOB_APP_ID). -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}"/>
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"
             android:name=".MainActivity"

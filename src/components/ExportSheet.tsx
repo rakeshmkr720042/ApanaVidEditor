@@ -13,6 +13,8 @@ import { youTubeMode } from '../lib/youtube'
 import { YouTubeSheet } from './YouTubeSheet'
 import { CompressSheet } from './CompressSheet'
 import { PremiumSheet } from './PremiumSheet'
+import { ProAd } from './ProAd'
+import { afterExportAd } from '../lib/ads'
 import { Icon } from './Icon'
 import { isAllowed, usePremium, type Feature } from '../lib/premium'
 
@@ -127,6 +129,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
         }])
       }
       setBatch([])
+      afterExportAd()
     } catch (e) {
       if (!(e instanceof Cancelled)) setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -256,6 +259,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
             ))}
           </div>
         )}
+        {results.length > 0 && !running && <ProAd where="export" />}
         {toast && <p className="muted small">{toast}</p>}
         {!running && <button className="btn wide ghost" onClick={onClose}>{t('Close')}</button>}
         {compress && <CompressSheet file={new File([compress.blob], compress.file, { type: compress.blob.type })} onClose={() => setCompress(null)} />}
