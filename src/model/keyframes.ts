@@ -22,7 +22,7 @@ export function boxAt(l: Boxed, t: number): Box {
   if (lt >= last.t) return last.box
   const i = keys.findIndex((k) => k.t > lt)
   const a = keys[i - 1], b = keys[i]
-  const k = ease((lt - a.t) / (b.t - a.t))
+  const k = a.lin ? (lt - a.t) / (b.t - a.t) : ease((lt - a.t) / (b.t - a.t))
   return {
     x: mix(a.box.x, b.box.x, k), y: mix(a.box.y, b.box.y, k), scale: mix(a.box.scale, b.box.scale, k),
     rotation: mix(a.box.rotation, b.box.rotation, k), opacity: mix(a.box.opacity, b.box.opacity, k),
