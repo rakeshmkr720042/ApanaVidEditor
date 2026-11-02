@@ -98,12 +98,13 @@ export function AudioFxPanel({ ed, target, onClose }: { ed: Editor; target: Targ
 
       {tab === 'stereo' && (
         <>
-          <Chips options={[{ value: 'stereo', label: 'Stereo' }, { value: 'mono', label: 'Mono' }, { value: 'left', label: 'Left only' }, { value: 'right', label: 'Right only' }, { value: 'swap', label: 'Swap sides' }]}
+          <Chips options={[{ value: 'stereo', label: 'Stereo' }, { value: 'mono', label: 'Mono' }, { value: 'left', label: 'Left only' }, { value: 'right', label: 'Right only' }, { value: 'swap', label: 'Swap sides' }, { value: 'novocal', label: 'Remove vocals (karaoke)' }]}
             value={fx.channels} wrap onChange={(channels) => patch({ channels })} />
           <Slider label="Balance" min={-1} max={1} step={0.05} center value={fx.pan} {...slide}
             format={(v) => (Math.abs(v) < 0.01 ? t('Centre') : `${Math.round(Math.abs(v) * 100)}% ${t(v < 0 ? 'left' : 'right')}`)} onChange={(pan) => patch({ pan })} />
           {audio && <Toggle label="Play backwards (reverse)" value={!!fx.reverse} onChange={(reverse) => patch({ reverse })} />}
           {fx.channels === 'stereo' && <p className="muted small">{t('Mic only on one side? Pick Left only or Right only, or Mono.')}</p>}
+          {fx.channels === 'novocal' && <p className="muted small">{t('Takes the singer out of a stereo song (the voice in the middle), for karaoke or a background track. Some echo of the voice can stay. Does not work on mono sound.')}</p>}
         </>
       )}
 
