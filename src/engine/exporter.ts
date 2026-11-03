@@ -16,7 +16,7 @@ import { outputSize, Renderer, type FrameImage } from './renderer'
 import { ensureFont } from './text'
 
 export type Format = 'mp4' | 'webm' | 'mov' | 'gif' | 'mp3'
-export type Resolution = '480' | '720' | '1080' | '1440'
+export type Resolution = '480' | '720' | '1080' | '1440' | '2160'
 /** How hard to squeeze the file: smaller files trade away some sharpness in fast motion. */
 export type SizeMode = 'small' | 'balanced' | 'high'
 
@@ -51,9 +51,11 @@ interface VideoTarget { kind: 'h264' | 'vp9' | 'vp8'; codec: string }
 async function pickEncoder(format: Format, w: number, h: number, fps: number, bitrate: number): Promise<VideoTarget | null> {
   if (typeof VideoEncoder === 'undefined') return null
   const wantH264 = format === 'mp4' || format === 'mov'
-  const level = w * h > 1920 * 1088 ? '32' : '28'
+  // H.264 level: 4.0 up to 1080p, 5.0 up to 2K, 5.1 for 4K (5.2 above 30 fps)
+  const big = w * h > 2560 * 1600
+  const level = big ? (fps > 30 ? '34' : '33') : w * h > 1920 * 1088 ? '32' : '28'
   const h264 = [`avc1.6400${level}`, `avc1.4d00${level}`, `avc1.4200${level}`].map((codec) => ({ kind: 'h264' as const, codec }))
-  const vp = [{ kind: 'vp9' as const, codec: 'vp09.00.40.08' }, { kind: 'vp8' as const, codec: 'vp8' }]
+  const vp = [{ kind: 'vp9' as const, codec: big ? (fps > 30 ? 'vp09.00.51.08' : 'vp09.00.50.08') : 'vp09.00.40.08' }, { kind: 'vp8' as const, codec: 'vp8' }]
   for (const t of wantH264 ? [...h264, ...vp] : vp) {
     const cfg: VideoEncoderConfig = { codec: t.codec, width: w, height: h, bitrate, framerate: fps, ...(t.kind === 'h264' ? { avc: { format: 'annexb' } } : {}) }
     for (const hardwareAcceleration of ['prefer-hardware', 'no-preference'] as const) {
@@ -171,7 +173,9 @@ export function motionShare(project: Project, sources: Record<string, MediaSourc
 /** Target video bitrate: bits per pixel by size mode, cut down to 35% for still content. */
 export function videoBitrate(w: number, h: number, fps: number, mode: SizeMode, motion: number): number {
   const fpsScale = 30 * Math.pow(fps / 30, 0.7) // doubling the frame rate needs much less than double the bits
-  return Math.round(Math.min(16e6, w * h * fpsScale * SIZE[mode].bpp * (0.35 + 0.65 * motion)))
+  // 4K needs far more bits than the 16 Mbit/s that is plenty up to 2K (YouTube asks 35-45 Mbit/s for 4K)
+  const cap = w * h > 2560 * 1600 ? 45e6 : 16e6
+  return Math.round(Math.min(cap, w * h * fpsScale * SIZE[mode].bpp * (0.35 + 0.65 * motion)))
 }
 
 /** Rough upper estimate of the exported file size in bytes (encoders often land below it on still content); null for GIF. */
@@ -269,6 +273,8 @@ export async function exportProject(
     const bitrate = gif ? Math.round(Math.min(16e6, w * h * fps * 0.2)) : videoBitrate(w, h, fps, mode, motionShare(project, sources))
     const keyEvery = Math.max(1, Math.round(fps * size.keySecs))
     const target = await pickEncoder(job.format, w, h, fps, bitrate)
+    // the built-in fallback encoder is far too slow (and runs out of memory) at 4K
+    if (!target && !gif && job.resolution === '2160') throw new Error('This device cannot make 4K videos. Please choose 2K or 1080p.')
     const chunks = new ChunkStore()
     let encoderName = 'ffmpeg'
 

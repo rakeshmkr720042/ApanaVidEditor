@@ -33,7 +33,7 @@ export function ProAd({ where }: { where: 'home' | 'export' | 'account' }) {
         <Icon name="crown" size={22} />
         <span>
           <b>{t('Remove ads and unlock every Pro feature')}</b>
-          <small>{t(where === 'export' ? 'No Apna Editor mark on your videos, 2K export and more.' : 'AI Dub, green screen, batch export, no mark on videos and more.')}</small>
+          <small>{t(where === 'export' ? 'No Apna Editor mark on your videos, 2K/4K export and more.' : 'AI Dub, green screen, batch export, no mark on videos and more.')}</small>
         </span>
         <i>{monthly ? `${rupees(monthly.price)}/${t('month')}` : t('See plans')}</i>
       </button>
