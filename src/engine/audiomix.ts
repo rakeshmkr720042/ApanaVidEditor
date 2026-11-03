@@ -1,5 +1,5 @@
 import type { AudioFx, Denoise, MediaSource, Project } from '../types'
-import { clipSegments, layerSpeed, layoutClips } from '../model/timeline'
+import { clipSegments, layerSpeed, layoutClips, sourceAt } from '../model/timeline'
 import { decodeAudio } from '../lib/media'
 import { encodeWav } from './music'
 import { runFFmpeg, getFFmpeg } from '../lib/ffmpeg'
@@ -7,6 +7,7 @@ import { LONG_SECS, decodeSpan, isLong } from '../lib/longaudio'
 import { cleanSound, denoiseKey, soundJob } from './denoise'
 import { duckCurve, duckGainFrom, FPS, isDucked } from './duck'
 import { fadeGain } from './player'
+import { maxVol, volAt } from '../model/clipKeys'
 import { reversedIn } from './soundfx'
 
 export const MIX_RATE = 48000
@@ -120,7 +121,7 @@ export async function mixAudio(
   for (const it of items) {
     const c = it.clip
     onProgress?.(done++ / steps)
-    if (c.volume <= 0) continue
+    if (maxVol(c) <= 0) continue
     const s = it.start, e = it.start + it.dur
     if (e <= from || s >= to) continue
     const g = ctx.createGain()
@@ -129,14 +130,17 @@ export async function mixAudio(
     const pts: [number, number][] = []
     const gainAt = (t: number) => {
       const local = t - s
-      let v = c.volume
+      let v = volAt(c, sourceAt(c, Math.min(it.dur, Math.max(0, local))).time)
       if (c.fadeIn > 0 && local < c.fadeIn) v *= local / c.fadeIn
       if (c.fadeOut > 0 && local > it.dur - c.fadeOut) v *= (it.dur - local) / c.fadeOut
       if (it.transIn > 0 && local < it.transIn) v *= local / it.transIn
       if (it.transOut > 0 && local > it.dur - it.transOut) v *= (it.dur - local) / it.transOut
       return Math.max(0, v)
     }
-    for (const t of [s, s + c.fadeIn, s + it.transIn, e - c.fadeOut, e - it.transOut, e]) if (t >= s && t <= e) pts.push([t, gainAt(t)])
+    const edges = [s, s + c.fadeIn, s + it.transIn, e - c.fadeOut, e - it.transOut, e]
+    // volume keyframes: a point per 1/20 s inside the window (their source times move with the speed / ramp)
+    if (c.volKeys?.length) for (let f = Math.ceil(Math.max(s, from) * 20); f <= Math.floor(Math.min(e, to) * 20); f++) edges.push(f / 20)
+    for (const t of edges) if (t >= s && t <= e) pts.push([t, gainAt(t)])
     pts.sort((a, b) => a[0] - b[0])
     automate(g.gain, pts, from, to)
 
@@ -158,7 +162,7 @@ export async function mixAudio(
 
   for (const l of project.layers) {
     onProgress?.(done++ / steps)
-    if ((l.type !== 'audio' && l.type !== 'media') || l.volume <= 0) continue
+    if ((l.type !== 'audio' && l.type !== 'media') || maxVol(l) <= 0) continue
     const t0 = Math.max(from, l.start), t1 = Math.min(to, l.end)
     if (t1 <= t0) continue
     const len = l.end - l.start
@@ -168,10 +172,11 @@ export async function mixAudio(
     let pts: [number, number][] = [[l.start, fi > 0 ? 0 : l.volume]]
     if (fi > 0) pts.push([l.start + fi, l.volume])
     if (fo > 0) pts.push([Math.max(l.start + fi, l.end - fo), l.volume], [l.end, 0])
-    if (duck && isDucked(l)) {
-      // volume, fades and the auto-lowering together, one point per curve step inside the window
+    if ((duck && isDucked(l)) || l.volKeys?.length) {
+      // volume (keyframes), fades and the auto-lowering together, one point per curve step inside the window
       pts = []
-      const gain = (t: number) => l.volume * fadeGain(t - l.start, len, fi, fo) * duckGainFrom(duck, l, t)
+      const lsp = layerSpeed(l)
+      const gain = (t: number) => volAt(l, l.in + (t - l.start) * lsp) * fadeGain(t - l.start, len, fi, fo) * (duck && isDucked(l) ? duckGainFrom(duck, l, t) : 1)
       for (let f = Math.floor(t0 * FPS); f <= Math.ceil(t1 * FPS); f++) pts.push([f / FPS, gain(f / FPS)])
     }
     automate(g.gain, pts, from, to)

@@ -4,6 +4,7 @@ import { stabAt } from './motion'
 import { drawPhoto3d, photo3dKey } from './photo3d'
 import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
+import { posAt } from '../model/clipKeys'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
@@ -389,9 +390,9 @@ export class Renderer {
       c.filter = 'none'
     }
     const p = Math.min(1, Math.max(0, progress))
-    const srcT = clip.stabilize || clip.smoothSlow ? sourceAt(clip, local).time : 0
+    const srcT = clip.stabilize || clip.smoothSlow || clip.keys?.length ? sourceAt(clip, local).time : 0
     const stab = clip.stabilize ? stabAt(clip.stabilize, srcT) : null
-    if (!(clip.photo3d && this.drawPhoto3d(c, f, clip, p))) this.placeFrame(c, f, clip, W, H, clip.fit, p, stab)
+    if (!(clip.photo3d && this.drawPhoto3d(c, f, clip, p))) this.placeFrame(c, f, clip, W, H, clip.fit, p, stab, srcT)
     // smooth slow motion: the next source frame shows through by how far the moment is between the two
     if (clip.smoothSlow) {
       const f2 = inp.frame(clipKey(clip) + '~next')
@@ -400,7 +401,7 @@ export class Renderer {
         const frac = pos - Math.floor(pos + 1e-3)
         if (frac > 0.02) {
           c.globalAlpha = Math.min(1, frac)
-          this.placeFrame(c, f2, clip, W, H, clip.fit, p, stab)
+          this.placeFrame(c, f2, clip, W, H, clip.fit, p, stab, srcT)
           c.globalAlpha = 1
         }
       }
@@ -453,7 +454,7 @@ export class Renderer {
     return drawPhoto3d(c, photo3dKey(clip.sourceId, clip.photo3d!), f.image, f.width, f.height, clip.photo3d!, p, W, H, cr, s, this.onNeedsRedraw)
   }
 
-  private placeFrame(c: Ctx, f: FrameImage, clip: Clip, W: number, H: number, fit: 'fit' | 'fill', progress?: number, stab?: { dx: number; dy: number; zoom: number } | null) {
+  private placeFrame(c: Ctx, f: FrameImage, clip: Clip, W: number, H: number, fit: 'fit' | 'fill', progress?: number, stab?: { dx: number; dy: number; zoom: number } | null, srcT = 0) {
     const cr = clip.crop ?? { x: 0, y: 0, w: 1, h: 1 }
     const sx = cr.x * f.width, sy = cr.y * f.height, sw = cr.w * f.width, sh = cr.h * f.height
     const rot = clip.rotate % 180 !== 0
@@ -461,6 +462,13 @@ export class Renderer {
     const s = fit === 'fit' ? Math.min(W / dw0, H / dh0) : Math.max(W / dw0, H / dh0)
     c.save()
     c.translate(W / 2, H / 2)
+    // zoom & move (keyframes or a fixed position); not on the small blurred background copy
+    if ((clip.pos || clip.keys?.length) && progress !== undefined) {
+      const pos = posAt(clip, srcT)
+      c.translate(pos.x * W, pos.y * H)
+      c.rotate((pos.rotation * Math.PI) / 180)
+      c.scale(pos.scale, pos.scale)
+    }
     if (clip.kenBurns && progress !== undefined) {
       const kb = kenBurnsAt(clip.kenBurns, progress)
       c.translate(kb.dx * W, kb.dy * H)

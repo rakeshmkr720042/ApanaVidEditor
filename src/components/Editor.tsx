@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
+import type { Clip, Crop, MediaLayer, MediaSource, Project, StickerLayer, TextLayer } from '../types'
 import { isSub, selectedIds, useEditor, type CamBubble, type Placed, type Placement, type Selection } from '../model/useEditor'
 import { Player } from '../engine/player'
 import { activeAt, layoutClips, sourceAt } from '../model/timeline'
@@ -42,6 +42,8 @@ import { PasteTrackSheet } from './PasteTrackSheet'
 import { KeysSheet } from './KeysSheet'
 import { MarkerSheet } from './MarkerSheet'
 import { TrimPanel, LayerTrimPanel } from '../panels/TrimPanel'
+import { ZoomMovePanel } from '../panels/ClipKeysPanel'
+import { clipSrcAt, layerSrcAt } from '../model/clipKeys'
 import { rippleDeleteLayer, trimClipToPlayhead, trimLayerToPlayhead } from '../model/trim'
 import { PasteStyleSheet } from './PasteStyleSheet'
 import { AudioMeter } from './AudioMeter'
@@ -98,7 +100,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -769,6 +771,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!selClip.chroma?.enabled },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'trim', label: 'Trim', on: () => setPanel('trim') },
+      { icon: 'keyframe', label: 'Zoom & move', on: () => setPanel('zoommove'), active: !!(selClip.keys?.length || selClip.pos) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
       { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !!selClip.ramp },
@@ -1025,6 +1028,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   useEffect(() => { if (shownKey) noteShown() }, [shownKey])
 
   const closePanel = () => setPanel(null)
+  /** The clip's source time at the playhead, or null when the playhead is on another clip. */
+  const srcOfClip = (c: Clip) => {
+    const it = ed.layout.items.find((x) => x.clip.id === c.id)
+    return it && time >= it.start - 1e-3 && time < it.start + it.dur ? clipSrcAt(c, Math.max(0, time - it.start)) : null
+  }
   let panelView: React.ReactNode = null
   const tclip = targetClip
   if (panel === 'trim' && selClip) panelView = <TrimPanel ed={ed} clip={selClip} onTrim={trimToPlayhead} onClose={closePanel}
@@ -1032,8 +1040,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'trim' && selLayer) panelView = <LayerTrimPanel onTrim={trimToPlayhead} onRippleDelete={rippleDelete} onClose={closePanel} />
   else if (panel === 'speed' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <LayerSpeedPanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'speed' && tclip) panelView = <SpeedPanel ed={ed} clip={tclip} onClose={closePanel} />
-  else if (panel === 'volume' && selLayer?.type === 'audio') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, fadeIn: selLayer.fadeIn, fadeOut: selLayer.fadeOut }} onClose={closePanel} />
-  else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} />
+  else if (panel === 'volume' && selLayer?.type === 'audio') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, fadeIn: selLayer.fadeIn, fadeOut: selLayer.fadeOut, volKeys: selLayer.volKeys }} onClose={closePanel}
+    src={group ? undefined : time >= selLayer.start && time < selLayer.end ? layerSrcAt(selLayer, time - selLayer.start) : null} />
+  else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} src={group ? undefined : srcOfClip(tclip)} />
+  else if (panel === 'zoommove' && selClip) panelView = <ZoomMovePanel ed={ed} clip={selClip} src={srcOfClip(selClip)} start={ed.layout.items.find((x) => x.clip.id === selClip.id)?.start ?? 0} onSeek={seek} onClose={closePanel} />
   else if (panel === 'noise' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <NoisePanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'noise' && selClip) panelView = <NoisePanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
   else if (panel === 'audiofx' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <AudioFxPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />

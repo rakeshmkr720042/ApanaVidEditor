@@ -125,7 +125,11 @@ export interface Clip {
   in: number
   out: number
   speed: number
-  ramp: string | null // speed-ramp preset id, overrides speed
+  ramp: string | null // speed-ramp preset id ('custom' = rampPts), overrides speed
+  rampPts?: number[] // the user's own speed curve (8 speeds over the clip), used when ramp = 'custom'
+  pos?: ClipPos | null // zoom & move of the picture (no keyframes), missing = none
+  keys?: ClipKey[] // zoom & move keyframes, t in SOURCE seconds (they stay on the video through trims and splits)
+  volKeys?: VolKey[] // volume keyframes (source seconds); when set they decide the volume
   volume: number // 0..2
   fadeIn: number
   fadeOut: number
@@ -153,6 +157,12 @@ export interface Clip {
   smoothSlow?: number | null // source frames per second: slow motion blends neighbouring frames, missing = off
   photo3d?: Photo3D | null // photos: 3D zoom (near things move more than far ones), missing = off
 }
+
+/** Zoom & move of a main-video clip's picture: offset (fraction of the frame), zoom and turn. */
+export interface ClipPos { x: number; y: number; scale: number; rotation: number }
+export interface ClipKey { t: number; pos: ClipPos }
+/** A volume point: at source time t the sound is v (0..2, like the volume slider). */
+export interface VolKey { t: number; v: number }
 
 /**
  * Shake removal: the camera's path as found in the video (how far the picture has moved, in fractions of the
@@ -308,6 +318,7 @@ export interface MediaLayer extends LayerBase, Keyed {
   filterAmount: number
   crop?: Crop | null // part of the source to show (screen recordings of a custom area)
   speed?: number // playback speed, missing = 1
+  volKeys?: VolKey[] // volume keyframes (source seconds), missing = the plain volume
   flipH?: boolean
   flipV?: boolean
   blend?: BlendMode // missing = normal
@@ -338,6 +349,7 @@ export interface AudioLayer extends LayerBase {
   label: string
   kind: 'music' | 'sound' | 'voice'
   speed?: number // playback speed, missing = 1
+  volKeys?: VolKey[] // volume keyframes (source seconds), missing = the plain volume
   denoise?: Denoise | null
   fx?: AudioFx | null
   duck?: number | null // 0..1: volume while someone speaks (other sounds lower it automatically), missing = off

@@ -1,12 +1,12 @@
 import type { Clip, MediaSource } from '../types'
-import { SPEED_RAMPS, layoutClips } from './timeline'
+import { layoutClips, rampPoints } from './timeline'
 
 /** Timeline length of a clip that shows `src` seconds of its source at its speed (or speed ramp). */
 function srcPerSecond(c: Clip) {
-  const ramp = c.ramp ? SPEED_RAMPS.find((r) => r.id === c.ramp) : null
-  if (!ramp) return c.speed
+  const pts = rampPoints(c)
+  if (!pts) return c.speed
   // a ramp spends len/s_i seconds on each of its n equal source pieces
-  return ramp.points.length / ramp.points.reduce((a, s) => a + 1 / s, 0)
+  return pts.length / pts.reduce((a, s) => a + 1 / s, 0)
 }
 
 /**
