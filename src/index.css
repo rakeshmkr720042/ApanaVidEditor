@@ -865,3 +865,10 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .pro-ad-tag { position: absolute; top: 4px; right: 8px; font-size: 10px; color: var(--muted); }
 .pro-ad-export { margin-top: 10px; }
 .home-foot { text-align: center; margin: 18px 0 4px; } .home-foot a { color: var(--muted); }
+
+/* Razorpay payments (website and Windows) */
+.pay-wait { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2, rgba(255,255,255,.06)); font-size: 13px; }
+.pay-wait > span:nth-child(2) { flex: 1; }
+.pay-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 16px; }
+.pay-sum > span { font-size: 22px; font-weight: 700; }
+.pay-sum .pay-test { flex-basis: 100%; }

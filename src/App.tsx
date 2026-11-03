@@ -3,18 +3,23 @@ import { Home } from './components/Home'
 import { Editor } from './components/Editor'
 import { AdminScreen } from './components/AdminScreen'
 import { BlockedScreen, DesktopSignIn, desktopSignInRequest, LoadingScreen } from './components/AuthScreen'
+import { PayPage, payPageRequest } from './components/PayPage'
 import { AccountContext, useAccount } from './lib/account'
+import './lib/razorpay'
 import { requestPersistence } from './lib/db'
 import { hasPendingFiles, listenForOpenedFiles } from './lib/desktop'
 import { createProject } from './lib/newProject'
 
 /** Set when the Windows app opened the website to sign in with Google (read once, before anything else). */
 const desktopSignIn = desktopSignInRequest()
+/** Set when the Windows app opened the website to pay for Pro. */
+const payRequest = payPageRequest()
 
 export default function App() {
   const [langKey, setLangKey] = useState(0)
   const onLang = () => setLangKey((k) => k + 1)
   if (desktopSignIn) return <DesktopSignIn key={langKey} {...desktopSignIn} onLang={onLang} />
+  if (payRequest) return <PayPage key={langKey} {...payRequest} onLang={onLang} />
   return <Gate langKey={langKey} onLang={onLang} />
 }
 

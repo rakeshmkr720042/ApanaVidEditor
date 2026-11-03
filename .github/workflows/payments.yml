@@ -1,0 +1,85 @@
+name: Payment server
+# Tests the payment server (payments/, a Cloudflare Worker) on the Firestore emulator for every change,
+# and deploys it from main (or by hand from the Actions tab).
+# Deploy needs GitHub Secrets: CLOUDFLARE_API_TOKEN, RAZORPAY_KEY_SECRET, FIREBASE_SERVICE_ACCOUNT,
+# optional RAZORPAY_WEBHOOK_SECRET. The Cloudflare account id and the Razorpay Key Id are not secret:
+# they are in payments/wrangler.toml. Without the secrets the deploy is skipped with a note.
+on:
+  push:
+    branches: [main]
+    paths: ['payments/**', '.github/workflows/payments.yml']
+  pull_request:
+    paths: ['payments/**', '.github/workflows/payments.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: payments-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  WRANGLER: wrangler@4.151.2
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: firebase/test/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+        working-directory: firebase/test
+      - name: Payment server tests (Firestore emulator, fake Razorpay)
+        run: npm test
+        working-directory: payments
+      - name: Worker bundles
+        run: npx -y "$WRANGLER" deploy --dry-run --outdir "$RUNNER_TEMP/worker"
+        working-directory: payments
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check setup
+        id: setup
+        working-directory: payments
+        run: |
+          missing=""
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$RAZORPAY_KEY_SECRET" ] || missing="$missing RAZORPAY_KEY_SECRET"
+          [ -n "$FIREBASE_SERVICE_ACCOUNT" ] || missing="$missing FIREBASE_SERVICE_ACCOUNT"
+          grep -Eq '^account_id = "[0-9a-f]{32}"' wrangler.toml || missing="$missing account_id(wrangler.toml)"
+          grep -Eq '^RAZORPAY_KEY_ID = "rzp_(test|live)_[A-Za-z0-9]+"' wrangler.toml || missing="$missing RAZORPAY_KEY_ID(wrangler.toml)"
+          if [ -n "$missing" ]; then
+            echo "::notice::Payment server not deployed yet. Missing:$missing"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.setup.outputs.ready == 'true'
+        with:
+          node-version: 22
+      - name: Deploy the Worker
+        if: steps.setup.outputs.ready == 'true'
+        working-directory: payments
+        run: npx -y "$WRANGLER" deploy
+      - name: Set the Worker's secrets
+        if: steps.setup.outputs.ready == 'true'
+        working-directory: payments
+        run: |
+          printf '%s' "$RAZORPAY_KEY_SECRET" | npx -y "$WRANGLER" secret put RAZORPAY_KEY_SECRET
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | npx -y "$WRANGLER" secret put FIREBASE_SERVICE_ACCOUNT
+          if [ -n "$RAZORPAY_WEBHOOK_SECRET" ]; then printf '%s' "$RAZORPAY_WEBHOOK_SECRET" | npx -y "$WRANGLER" secret put RAZORPAY_WEBHOOK_SECRET; fi

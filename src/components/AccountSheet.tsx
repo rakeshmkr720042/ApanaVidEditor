@@ -120,11 +120,11 @@ function Payments({ onBack }: { onBack: () => void }) {
         <div key={p.id} className="account-pay" data-testid="payment-row">
           <div>
             <b>{p.planName || t('Pro')}</b>
-            <small className="muted">{p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}{p.provider ? ` · ${p.provider === 'play' ? 'Google Play' : p.provider === 'razorpay' ? 'Razorpay' : p.provider}` : ''}</small>
+            <small className="muted">{p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}{p.provider ? ` · ${p.provider === 'play' ? 'Google Play' : p.provider === 'razorpay' ? 'Razorpay' : p.provider}` : ''}{p.mode === 'test' ? ` · ${t('Test')}` : ''}</small>
           </div>
           <div className="account-pay-amt">
             <b>{p.currency === 'INR' ? rupees(p.amount) : `${(p.amount / 100).toFixed(2)} ${p.currency}`}</b>
-            <small className={p.status === 'success' || p.status === 'paid' ? 'ok' : 'muted'}>{t(statusWord(p.status))}</small>
+            <small className={statusWord(p.status) === 'Paid' ? 'ok' : 'muted'}>{t(statusWord(p.status))}</small>
           </div>
         </div>
       ))}
@@ -132,7 +132,7 @@ function Payments({ onBack }: { onBack: () => void }) {
   )
 }
 
-const statusWord = (s: string) => (s === 'success' || s === 'paid' ? 'Paid' : s === 'refunded' ? 'Refunded' : s === 'failed' ? 'Failed' : 'Pending')
+const statusWord = (s: string) => (s === 'success' || s === 'paid' || s === 'paid_no_account' ? 'Paid' : s === 'refunded' ? 'Refunded' : s === 'failed' ? 'Failed' : 'Pending')
 
 function DeleteAccount({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
   const kind = signInKind()

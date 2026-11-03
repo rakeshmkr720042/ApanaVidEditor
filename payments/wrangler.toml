@@ -1,0 +1,23 @@
+# Apna Editor payment server on Cloudflare Workers (free plan: 100,000 requests a day).
+# Deployed by .github/workflows/payments.yml. Secrets are set there from GitHub Secrets, never here:
+#   RAZORPAY_KEY_SECRET, FIREBASE_SERVICE_ACCOUNT, RAZORPAY_WEBHOOK_SECRET (optional)
+name = "apna-editor-payments"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+# Cloudflare account (not secret). Filled in when Rakesh sends it.
+# account_id = ""
+
+[vars]
+FIREBASE_PROJECT_ID = "apnaeditor-b7b18"
+# Razorpay Key Id (not secret; the Key Secret is a GitHub Secret). rzp_test_... while testing.
+RAZORPAY_KEY_ID = ""
+# Website, Windows app, Android app, local development.
+ALLOWED_ORIGINS = "https://rakeshmkr720042.github.io,app://bundle,https://localhost,http://localhost:5173"
+# While the key is a test key, only these emails can buy (comma separated).
+TEST_BUYERS = "pratimarakesh100k@gmail.com"
+# A live key (rzp_live_...) is refused until this says "on" (only with Rakesh's go-ahead).
+LIVE_PAYMENTS = "off"
+
+[observability]
+enabled = true
