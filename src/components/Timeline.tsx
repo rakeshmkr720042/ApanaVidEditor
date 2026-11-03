@@ -12,6 +12,7 @@ import { Icon } from './Icon'
 import { TrackSheet } from './TrackSheet'
 import { useCopiedTrack } from '../model/trackCopy'
 import { CtxMenu } from './TimelineMenu'
+import { roll, rollRange, slide, slideRange, slip, slipRange } from '../model/trim'
 
 interface Props {
   ed: Editor
@@ -55,6 +56,7 @@ const LANE = 34 // height of one track row
 
 type Drag =
   | { kind: 'clip-trim'; id: string; side: 'in' | 'out'; x0: number; in0: number; out0: number; speed: number }
+  | { kind: 'slip' | 'slide' | 'roll'; id: string; i: number; x0: number; base: Clip[] }
   | { kind: 'layer-trim'; id: string; side: 'in' | 'out'; x0: number; start0: number; end0: number; in0: number; speed: number }
   | { kind: 'layer-move'; id: string; x0: number; y0: number; start0: number; end0: number; moved: boolean }
   // slot: the gap the clip is over (k = before clip k); to: its new index once taken out
@@ -311,11 +313,27 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     setDrag({ kind: 'clip-trim', id: c.id, side, x0: e.clientX, in0: c.in, out0: c.out, speed: c.ramp ? 1 : c.speed })
   }
 
+  /** Alt+drag: slip (clip body), slide (Alt+Shift on the body), roll (an edge). */
+  const startProTrim = (e: React.PointerEvent, kind: 'slip' | 'slide' | 'roll', i: number) => {
+    capture(e)
+    ed.begin()
+    setDrag({ kind, id: project.clips[i].id, i, x0: e.clientX, base: project.clips.map((c) => ({ ...c })) })
+  }
+
   const onMove = (e: React.PointerEvent) => {
     const d = dragRef.current
     if (!d) return
     const dt = (e.clientX - d.x0) / pps
-    if (d.kind === 'clip-trim') {
+    if (d.kind === 'slip' || d.kind === 'slide' || d.kind === 'roll') {
+      const b = d.base
+      const r = d.kind === 'roll' ? rollRange(b, d.i, sources) : d.kind === 'slide' ? slideRange(b, d.i, sources) : slipRange(b[d.i], sources)
+      // slip: dragging right shows earlier video (the picture follows the hand, like Premiere)
+      const want = d.kind === 'slip' ? -dt * b[d.i].speed : dt
+      const x = Math.max(r.min, Math.min(r.max, want))
+      ed.patchItems(d.kind === 'roll' ? roll(b, d.i, x) : d.kind === 'slide' ? slide(b, d.i, x) : slip(b[d.i], x))
+      const shown = d.kind === 'slip' ? b[d.i] : d.kind === 'roll' ? b[d.i] : b[d.i - 1]
+      onTrimPreview(shown.id, d.kind === 'slip' ? shown.in + x : Math.max(shown.in, shown.out + x * shown.speed - 0.04))
+    } else if (d.kind === 'clip-trim') {
       const c = project.clips.find((x) => x.id === d.id)!
       const src = sources[c.sourceId]
       const maxOut = src.kind === 'image' ? IMAGE_DURATION : src.duration
@@ -376,7 +394,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     if (!d) return
     setDrag(null)
     setSnapLine(null)
-    if (d.kind === 'clip-trim') { ed.end(); onTrimPreview(null, 0) }
+    if (d.kind === 'clip-trim' || d.kind === 'slip' || d.kind === 'slide' || d.kind === 'roll') { ed.end(); onTrimPreview(null, 0) }
     else if (d.kind === 'layer-trim' || (d.kind === 'layer-move' && d.moved)) { ed.settleLayer(d.id); ed.end() }
     else if (d.kind === 'reorder' && d.moved) {
       // land on the moved clip's new start (the timeline may have scrolled while dragging)
@@ -494,6 +512,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                   onDoubleClick={(e) => { e.stopPropagation(); if (!mainLocked && !picking) onOpenItem?.({ type: 'clip', id: clip.id }) }}
                   onContextMenu={(e) => { if (picking) return; if (!mainLocked) ed.setSel({ type: 'clip', id: clip.id }); openCtx(e, { kind: 'clip', id: clip.id }) }}
                   onPointerDown={(e) => {
+                    if (e.button === 0 && e.altKey && !mainLocked && !picking) { ed.setSel({ type: 'clip', id: clip.id }); startProTrim(e, e.shiftKey ? 'slide' : 'slip', it.index); return }
                     if (e.button > 0 || pointers.current.size > 1 || mainLocked || picking || (snap && project.clips.length < 2)) return
                     const x = e.clientX, y = e.clientY
                     // snap off: the clip goes to any time, not just between clips
@@ -534,7 +553,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                   </span>
                   <span className="tl-dur">{fmtTime(it.dur)}</span>
                   {selected && (['in', 'out'] as const).map((side) => (
-                    <div key={side} className={`tl-handle ${side}`} onPointerDown={(e) => startClipTrim(e, clip, side)} onClick={(e) => e.stopPropagation()} />
+                    <div key={side} className={`tl-handle ${side}`} onPointerDown={(e) => (e.altKey && (side === 'out' ? it.index < layout.items.length - 1 : it.index > 0) ? startProTrim(e, 'roll', side === 'out' ? it.index : it.index - 1) : startClipTrim(e, clip, side))} onClick={(e) => e.stopPropagation()} />
                   ))}
                 </div>
               )
