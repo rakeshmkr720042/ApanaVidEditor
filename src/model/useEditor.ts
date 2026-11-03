@@ -11,6 +11,7 @@ import { defaultWatermark } from '../engine/watermark'
 import { defaultPresenter } from '../engine/presenter'
 import { outputSize } from '../engine/renderer'
 import { hasSound } from '../engine/denoise'
+import { maxVol } from './clipKeys'
 import { insertAt, isLocked, newTrack, overlaps, trackKind, withTracks } from './tracks'
 import { defaultChroma } from '../engine/chromakey'
 import type { PasteTrackHow, TrackCopy } from './trackCopy'
@@ -458,7 +459,7 @@ export function useEditor(initial: Project) {
     const silenced = new Set<string>()
     for (const it of layoutClips(p.clips).items) {
       const c = it.clip
-      if (!want.has(c.id) || p.main?.locked || c.volume <= 0 || !hasSound(src(c.sourceId))) continue
+      if (!want.has(c.id) || p.main?.locked || maxVol(c) <= 0 || !hasSound(src(c.sourceId))) continue
       // a speed ramp becomes one piece per constant-speed step; a transition becomes a fade, like the mix does
       const segs = clipSegments(c).reduce<ReturnType<typeof clipSegments>>((out, s) => {
         const last = out[out.length - 1]
@@ -472,17 +473,19 @@ export function useEditor(initial: Project) {
           speed: s.speed, volume: c.volume, label: label(c.sourceId), kind: 'sound',
           fadeIn: i === 0 ? Math.max(c.fadeIn, it.transIn) : 0, fadeOut: i === segs.length - 1 ? Math.max(c.fadeOut, it.transOut) : 0,
           ...(c.denoise ? { denoise: { ...c.denoise } } : {}),
+          ...(c.volKeys?.length ? { volKeys: c.volKeys.map((k) => ({ ...k })) } : {}),
           ...(c.fx ? { fx: { ...c.fx } } : {}),
         })
       })
       silenced.add(c.id)
     }
     for (const l of p.layers) {
-      if (!want.has(l.id) || l.type !== 'media' || l.volume <= 0 || !hasSound(src(l.sourceId)) || isLocked(p, l)) continue
+      if (!want.has(l.id) || l.type !== 'media' || maxVol(l) <= 0 || !hasSound(src(l.sourceId)) || isLocked(p, l)) continue
       made.push({
         id: uid(), type: 'audio', sourceId: l.sourceId, in: l.in, start: l.start, end: l.end, speed: layerSpeed(l),
         volume: l.volume, label: label(l.sourceId), kind: 'sound', fadeIn: 0, fadeOut: 0,
         ...(l.denoise ? { denoise: { ...l.denoise } } : {}),
+        ...(l.volKeys?.length ? { volKeys: l.volKeys.map((k) => ({ ...k })) } : {}),
         ...(l.fx ? { fx: { ...l.fx } } : {}),
       })
       silenced.add(l.id)
@@ -496,8 +499,8 @@ export function useEditor(initial: Project) {
     h.set({
       ...p,
       tracks,
-      clips: p.clips.map((c) => (silenced.has(c.id) ? { ...c, volume: 0 } : c)),
-      layers: [...p.layers.map((l) => (silenced.has(l.id) ? { ...l, volume: 0 } as Layer : l)), ...made.map((m) => ({ ...m, track: tr.id }))],
+      clips: p.clips.map((c) => (silenced.has(c.id) ? { ...c, volume: 0, volKeys: undefined } : c)),
+      layers: [...p.layers.map((l) => (silenced.has(l.id) ? { ...l, volume: 0, volKeys: undefined } as Layer : l)), ...made.map((m) => ({ ...m, track: tr.id }))],
     })
     setSel({ type: 'layer', id: made[0].id })
     return made

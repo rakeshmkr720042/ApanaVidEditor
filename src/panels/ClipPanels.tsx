@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Adjust, AspectRatio, AudioLayer, Clip, Denoise, MediaLayer } from '../types'
+import type { Adjust, AspectRatio, AudioLayer, Clip, Denoise, MediaLayer, VolKey } from '../types'
 import type { Editor } from '../model/useEditor'
-import { defaultAdjust, SPEED_RAMPS } from '../model/timeline'
+import { defaultAdjust, rampPoints, SPEED_RAMPS } from '../model/timeline'
+import { volAt, volKeyAt, withVolKey } from '../model/clipKeys'
+import { SpeedCurve } from './ClipKeysPanel'
 import { ADJUST_SLIDERS, colorParams, FILTER_GROUPS, FILTERS } from '../engine/filters'
 import { Grader } from '../engine/gl'
 import { TRANSITION_GROUPS, TRANSITIONS } from '../engine/transitions'
@@ -17,6 +19,7 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
   return (
     <Panel title="Speed" onClose={onClose}>
       <Chips options={[{ value: 'normal', label: 'Normal' }, { value: 'curve', label: 'Speed ramp' }]} value={tab} onChange={setTab} />
+      {tab === 'curve' && clip.ramp === 'custom' && <SpeedCurve ed={ed} clip={clip} />}
       {tab === 'normal' ? (
         <>
           <Slider
@@ -31,6 +34,9 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
         <div className="grid ramps">
           <button className={!clip.ramp ? 'on' : ''} onClick={() => ed.updateClip(clip.id, { ramp: null })}>
             <svg viewBox="0 0 80 30"><path d="M0 15H80" /></svg>{t('None')}
+          </button>
+          <button className={clip.ramp === 'custom' ? 'on' : ''} onClick={() => ed.updateClip(clip.id, { ramp: 'custom', rampPts: clip.rampPts?.length ? clip.rampPts : rampPoints(clip) ?? Array.from({ length: 8 }, () => 1) })}>
+            <svg viewBox="0 0 80 30"><polyline points="0,20 20,8 40,24 60,10 80,16" /></svg>{t('Custom')}
           </button>
           {SPEED_RAMPS.map((r) => {
             const pts = r.points.map((s, i) => `${(i / (r.points.length - 1)) * 80},${28 - (Math.log2(s) + 2) * 6.5}`).join(' ')
@@ -71,15 +77,36 @@ export function LayerSpeedPanel({ ed, layer, onClose }: P & { layer: MediaLayer 
 
 const SPEED_CHIPS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4].map((s) => ({ value: s, label: `${s}x` }))
 
-export function VolumePanel({ ed, target, onClose }: P & { target: { kind: 'clip'; clip: Clip } | { kind: 'layer'; id: string; volume: number; fadeIn?: number; fadeOut?: number } }) {
-  const vol = target.kind === 'clip' ? target.clip.volume : target.volume
+export function VolumePanel({ ed, target, src, onClose }: P & {
+  target: { kind: 'clip'; clip: Clip } | { kind: 'layer'; id: string; volume: number; fadeIn?: number; fadeOut?: number; volKeys?: VolKey[] }
+  /** Source time at the playhead (null = the playhead is not on this item): volume keyframes go there. */
+  src?: number | null
+}) {
+  const item = target.kind === 'clip' ? target.clip : { volume: target.volume, volKeys: target.volKeys }
+  const keys = item.volKeys ?? []
+  const at = src ?? null
+  const vol = at !== null && keys.length ? volAt(item as Clip, at) : target.kind === 'clip' ? target.clip.volume : target.volume
   const fi = target.kind === 'clip' ? target.clip.fadeIn : target.fadeIn
   const fo = target.kind === 'clip' ? target.clip.fadeOut : target.fadeOut
-  const set = (patch: { volume?: number; fadeIn?: number; fadeOut?: number }) =>
-    target.kind === 'clip' ? ed.updateClip(target.clip.id, patch) : ed.updateLayer(target.id, patch)
+  const id = target.kind === 'clip' ? target.clip.id : target.id
+  const set = (patch: { volume?: number; fadeIn?: number; fadeOut?: number; volKeys?: VolKey[] }) =>
+    target.kind === 'clip' ? ed.updateClip(id, patch) : ed.updateLayer(id, patch)
+  // with volume keyframes the slider changes (or makes) the keyframe at the playhead
+  const setVol = (v: number) => (keys.length && at !== null ? set({ volKeys: withVolKey(item as Clip, at, v) }) : set({ volume: v }))
+  const on = volKeyAt(item as Clip, at) >= 0
   return (
-    <Panel title="Volume" onClose={onClose} actions={<button className="btn small" onClick={() => set({ volume: vol === 0 ? 1 : 0 })}>{vol === 0 ? '🔈' : '🔇'} {t('Mute')}</button>}>
-      <Slider label="Volume" min={0} max={2} value={vol} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ volume: v })} />
+    <Panel title="Volume" onClose={onClose} actions={<button className="btn small" onClick={() => set({ volume: vol === 0 ? 1 : 0, volKeys: undefined })}>{vol === 0 ? '🔈' : '🔇'} {t('Mute')}</button>}>
+      <Slider label="Volume" min={0} max={2} value={vol} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={setVol} />
+      {src !== undefined && (
+        <div className="row">
+          {on
+            ? <button className="btn small" onClick={() => set({ volKeys: keys.filter((_, i) => i !== volKeyAt(item as Clip, at)) })}>◆ {t('Remove volume keyframe')}</button>
+            : <button className="btn small" disabled={at === null} onClick={() => at !== null && set({ volKeys: withVolKey(item as Clip, at, vol) })}>◇ {t('Add volume keyframe')}</button>}
+          {keys.length > 0 && <span className="muted small">{keys.length} {t('keyframes')}</span>}
+          {keys.length > 0 && <button className="btn small" onClick={() => set({ volume: vol, volKeys: undefined })}>{t('Remove all')}</button>}
+        </div>
+      )}
+      {src !== undefined && <p className="muted small">{t(keys.length ? 'Move the playhead and change the volume: a keyframe is saved there, and the sound glides between keyframes.' : 'Volume keyframes: add one, move the playhead, change the volume. Good for making music quieter under speech.')}</p>}
       {fi !== undefined && <Slider label="Fade in" min={0} max={5} value={fi} format={(v) => `${v.toFixed(1)}s`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ fadeIn: v })} />}
       {fo !== undefined && <Slider label="Fade out" min={0} max={5} value={fo} format={(v) => `${v.toFixed(1)}s`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ fadeOut: v })} />}
     </Panel>

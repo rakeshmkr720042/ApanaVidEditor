@@ -6,6 +6,7 @@ import { onCleanChange, prepareCleanSounds, previewSource, soundJob } from './de
 import { duckCurve, duckGain, onDuckChange } from './duck'
 import { reversedIn } from './soundfx'
 import { Meter } from './meter'
+import { volAt } from '../model/clipKeys'
 
 interface Need { key: string; source: MediaSource; time: number; rate: number; volume: number; preload?: boolean }
 
@@ -26,7 +27,7 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     const src = sources[c.sourceId]
     if (!src) continue
     const { time, speed } = sourceAt(c, act.local)
-    const volume = c.volume * g * fadeGain(act.local, act.item.dur, c.fadeIn, c.fadeOut)
+    const volume = volAt(c, time) * g * fadeGain(act.local, act.item.dur, c.fadeIn, c.fadeOut)
     // with noise removal or sound effects the picture plays silent and the cleaned sound plays next to it
     const job = soundJob(c)
     const clean = job ? previewSource(c.sourceId, job.dn, job.fx) : null
@@ -56,8 +57,9 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
     const soon = lookahead > 0 && l.start > t && l.start - t < lookahead
     if (!active && !soon) continue
     const local = Math.max(0, t - l.start)
-    const vol = l.type === 'audio' ? l.volume * fadeGain(local, l.end - l.start, l.fadeIn, l.fadeOut) * duckGain(l, t) : l.volume
     const sp = layerSpeed(l)
+    const lv = volAt(l, l.in + local * sp)
+    const vol = l.type === 'audio' ? lv * fadeGain(local, l.end - l.start, l.fadeIn, l.fadeOut) * duckGain(l, t) : lv
     const job = soundJob(l)
     const clean = job ? previewSource(l.sourceId, job.dn, job.fx) : null
     let time = l.in + local * sp

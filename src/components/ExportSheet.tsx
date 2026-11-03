@@ -16,7 +16,7 @@ import { PremiumSheet } from './PremiumSheet'
 import { ProAd } from './ProAd'
 import { afterExportAd } from '../lib/ads'
 import { Icon } from './Icon'
-import { isAllowed, usePremium, type Feature } from '../lib/premium'
+import { canExportHeight, isAllowed, usePremium, type Feature } from '../lib/premium'
 
 interface Props {
   project: Project
@@ -32,7 +32,7 @@ const FORMATS: { value: Format; label: string }[] = [
   { value: 'mp4', label: 'MP4' }, { value: 'webm', label: 'WebM' }, { value: 'mov', label: 'MOV' }, { value: 'gif', label: 'GIF' }, { value: 'mp3', label: 'MP3 (audio)' },
 ]
 const RES: { value: Resolution; label: string }[] = [
-  { value: '480', label: '480p' }, { value: '720', label: '720p' }, { value: '1080', label: '1080p' }, { value: '1440', label: '2K' },
+  { value: '480', label: '480p' }, { value: '720', label: '720p' }, { value: '1080', label: '1080p' }, { value: '1440', label: '2K' }, { value: '2160', label: '4K' },
 ]
 
 const SIZES: { value: SizeMode; label: string }[] = [
@@ -82,7 +82,9 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const [paywall, setPaywall] = useState<Feature | null>(null)
   // free plan: up to 1080p, one export at a time, with the app's mark
   const can2k = isAllowed('export2k'), canBatch = isAllowed('batch'), canHideMark = isAllowed('nomark')
-  const resolution = res === '1440' && !can2k ? '1080' : res
+  const canRes = (r: Resolution) => (r === '1440' ? can2k : canExportHeight(Number(r)))
+  const resolution = !canRes(res) ? '1080' : res
+  const biggest = Math.max(0, ...Object.values(sources).filter((s) => s.kind !== 'audio').map((s) => Math.min(s.width, s.height)))
   const mark = watermark || !canHideMark
 
   useEffect(() => () => results.forEach((r) => URL.revokeObjectURL(r.url)), [results])
@@ -131,7 +133,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
       setBatch([])
       afterExportAd()
     } catch (e) {
-      if (!(e instanceof Cancelled)) setError(e instanceof Error ? e.message : String(e))
+      if (!(e instanceof Cancelled)) setError(e instanceof Error ? t(e.message) : String(e))
     } finally {
       setRunning(null)
     }
@@ -205,8 +207,11 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
                 {format !== 'mp3' && (
                   <>
                     <span className="field-label">{t('Resolution')}</span>
-                    <Chips options={format === 'gif' ? RES.slice(0, 1) : RES.map((r) => (r.value === '1440' && !can2k ? { ...r, label: `${r.label} 👑` } : r))} value={format === 'gif' ? '480' : resolution}
-                      onChange={(v) => { if (v === '1440' && !can2k) { setPaywall('export2k'); return } setRes(v); setPreset('') }} />
+                    <Chips options={format === 'gif' ? RES.slice(0, 1) : RES.map((r) => (!canRes(r.value) ? { ...r, label: `${r.label} 👑` } : r))} value={format === 'gif' ? '480' : resolution}
+                      onChange={(v) => { if (!canRes(v)) { setPaywall('export2k'); return } setRes(v); setPreset('') }} />
+                    {resolution === '2160' && format !== 'gif' && (
+                      <p className="muted small">{t('4K takes about 4 times longer than 1080p and makes big files. It works best on a computer.')}{biggest > 0 && biggest < 2160 ? ` ${t('Your videos are smaller than 4K, so 4K will not look sharper than 2K.')}` : ''}</p>
+                    )}
                     {format !== 'gif' && (
                       <>
                         <span className="field-label">{t('Frame rate')}</span>

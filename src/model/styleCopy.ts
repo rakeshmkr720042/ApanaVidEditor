@@ -39,6 +39,8 @@ const KEYS: Record<StylePart, { key: string; kinds: Kind[]; none: unknown }[]> =
     { key: 'mask', kinds: ['media'], none: 'none' },
     { key: 'border', kinds: ['media'], none: 0 },
     { key: 'blend', kinds: ['media'], none: 'normal' },
+    { key: 'shapeMask', kinds: ['clip', 'media'], none: null },
+    { key: 'pos', kinds: ['clip'], none: null },
   ],
   anim: [
     { key: 'animIn', kinds: ['text', 'sticker', 'media'], none: 'none' },

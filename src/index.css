@@ -974,3 +974,13 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .marker-dot.on { border-color: #fff; }
 .marker-colors { display: flex; gap: 6px; }
 .style-parts { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+
+/* own speed curve */
+.speed-curve svg { width: 100%; max-width: 420px; height: auto; touch-action: none; display: block; margin: 6px auto; background: var(--panel-2); border-radius: 10px; }
+.speed-curve line { stroke: var(--line); stroke-width: 1; }
+.speed-curve line.mid { stroke: var(--muted); stroke-dasharray: 4 4; }
+.speed-curve text { fill: var(--muted); font-size: 9px; }
+.speed-curve polyline { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.speed-curve circle { fill: #fff; stroke: var(--accent); stroke-width: 3; cursor: ns-resize; }
+.tl-ckey { position: absolute; bottom: 2px; width: 8px; height: 8px; margin-left: -4px; background: #ffcc00; transform: rotate(45deg); pointer-events: none; z-index: 2; box-shadow: 0 0 2px #000; }
+.tl-ckey.vol { background: #3ecf6a; bottom: 12px; }

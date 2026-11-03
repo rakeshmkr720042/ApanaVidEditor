@@ -21,7 +21,7 @@ export const GRACE_DAYS = 7
 export type Feature = 'export2k' | 'batch' | 'nomark' | 'dub' | 'audio' | 'greenscreen' | 'presenter' | 'scenes'
 
 export const FEATURES: Record<Feature, { label: string; info: string }> = {
-  export2k: { label: '2K export', info: 'Sharper 1440p videos' },
+  export2k: { label: '2K & 4K export', info: 'Sharper 1440p and 2160p videos' },
   batch: { label: 'Batch export', info: 'Several sizes in one go' },
   nomark: { label: 'No Apna Editor mark', info: 'Clean exports without the app name' },
   dub: { label: 'AI Dub', info: 'Translate, voice-over, voice cloning, YouTube subtitles' },
@@ -178,6 +178,13 @@ export function isProFeature(f: Feature) {
 export const proFeatureList = () => (Object.keys(FEATURES) as Feature[]).filter(isProFeature)
 
 export const isAllowed = (f: Feature) => !lockActive() || isPremium() || !isProFeature(f)
+
+/** Can this user export at this height? Up to 1080p always; above that with Pro, or up to the height the admin made free. */
+export function canExportHeight(h: number) {
+  if (h <= 1080 || !lockActive() || isPremium()) return true
+  if (server?.proFeatures && !server.proFeatures.includes('export2k')) return true
+  return (server?.freeExportMaxHeight ?? 0) >= h
+}
 
 export const devSettings = () => { const s = load(); return { dev: s.dev, devLock: s.devLock, devPremium: s.devPremium } }
 export function setDev(p: Partial<{ dev: boolean; devLock: boolean; devPremium: boolean }>) { Object.assign(load(), p); save() }

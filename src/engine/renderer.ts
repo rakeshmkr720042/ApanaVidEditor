@@ -4,6 +4,8 @@ import { stabAt } from './motion'
 import { drawPhoto3d, photo3dKey } from './photo3d'
 import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
+import { posAt } from '../model/clipKeys'
+import { applyMask } from './shapeMask'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
@@ -389,9 +391,9 @@ export class Renderer {
       c.filter = 'none'
     }
     const p = Math.min(1, Math.max(0, progress))
-    const srcT = clip.stabilize || clip.smoothSlow ? sourceAt(clip, local).time : 0
+    const srcT = clip.stabilize || clip.smoothSlow || clip.keys?.length ? sourceAt(clip, local).time : 0
     const stab = clip.stabilize ? stabAt(clip.stabilize, srcT) : null
-    if (!(clip.photo3d && this.drawPhoto3d(c, f, clip, p))) this.placeFrame(c, f, clip, W, H, clip.fit, p, stab)
+    if (!(clip.photo3d && this.drawPhoto3d(c, f, clip, p))) this.placeFrame(c, f, clip, W, H, clip.fit, p, stab, srcT)
     // smooth slow motion: the next source frame shows through by how far the moment is between the two
     if (clip.smoothSlow) {
       const f2 = inp.frame(clipKey(clip) + '~next')
@@ -400,12 +402,24 @@ export class Renderer {
         const frac = pos - Math.floor(pos + 1e-3)
         if (frac > 0.02) {
           c.globalAlpha = Math.min(1, frac)
-          this.placeFrame(c, f2, clip, W, H, clip.fit, p, stab)
+          this.placeFrame(c, f2, clip, W, H, clip.fit, p, stab, srcT)
           c.globalAlpha = 1
         }
       }
     }
     if (clip.motionBlur) this.smear(i, clip, out, inp.t)
+    if (clip.shapeMask) {
+      // pro mask: outside the shape the project background shows (or nothing, when this frame goes on a backdrop)
+      applyMask(c, clip.shapeMask, W, H)
+      if (!clear) {
+        c.save()
+        c.setTransform(1, 0, 0, 1, 0, 0)
+        c.globalCompositeOperation = 'destination-over'
+        c.fillStyle = bg === 'white' ? '#fff' : bg === 'black' || bg === 'blur' ? '#000' : bg
+        c.fillRect(0, 0, W, H)
+        c.restore()
+      }
+    }
     return out
   }
 
@@ -453,7 +467,7 @@ export class Renderer {
     return drawPhoto3d(c, photo3dKey(clip.sourceId, clip.photo3d!), f.image, f.width, f.height, clip.photo3d!, p, W, H, cr, s, this.onNeedsRedraw)
   }
 
-  private placeFrame(c: Ctx, f: FrameImage, clip: Clip, W: number, H: number, fit: 'fit' | 'fill', progress?: number, stab?: { dx: number; dy: number; zoom: number } | null) {
+  private placeFrame(c: Ctx, f: FrameImage, clip: Clip, W: number, H: number, fit: 'fit' | 'fill', progress?: number, stab?: { dx: number; dy: number; zoom: number } | null, srcT = 0) {
     const cr = clip.crop ?? { x: 0, y: 0, w: 1, h: 1 }
     const sx = cr.x * f.width, sy = cr.y * f.height, sw = cr.w * f.width, sh = cr.h * f.height
     const rot = clip.rotate % 180 !== 0
@@ -461,6 +475,13 @@ export class Renderer {
     const s = fit === 'fit' ? Math.min(W / dw0, H / dh0) : Math.max(W / dw0, H / dh0)
     c.save()
     c.translate(W / 2, H / 2)
+    // zoom & move (keyframes or a fixed position); not on the small blurred background copy
+    if ((clip.pos || clip.keys?.length) && progress !== undefined) {
+      const pos = posAt(clip, srcT)
+      c.translate(pos.x * W, pos.y * H)
+      c.rotate((pos.rotation * Math.PI) / 180)
+      c.scale(pos.scale, pos.scale)
+    }
     if (clip.kenBurns && progress !== undefined) {
       const kb = kenBurnsAt(clip.kenBurns, progress)
       c.translate(kb.dx * W, kb.dy * H)
@@ -533,6 +554,8 @@ export class Renderer {
     return { w: sq ? Math.min(w, h) : w, h: sq ? Math.min(w, h) : h, fw: w, fh: h }
   }
 
+  private maskScratch: Canvas | null = null
+
   private drawMediaLayer(l: MediaLayer, inp: RenderInput, seed: number) {
     const f = inp.frame(layerKey(l))
     if (!f) return
@@ -571,6 +594,19 @@ export class Renderer {
       cc.globalCompositeOperation = 'source-over'
       mask = personMask(cs, layerKey(l), `${inp.t.toFixed(3)}:${JSON.stringify(l.crop ?? null)}:${cw}x${ch}`, l.cutout.soft, this.onNeedsRedraw)
       if (mask) { img = keepPerson(cs, mask, cw, ch); sx = 0; sy = 0; sw = cw; sh = ch }
+    }
+    if (l.shapeMask) {
+      // pro mask: a copy of the shown picture with the hidden part taken out
+      const mw = Math.max(2, Math.round(fw)), mh = Math.max(2, Math.round(fh))
+      const ms = (this.maskScratch ??= makeCanvas(mw, mh))
+      if (ms.width !== mw || ms.height !== mh) { ms.width = mw; ms.height = mh }
+      const mc = ctx2d(ms)
+      mc.setTransform(1, 0, 0, 1, 0, 0)
+      mc.globalCompositeOperation = 'copy'
+      mc.drawImage(img, sx, sy, sw, sh, 0, 0, mw, mh)
+      mc.globalCompositeOperation = 'source-over'
+      applyMask(mc, l.shapeMask, mw, mh)
+      img = ms; sx = 0; sy = 0; sw = mw; sh = mh
     }
     const a = animState({ start: l.start, end: l.end, animIn: l.animIn ?? 'none', animOut: l.animOut ?? 'none' }, inp.t)
     if (a.alpha <= 0.001 || a.scale <= 0.001) return

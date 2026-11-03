@@ -15,10 +15,16 @@ export const SPEED_RAMPS: { id: string; name: string; points: number[] }[] = [
 
 export interface Segment { srcStart: number; srcEnd: number; speed: number; tStart: number; tEnd: number }
 
+/** The speeds of a clip's speed ramp (preset or the user's own curve), or null without one. */
+export function rampPoints(c: Clip): number[] | null {
+  if (!c.ramp) return null
+  if (c.ramp === 'custom') return c.rampPts?.length ? c.rampPts : null
+  return SPEED_RAMPS.find((r) => r.id === c.ramp)?.points ?? null
+}
+
 /** Splits a clip into constant-speed pieces (one piece unless it has a speed ramp). */
 export function clipSegments(c: Clip): Segment[] {
-  const ramp = c.ramp ? SPEED_RAMPS.find((r) => r.id === c.ramp) : null
-  const speeds = ramp ? ramp.points : [c.speed]
+  const speeds = rampPoints(c) ?? [c.speed]
   const n = speeds.length
   const len = (c.out - c.in) / n
   let t = 0

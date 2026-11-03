@@ -12,6 +12,7 @@ import { Icon } from './Icon'
 import { TrackSheet } from './TrackSheet'
 import { useCopiedTrack } from '../model/trackCopy'
 import { CtxMenu } from './TimelineMenu'
+import { localOfSrc } from '../model/clipKeys'
 import { roll, rollRange, slide, slideRange, slip, slipRange } from '../model/trim'
 
 interface Props {
@@ -552,6 +553,8 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                     {clip.filter && <i>◐</i>}
                   </span>
                   <span className="tl-dur">{fmtTime(it.dur)}</span>
+                  {(clip.keys ?? []).map((k, j) => { const lt = localOfSrc(clip, k.t); return lt === null ? null : <i key={'k' + j} className="tl-ckey" style={{ left: lt * pps }} /> })}
+                  {(clip.volKeys ?? []).map((k, j) => { const lt = localOfSrc(clip, k.t); return lt === null ? null : <i key={'v' + j} className="tl-ckey vol" style={{ left: lt * pps }} /> })}
                   {selected && (['in', 'out'] as const).map((side) => (
                     <div key={side} className={`tl-handle ${side}`} onPointerDown={(e) => (e.altKey && (side === 'out' ? it.index < layout.items.length - 1 : it.index > 0) ? startProTrim(e, 'roll', side === 'out' ? it.index : it.index - 1) : startClipTrim(e, clip, side))} onClick={(e) => e.stopPropagation()} />
                   ))}
