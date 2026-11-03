@@ -12,7 +12,7 @@ import { deleteVoiceSample, getVoiceSample, saveMedia, saveVoiceSample } from '.
 import { getLocalAI, localAI, setLocalAI } from '../lib/localai'
 import { CLONE_LANGS, referenceWav, voiceCloneSpace } from '../engine/voiceclone'
 import {
-  ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, hasVoice, langName, modelChosen, sampleVoice, saveModel, savedModel, setEmail, transcribe, translateCues,
+  ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, hasVoice, langName, modelChosen, sampleVoice, saveModel, savedModel, setEmail, transcribe, translateCues, listenError, LISTEN_SLOW,
   translator, type Progress,
 } from '../engine/ai'
 import { modelStates, type ModelState } from '../engine/offline'
@@ -198,9 +198,13 @@ export function AIPanel({ ed, name, onClose }: P) {
   const listenOpts = { model: memo.model, language: memo.spoken, toEnglish: memo.toEnglish, voice }
   const heard = (lang: string | null) => (memo.toEnglish ? 'en' : memo.spoken !== 'auto' ? memo.spoken : lang ?? 'auto')
 
+  // speech to text, with its failures told in plain words
+  const hear = (opts: Parameters<typeof transcribe>[2], label: string) =>
+    transcribe(ed.project, ed.sources, opts, progress(`${label} ${t(LISTEN_SLOW)}`)).catch((e) => { throw new Error(listenError(e)) })
+
   const generate = () => run(t('Listening to the video…'), async () => {
     if (subs.length && !confirm(t('Replace the subtitles you already have?'))) return ''
-    const { cues: out, language } = await transcribe(ed.project, ed.sources, listenOpts, progress(t('Listening to the video…')))
+    const { cues: out, language } = await hear(listenOpts, t('Listening to the video…'))
     if (!out.length) throw new Error(t('No speech was found in this video'))
     replaceSubs(out, heard(language))
     const found = memo.spoken === 'auto' && language ? ` ${t('Language heard')}: ${langName(language)}.` : ''
@@ -214,7 +218,7 @@ export function AIPanel({ ed, name, onClose }: P) {
     const i = subs.indexOf(picked)
     // a little either side, without reaching into the neighbouring captions
     const range: [number, number] = [Math.max(subs[i - 1]?.end ?? 0, picked.start - 1), Math.min(subs[i + 1]?.start ?? total, picked.end + 1)]
-    const { cues: out, language } = await transcribe(ed.project, ed.sources, { ...listenOpts, range }, progress(t('Listening again…')))
+    const { cues: out, language } = await hear({ ...listenOpts, range }, t('Listening again…'))
     if (!out.length) throw new Error(t('No speech was found in this part'))
     const fresh = replaceSubs(out.map((c) => ({ ...c, start: Math.max(range[0], c.start), end: Math.min(range[1], c.end) })), heard(language), range)
     // keep the new caption picked, so it can be listened to again with another quality

@@ -35,7 +35,7 @@ export type AiResponse =
   | { id: number; type: 'prepare' }
   | { id: number; type: 'error'; message: string }
 
-const pipes = new Map<string, Promise<Pipe & { device: string }>>()
+const pipes = new Map<string, Promise<Pipe>>()
 let bundled: Promise<Set<string>> | null = null
 let base = ''
 
@@ -54,31 +54,41 @@ function setup(b: string) {
 /**
  * Weights per Whisper size. Whisper's encoder loses a lot of accuracy when it is
  * squeezed to 8 bits (it starts inventing sentences), so it stays full size and
- * only the decoder is squeezed. Later entries are fallbacks for repos that lack a file.
+ * only the decoder is squeezed. Later entries are fallbacks for repos (or built-in
+ * copies) that lack a file.
+ *
+ * Everything runs on the CPU ('wasm'): the app ships the CPU build of the ONNX runtime
+ * (see vite.config.ts), which has no WebGPU backend. Asking it for WebGPU fails with
+ * "[webgpu] backend not found", and transformers.js then refuses every later model load
+ * in the same worker, so captions failed on any computer whose browser offers WebGPU
+ * (the Windows app, Chrome, Edge).
  */
-const WHISPER: Record<string, { wasm: Dtype[]; gpu?: Dtype; f16?: boolean }> = {
-  'onnx-community/whisper-large-v3-turbo': {
-    wasm: [{ encoder_model: 'q8', decoder_model_merged: 'q8' }, 'q8'],
-    gpu: { encoder_model: 'fp16', decoder_model_merged: 'q4' }, f16: true,
-  },
+const WHISPER: Record<string, Dtype[]> = {
+  'onnx-community/whisper-large-v3-turbo': [{ encoder_model: 'q8', decoder_model_merged: 'q8' }, 'q8'],
 }
-const whisperDtypes = (model: string) => WHISPER[model] ?? {
-  wasm: [{ encoder_model: 'fp32', decoder_model_merged: 'q8' }, 'q8', 'fp32'],
-  gpu: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+const whisperDtypes = (model: string) => WHISPER[model] ?? [{ encoder_model: 'fp32', decoder_model_merged: 'q8' }, 'q8', 'fp32']
+
+/** File name endings transformers.js uses per precision. */
+const SUFFIX: Record<string, string> = { fp32: '', q8: '_quantized', fp16: '_fp16', q4: '_q4', int8: '_int8', uint8: '_uint8', bnb4: '_bnb4', q4f16: '_q4f16' }
+
+/**
+ * Whether a built-in Whisper has the weight files for this precision. Trying one it lacks
+ * is not harmless: a server can answer a missing file with a web page, the engine fails to
+ * read that as a model, and after one such failure transformers.js refuses every later load.
+ */
+async function hasWeights(model: string, dtype: Dtype) {
+  const of = (part: string) => (typeof dtype === 'string' ? dtype : dtype[part]) ?? 'fp32'
+  const ok = await Promise.all(['encoder_model', 'decoder_model_merged'].map(async (part) => {
+    try {
+      const r = await fetch(`${base}models/${model}/onnx/${part}${SUFFIX[of(part)] ?? ''}.onnx`, { method: 'HEAD' })
+      return r.ok && !/text\/html/i.test(r.headers.get('content-type') ?? '')
+    } catch { return false }
+  }))
+  return ok.every(Boolean)
 }
 
-/** WebGPU makes the bigger models usable on a computer; anything wrong with it falls back to the CPU. */
-let gpuCheck: Promise<{ ok: boolean; f16: boolean }> | null = null
-const gpu = () => (gpuCheck ??= (async () => {
-  try {
-    const g = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<{ features: Set<string> } | null> } }).gpu
-    const a = g ? await g.requestAdapter() : null
-    return { ok: !!a, f16: !!a?.features.has('shader-f16') }
-  } catch { return { ok: false, f16: false } }
-})())
-
-function getPipe(task: Task, model: string, id: number, cpuOnly = false) {
-  const key = task + ':' + model + (cpuOnly ? ':cpu' : '')
+function getPipe(task: Task, model: string, id: number) {
+  const key = task + ':' + model
   if (!pipes.has(key)) {
     const files = new Map<string, [number, number]>()
     const progress_callback = (e: { status: string; file?: string; loaded?: number; total?: number }) => {
@@ -94,24 +104,20 @@ function getPipe(task: Task, model: string, id: number, cpuOnly = false) {
       env.allowLocalModels = local
       env.allowRemoteModels = !local
       env.useBrowserCache = !local // the app's own files need no second copy in the cache
-      const tries: [string, Dtype][] = []
-      if (task === 'automatic-speech-recognition') {
-        const d = whisperDtypes(model)
-        const g = cpuOnly ? null : await gpu()
-        if (g?.ok && d.gpu && (!d.f16 || g.f16)) tries.push(['webgpu', d.gpu])
-        for (const x of d.wasm) tries.push(['wasm', x])
-      } else {
-        // some repos only ship full-precision weights
-        tries.push(['wasm', 'q8'], ['wasm', 'fp32'])
+      // some repos only ship full-precision weights
+      let tries: Dtype[] = task === 'automatic-speech-recognition' ? whisperDtypes(model) : ['q8', 'fp32']
+      if (local && task === 'automatic-speech-recognition') {
+        const have = await Promise.all(tries.map((d) => hasWeights(model, d)))
+        tries = tries.filter((_, i) => have[i])
       }
       // without internet, a saved or built-in model may only have some of these files: the next one is tried
       let first: unknown
-      for (const [device, dtype] of tries) {
+      for (const dtype of tries) {
         try {
-          const pipe = (await pipeline(task, model, { dtype, device, progress_callback } as never)) as unknown as Pipe
-          return Object.assign(pipe, { device })
+          return (await pipeline(task, model, { dtype, device: 'wasm', progress_callback } as never)) as unknown as Pipe
         } catch (e) { first ??= e }
       }
+      if (first === undefined) throw new Error('This speech model is missing its files.')
       if (!local && (!navigator.onLine || /fetch|network/i.test(String(first)))) throw new Error('This AI model is not downloaded yet. Connect to the internet once, or download it in Offline & online on the home screen.')
       throw first
     })
@@ -213,18 +219,11 @@ function looping(text: string) {
 const dedupe = (text: string) => text.replace(/([^\d\s.])\1{4,}/gu, '$1').replace(/(^|\s)(\S.{0,39}?)(?:\s+\2){3,}(?=\s|$)/gu, '$1$2')
 
 async function asr(r: Extract<AiRequest, { type: 'asr' }>) {
-  let pipe = (await getPipe('automatic-speech-recognition', r.model, r.id)) as unknown as WhisperPipe & { device: string }
+  const pipe = (await getPipe('automatic-speech-recognition', r.model, r.id)) as unknown as WhisperPipe
   normalise(r.audio)
   const cues: { start: number; end: number; text: string }[] = []
   const parts = pieces(r.audio).filter(([a, b]) => rms(r.audio, a, b) >= 0.004) // silence: Whisper would invent words
-  // run once; if the graphics card path breaks, the CPU takes over for the rest
-  const run = async (fn: (p: WhisperPipe) => Promise<unknown>) => {
-    try { return await fn(pipe) } catch (e) {
-      if (pipe.device !== 'webgpu') throw e
-      pipe = (await getPipe('automatic-speech-recognition', r.model, r.id, true)) as unknown as WhisperPipe & { device: string }
-      return fn(pipe)
-    }
-  }
+  const run = (fn: (p: WhisperPipe) => Promise<unknown>) => fn(pipe)
   let language = r.language
   if (!language && parts.length) {
     post({ id: r.id, type: 'progress', stage: 'work', p: 0 })

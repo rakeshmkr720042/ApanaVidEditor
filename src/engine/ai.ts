@@ -85,8 +85,11 @@ function call(req: NoId<AiRequest>, progress?: Progress, transfer: Transferable[
       if (!w) return
       if (r.type === 'progress') { w.progress?.(r.stage, r.p); return }
       waiting.delete(r.id)
-      if (r.type === 'error') w.reject(new Error(r.message))
-      else w.resolve(r)
+      if (r.type === 'error') {
+        w.reject(new Error(r.message))
+        // the AI engine refuses every later model after one fails to start, so it is started fresh next time
+        if (/backend|session/i.test(r.message) && !waiting.size) { worker?.terminate(); worker = null }
+      } else w.resolve(r)
     }
     worker.onerror = (e) => {
       for (const w of waiting.values()) w.reject(new Error(e.message || 'AI engine failed to start'))
@@ -201,6 +204,23 @@ async function listen(audio: Float32Array, opts: ListenOpts, progress: Progress,
   if (r.type !== 'asr') throw new Error('Unexpected reply')
   return { cues: r.cues.flatMap((c) => splitLong(c)), language: r.language }
 }
+
+/**
+ * Why speech to text failed, in plain words (the engine's own message stays in the console).
+ * Returns the English text; callers translate it with t().
+ */
+export function listenError(e: unknown): string {
+  const msg = String((e as Error)?.message ?? e)
+  console.warn('Speech to text failed:', msg)
+  if (/not downloaded yet|internet/i.test(msg)) return 'The speech model needs internet the first time. Connect once and try again.'
+  if (/fetch|network|load/i.test(msg)) return 'The speech model could not be downloaded. Check the internet and try again.'
+  if (/memory|allocat|RangeError/i.test(msg)) return 'The computer ran out of memory. Pick the Fast quality, or close other apps, and try again.'
+  if (/no sound/i.test(msg)) return msg
+  return 'The speech model could not run on this device. Try the Fast quality and try again.'
+}
+
+/** What the user sees while speech is being turned into text: it runs on the processor, so long audio takes a while. */
+export const LISTEN_SLOW = 'This runs on your computer and can take a few minutes for long audio.'
 
 /** Speech to text on 16 kHz mono samples (the array is handed to the worker, so pass a copy to keep it). */
 export async function transcribeSamples(audio: Float32Array, opts: ListenOpts, progress: Progress): Promise<Cue[]> {
