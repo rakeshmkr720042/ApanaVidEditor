@@ -23,6 +23,10 @@ import { SignInOverlay } from './AuthScreen'
 import { useAccountState } from '../lib/account'
 import { usePremium } from '../lib/premium'
 
+
+/** Brand picture behind New project; the left side is dark for the text (relative path works on web, Android and Windows). */
+const HERO = 'linear-gradient(90deg, rgba(14, 16, 20, 0.94) 0%, rgba(14, 16, 20, 0.75) 45%, rgba(14, 16, 20, 0.1) 85%), url(brand/hero.webp)'
+
 export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang: () => void }) {
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null)
   const [offline, setOffline] = useState<'unknown' | 'ready' | 'no'>('unknown')
@@ -75,7 +79,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   return (
     <div className="app home">
       <header className="top">
-        <div className="brand"><span className="logo"><Icon name="play" size={16} /></span> Apna Editor</div>
+        <div className="brand"><img className="logo-img" src="brand/icon-96.png" alt="" width={30} height={30} /> Apna Editor</div>
         <div className="top-actions">
           <button className="btn ghost small notes-btn" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
             <Icon name="note" size={16} /><span className="wide-only"> {t('Notes')}</span>{openNotes > 0 && <span className="count">{openNotes}</span>}
@@ -94,9 +98,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         </div>
       </header>
       <main className="home-main">
-        <button className="new-project" onClick={create}>
-          <Icon name="plus" size={30} />
-          <span>{t('New project')}</span>
+        <button className="new-project" onClick={create} style={{ backgroundImage: HERO }}>
+          <span className="np-plus"><Icon name="plus" size={26} /></span>
+          <span className="np-text">{t('New project')}<small>{t('Apni video, apna andaaz')}</small></span>
         </button>
         <button className="btn wide" disabled={opening} onClick={() => fileInput.current?.click()}>
           <Icon name="folder" size={18} /> {opening ? t('Opening project…') : t('Open project file (.avp)')}
