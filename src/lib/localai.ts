@@ -100,6 +100,26 @@ export async function listModels(url: string): Promise<string[]> {
 /** The model to start with: a Gemma one if there is one, else the first. */
 export const pickModel = (models: string[]) => models.find((m) => /gemma/i.test(m)) ?? models[0] ?? ''
 
+let looked: Promise<LocalAI | null> | null = null
+/**
+ * Local AI if it is set up, or else Ollama found running on this computer: when the user has
+ * never touched the Local AI settings and Ollama answers at localhost with a model installed,
+ * it is switched on with that model (a Gemma one first). Looks once per app start, quietly.
+ */
+export function findLocalAI(): Promise<LocalAI | null> {
+  const set = localAI()
+  if (set) return Promise.resolve(set)
+  let touched = true
+  try { touched = localStorage.getItem(KEY) !== null } catch { /* private mode */ }
+  if (touched) return Promise.resolve(null)
+  return (looked ??= request<{ models?: { name: string }[] }>(DEFAULT_URL, '/api/tags', undefined, 3000)
+    .then((r) => {
+      const model = pickModel((r.models ?? []).map((m) => m.name))
+      return model ? setLocalAI({ on: true, url: DEFAULT_URL, model }) : null
+    })
+    .catch(() => null))
+}
+
 /** One chat turn with the local model; returns its answer as plain text. */
 export async function ask(system: string, user: string, cfg = localAI(), timeout = TIMEOUT): Promise<string> {
   if (!cfg) throw new Error('Set up Local AI first (Home → Local AI)')

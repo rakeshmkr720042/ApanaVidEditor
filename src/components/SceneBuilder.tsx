@@ -23,7 +23,7 @@ import { loadSource } from '../lib/media'
 import { TOO_BIG, isLong } from '../lib/longaudio'
 import { saveMedia } from '../lib/db'
 import { fmtTime } from '../lib/format'
-import { ASR_MODELS, SPOKEN, VOICES, langName, savedModel, saveModel, speakLines, stopAI, transcribeSamples } from '../engine/ai'
+import { ASR_MODELS, SPOKEN, VOICES, langName, savedModel, saveModel, speakLines, stopAI, transcribeSamples, listenError, LISTEN_SLOW } from '../engine/ai'
 import { WAVE_STYLES, analyse, decodeMono, primeWave } from '../engine/visualizer'
 import { audioToScenes, bitmapOf, drawAudioCard, findGaps, type AudioLook } from '../lib/audioScenes'
 import { fillInOrder, picsFromFiles, type Leftover, type Pic } from '../lib/rawMedia'
@@ -34,7 +34,7 @@ import type { WaveStyle } from '../types'
 import { encodeWav } from '../engine/music'
 import { Chips, Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
-import { articleKeyPoints, chapterPoints, keyPoints, localAI, makeQuiz } from '../lib/localai'
+import { articleKeyPoints, chapterPoints, findLocalAI, keyPoints, localAI, makeQuiz } from '../lib/localai'
 
 // remembered while the app is open, so the next deck starts with the same choices
 let memo: SceneOptions = defaultSceneOptions()
@@ -424,7 +424,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
             for (let i = 0; i < pieces.length; i++) {
               const [a, b] = pieces[i]
               const got = await transcribeSamples(pcm.slice(a, b), { model: ad.model, language: ad.lang, toEnglish: false }, (stage, p) =>
-                setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : t('Listening to the audio…'), p: (i + p) / pieces.length }))
+                setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : `${t('Listening to the audio…')} ${t(LISTEN_SLOW)}`, p: (i + p) / pieces.length }))
               const off = a / 16000
               all.push(...got.map((c) => ({ ...c, start: c.start + off, end: c.end + off })))
             }
@@ -435,13 +435,11 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           else if (!heard.length) notes.push(t('No speech was found, so there are no captions. Scenes are cut at the pauses.'))
           cues = heard ?? []
         } catch (e) {
-          const msg = (e as Error).message
-          const why = /fetch|network|load/i.test(msg) ? t('The speech model needs internet the first time.') : msg
-          notes.push(`${t('Captions could not be made')}: ${why} ${t('Scenes are cut at the pauses.')}`)
+          notes.push(`${t('Captions could not be made.')} ${t(listenError(e))} ${t('The scenes were still made, cut at the pauses in the audio.')}`)
         }
       }
       // Local AI writes a key point for each chapter card, a few chapters at a time
-      const ai = localAI()
+      const ai = await findLocalAI()
       const points = ai ? async (texts: string[]) => {
         const label = `${t('Local AI is writing key points…')} (${ai.model})`
         setBusy({ label, p: 0 })

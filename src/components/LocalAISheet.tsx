@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { DEFAULT_URL, getLocalAI, listModels, pickModel, setLocalAI } from '../lib/localai'
 import { isDesktop } from '../lib/desktop'
@@ -28,7 +28,7 @@ export function LocalAISheet({ onClose }: { onClose: () => void }) {
     } catch (e) { setVcStatus({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
   }
 
-  const test = async () => {
+  const test = async (quiet = false) => {
     setBusy(true); setStatus(null)
     try {
       const got = await listModels(c.url)
@@ -37,8 +37,11 @@ export function LocalAISheet({ onClose }: { onClose: () => void }) {
       const model = got.includes(c.model) ? c.model : pickModel(got)
       save({ model, on: true })
       setStatus({ ok: true, text: `${t('Connected.')} ${got.length} ${t(got.length === 1 ? 'model' : 'models')}: ${got.join(', ')}` })
-    } catch (e) { setStatus({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
+    } catch (e) { if (!quiet) setStatus({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
   }
+
+  // not set up yet: look for Ollama on this computer straight away, without an error if it isn't there
+  useEffect(() => { if (!getLocalAI().model) void test(true) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
@@ -62,7 +65,7 @@ export function LocalAISheet({ onClose }: { onClose: () => void }) {
         )}
         <Toggle label="Translate subtitles with Local AI" value={c.translate} onChange={(translate) => save({ translate })} />
         <div className="row">
-          <button className="btn primary" disabled={busy || !c.url} onClick={test}>{t(busy ? 'Connecting…' : 'Test connection')}</button>
+          <button className="btn primary" disabled={busy || !c.url} onClick={() => test()}>{t(busy ? 'Connecting…' : 'Test connection')}</button>
           {c.url !== DEFAULT_URL && <button className="btn" disabled={busy} onClick={() => save({ url: DEFAULT_URL })}>{t('Use this computer')}</button>}
         </div>
         {status && <p className={`small ${status.ok ? 'ok-text' : 'error-text'}`}>{status.text}</p>}
