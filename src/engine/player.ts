@@ -5,6 +5,7 @@ import { backdropSource, backdropTime } from './chromakey'
 import { onCleanChange, prepareCleanSounds, previewSource, soundJob } from './denoise'
 import { duckCurve, duckGain, onDuckChange } from './duck'
 import { reversedIn } from './soundfx'
+import { Meter } from './meter'
 
 interface Need { key: string; source: MediaSource; time: number; rate: number; volume: number; preload?: boolean }
 
@@ -93,6 +94,13 @@ export class Player {
   rate = 1
   readonly renderer: Renderer
   onTick: ((t: number, playing: boolean) => void) | null = null
+  /** Audio meter (sounds routed through an analyser while playing), null = off. */
+  meter: Meter | null = null
+  setMeter(on: boolean) {
+    if (on && !this.meter) this.meter = new Meter()
+    // once routed, elements must stay in the context to be heard: switching off only stops reading the levels
+  }
+  meterOn = true
 
   private els = new Map<string, HTMLMediaElement>()
   private used = new Map<string, number>()
@@ -134,6 +142,7 @@ export class Player {
     if (this.playing || this.total <= 0) return
     if (this.t >= this.total - 0.05) this.t = 0
     this.playing = true
+    if (this.meterOn) { this.setMeter(true); this.meter!.start() } else this.meter?.start()
     this.clockStart = performance.now()
     this.clockT = this.t
     this.sync()
@@ -236,6 +245,7 @@ export class Player {
       if (!el) continue
       active.add(n.key)
       if (this.playing && !n.preload) {
+        if (this.meterOn) this.meter?.attach(el)
         el.playbackRate = clampRate(n.rate * this.rate)
         el.volume = Math.max(0, Math.min(1, n.volume))
         el.muted = this.muted || n.volume <= 0
@@ -257,6 +267,7 @@ export class Player {
       if (now - (this.used.get(key) ?? 0) > 8000) {
         el.removeAttribute('src')
         el.load()
+        this.meter?.detach(el)
         this.els.delete(key)
       }
     }
@@ -304,5 +315,6 @@ export class Player {
     this.pause()
     for (const el of this.els.values()) { el.removeAttribute('src'); el.load() }
     this.els.clear()
+    this.meter?.close()
   }
 }

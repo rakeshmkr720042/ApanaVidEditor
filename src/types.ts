@@ -454,6 +454,15 @@ export interface Project {
   luts?: Lut[] // imported .cube looks used by clips and overlays
   originalSubs?: { lang: string; cues: { start: number; end: number; text: string }[] } | null
   beatFx?: BeatFx | null // beat effects, missing = off
+  markers?: Marker[] // named spots on the timeline (sorted by time), missing = none
+}
+
+/** A named spot on the timeline: to find a moment again, plan cuts, or list YouTube chapters. */
+export interface Marker {
+  id: string
+  t: number // timeline seconds
+  name: string
+  color: string
 }
 
 export const MIN_CLIP = 0.2

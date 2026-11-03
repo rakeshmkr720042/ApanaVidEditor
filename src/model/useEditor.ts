@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BeatFx, BlurLayer, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AudioLayer, BeatFx, BlurLayer, Marker, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -49,6 +49,9 @@ function bulkPatch<T extends object>(patch: Partial<T>, sound: boolean): Partial
   if (!sound) { delete out.denoise; delete out.fx; delete out.duck }
   return out as Partial<T>
 }
+
+/** Marker colours (the first is the default). */
+export const MARKER_COLORS = ['#ffcc00', '#ff5a5a', '#4cd964', '#3fa9ff', '#c86bff', '#ff9f40']
 
 export const emptyProject = (): Project => ({ clips: [], layers: [], settings: { aspect: 'original', background: 'black', fps: 30 } })
 
@@ -200,6 +203,23 @@ export function useEditor(initial: Project) {
   const setBeatFx = useCallback((fx: BeatFx | null) => {
     const p = ref.current
     commit({ ...p, beatFx: fx })
+  }, [commit])
+
+  /** Markers: named spots on the timeline, kept sorted by time. */
+  const addMarker = useCallback((t: number, name?: string): Marker => {
+    const p = ref.current
+    const list = p.markers ?? []
+    const m: Marker = { id: uid(), t: Math.max(0, t), name: name ?? `${list.length + 1}`, color: MARKER_COLORS[0] }
+    commit({ ...p, markers: [...list, m].sort((a, b) => a.t - b.t) })
+    return m
+  }, [commit])
+  const updateMarker = useCallback((id: string, patch: Partial<Omit<Marker, 'id'>>) => {
+    const p = ref.current
+    commit({ ...p, markers: (p.markers ?? []).map((m) => (m.id === id ? { ...m, ...patch } : m)).sort((a, b) => a.t - b.t) })
+  }, [commit])
+  const removeMarker = useCallback((id: string | 'all') => {
+    const p = ref.current
+    commit({ ...p, markers: id === 'all' ? [] : (p.markers ?? []).filter((m) => m.id !== id) })
   }, [commit])
 
   const setPresenter = useCallback((patch: Partial<Presenter>) => {
@@ -918,7 +938,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter,
+    addSource, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter, addMarker, updateMarker, removeMarker,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
     track, setTrack, addTrack, pasteTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,

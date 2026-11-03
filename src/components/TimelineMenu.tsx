@@ -7,11 +7,12 @@ type At = { x: number; y: number; kind: 'clip' | 'layer' | 'track' | 'empty'; id
 type Item = { icon: IconName; label: string; key?: string; on: () => void; disabled?: boolean; danger?: boolean } | 'hr'
 
 /** The right-click menu of the timeline: what can be done with an item, a track or the empty timeline. */
-export function CtxMenu({ at, ed, t, copied, close, onCopyTrack, onPasteTrack, onDuplicateTrack, onDelete, onOpenItem, onSettings, onRename, onSelectRow, onSelectAll }: {
+export function CtxMenu({ at, ed, t, copied, close, onCopyTrack, onPasteTrack, onDuplicateTrack, onDelete, onOpenItem, onAddMarker, onCopyStyle, onPasteStyle, onSettings, onRename, onSelectRow, onSelectAll }: {
   at: At; ed: Editor; t: number; copied: boolean; close: () => void
   onCopyTrack?: (id: string) => void; onPasteTrack?: () => void; onDuplicateTrack?: (id: string) => void; onDelete?: () => void
   onOpenItem?: (s: { type: 'clip' | 'layer'; id: string }) => void; onSettings: (id: string) => void; onRename: (id: string) => void
   onSelectRow?: (firstId: string) => void; onSelectAll?: () => void
+  onAddMarker?: () => void; onCopyStyle?: (id: string) => void; onPasteStyle?: () => void
 }) {
   // kept on screen: moved up / left when it would run past the edge
   const box = useRef<HTMLDivElement>(null)
@@ -36,6 +37,8 @@ export function CtxMenu({ at, ed, t, copied, close, onCopyTrack, onPasteTrack, o
       { icon: 'adjust', label: 'Open tool', key: tl('Double-click'), on: () => onOpenItem?.({ type: at.kind as 'clip' | 'layer', id: at.id }), disabled: locked },
       { icon: 'split', label: 'Split at the playhead', key: 'S', on: () => ed.split(t), disabled: locked },
       { icon: 'copy', label: 'Duplicate', key: 'Ctrl+D', on: () => ed.duplicate(), disabled: locked },
+      ...(layer?.type !== 'blur' && layer?.type !== 'wave' ? [{ icon: 'brush', label: 'Copy style', key: 'Ctrl+Alt+C', on: () => onCopyStyle?.(at.id), disabled: !onCopyStyle } as Item] : []),
+      { icon: 'paste', label: 'Paste style', key: 'Ctrl+Alt+V', on: () => onPasteStyle?.(), disabled: !onPasteStyle || locked },
       'hr',
       copy, paste,
       { icon: 'selectAll', label: 'Select everything on this track', key: 'Ctrl+A', disabled: locked,
@@ -77,6 +80,7 @@ export function CtxMenu({ at, ed, t, copied, close, onCopyTrack, onPasteTrack, o
   } else {
     items = [
       paste,
+      { icon: 'marker', label: 'Add marker', key: 'Shift+M', on: () => onAddMarker?.(), disabled: !onAddMarker },
       'hr',
       { icon: 'overlay', label: 'Add video track', on: () => ed.addTrack('visual') },
       { icon: 'music', label: 'Add audio track', on: () => ed.addTrack('audio') },

@@ -37,6 +37,12 @@ interface Props {
   onOpenItem?: (s: { type: 'clip' | 'layer'; id: string }) => void
   /** Deletes the selected item(s), asking first for a group. */
   onDelete?: () => void
+  /** A marker flag on the ruler was tapped. */
+  onMarker?: (id: string) => void
+  onAddMarker?: () => void
+  /** Copy style of an item / paste the copied style on the selection (right-click menu). */
+  onCopyStyle?: (id: string) => void
+  onPasteStyle?: () => void
   snap: boolean
   /** Swap is waiting for a second item: taps pick it instead of selecting. */
   picking?: Selection
@@ -68,7 +74,7 @@ function layerLabel(l: Layer) {
   }
 }
 
-export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, onSelectAll, onSelectRow, onCopyTrack, onPasteTrack, onDuplicateTrack, onOpenItem, onDelete, snap, picking, onPicked }: Props) {
+export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, onSelectAll, onSelectRow, onCopyTrack, onPasteTrack, onDuplicateTrack, onOpenItem, onDelete, onMarker, onAddMarker, onCopyStyle, onPasteStyle, snap, picking, onPicked }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const lastSet = useRef(-1)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -142,6 +148,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     const e = [0, total, t]
     for (const it of layout.items) e.push(it.start, it.start + it.dur)
     for (const l of project.layers) if (l.id !== skipId) e.push(l.start, l.end)
+    for (const m of project.markers ?? []) e.push(m.t)
     return e
   }
   /** Returns the shift that snaps one of `edges` to the nearest target, or 0. */
@@ -456,7 +463,12 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
           {snapLine !== null && <div className="tl-snapline" style={{ left: snapLine * pps }} />}
           <div className="tl-ruler" onClick={onRulerClick}>
             {ticks.map((s) => <span key={s} style={{ left: s * pps }}>{fmtTime(s, false)}</span>)}
+            {(project.markers ?? []).map((m) => (
+              <button key={m.id} className="tl-marker" style={{ left: m.t * pps, '--c': m.color } as React.CSSProperties} title={`${m.name} (${fmtTime(m.t)})`}
+                data-testid="tl-marker" onClick={(e) => { e.stopPropagation(); onMarker?.(m.id) }} />
+            ))}
           </div>
+          {(project.markers ?? []).map((m) => <div key={m.id} className="tl-marker-line" style={{ left: m.t * pps, '--c': m.color } as React.CSSProperties} />)}
           <div className="tl-track">
             {layout.items.map((it) => {
               const clip = it.clip
@@ -615,7 +627,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
         </>
       })()}
       {ctx && <CtxMenu at={ctx} ed={ed} t={t} copied={!!copied} close={() => setCtx(null)} onCopyTrack={onCopyTrack} onPasteTrack={onPasteTrack} onDuplicateTrack={onDuplicateTrack}
-        onDelete={onDelete} onOpenItem={onOpenItem} onSettings={(id) => setMenu(id)} onRename={renameTrack} onSelectRow={onSelectRow} onSelectAll={onSelectAll} />}
+        onDelete={onDelete} onOpenItem={onOpenItem} onAddMarker={onAddMarker} onCopyStyle={onCopyStyle} onPasteStyle={onPasteStyle} onSettings={(id) => setMenu(id)} onRename={renameTrack} onSelectRow={onSelectRow} onSelectAll={onSelectAll} />}
       {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} onSelectAll={onSelectRow} onSelectAllClips={onSelectAll} onCopy={onCopyTrack} onPaste={onPasteTrack} />}
     </div>
   )
