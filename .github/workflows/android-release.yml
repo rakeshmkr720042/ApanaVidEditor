@@ -10,14 +10,13 @@ name: Android release (Play Store)
 #   ADMOB_APP_ID, VITE_ADMOB_BANNER_ID, VITE_ADMOB_INTERSTITIAL_ID
 on:
   workflow_dispatch:
-  pull_request:
 permissions:
   contents: read
 jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || 'ci-test-only-password' }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       ANDROID_UPLOAD_KEY: ${{ secrets.ANDROID_UPLOAD_KEY }}
       ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
       VITE_ADMOB_BANNER_ID: ${{ vars.VITE_ADMOB_BANNER_ID }}
