@@ -14,6 +14,18 @@ export function ProAd({ where }: { where: 'home' | 'export' | 'account' }) {
   const [open, setOpen] = useState(false)
   if (nativeAds || !adsOn()) return null
   const monthly = (serverPlans() ?? DEFAULT_PLANS).find((p) => p.durationMonths === 1)
+  if (where === 'home') {
+    // the Go Pro picture (Hindi + English text is in the picture); price and Ad label under it
+    return (
+      <>
+        <button className="pro-ad-banner" onClick={() => setOpen(true)} data-testid="pro-ad">
+          <img src="brand/go-pro.webp" alt={t('Go Pro: remove ads and unlock every Pro feature')} width={1200} height={396} />
+          <span><small className="pro-ad-tag">{t('Ad')}</small> {t('Remove ads and unlock every Pro feature')} <i>{monthly ? `${rupees(monthly.price)}/${t('month')}` : t('See plans')}</i></span>
+        </button>
+        {open && <PremiumSheet onClose={() => setOpen(false)} />}
+      </>
+    )
+  }
   return (
     <>
       <button className={`pro-ad pro-ad-${where}`} onClick={() => setOpen(true)} data-testid="pro-ad">

@@ -15,7 +15,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       // registered in main.tsx, skipped in the desktop app (service workers don't run on app://)
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
+      includeAssets: ['icons/favicon-48.png', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'Apna Editor',
         short_name: 'Apna Editor',
@@ -28,15 +28,16 @@ export default defineConfig({
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
         // App shell is precached (the AI worker with its engine is a few MB, so the limit is
         // raised); the 32 MB ffmpeg core, the 14 MB ONNX runtime and the fonts are cached on
         // first use. AI models are kept by transformers.js in its own cache.
-        globPatterns: ['**/*.{js,mjs,css,html,svg,png,woff2}'],
-        globIgnores: ['ffmpeg/**', 'fonts/**', 'ort/**', 'models/**', 'mediapipe/**'],
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,webp,woff2}'],
+        // the 512px install icons are only fetched when the app is installed, so they are not precached
+        globIgnores: ['ffmpeg/**', 'fonts/**', 'ort/**', 'models/**', 'mediapipe/**', 'icons/*-512.png'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         runtimeCaching: [
           {

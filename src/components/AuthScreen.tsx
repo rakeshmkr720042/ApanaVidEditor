@@ -16,7 +16,7 @@ export function AuthShell({ children, onLang, onClose }: { children: ReactNode; 
     <div className={`auth${onClose ? ' auth-overlay' : ''}`} data-testid="auth">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="logo"><Icon name="play" size={20} /></span>
+          <img className="logo-img" src="brand/icon-96.png" alt="" width={44} height={44} />
           <div>
             <b>Apna Editor</b>
             <small className="muted">{t('Edit videos on your device')}</small>

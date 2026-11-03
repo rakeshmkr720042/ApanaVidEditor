@@ -1,3 +1,5 @@
+<img src="public/brand/logo.webp" alt="Apna Editor" width="360">
+
 # Apna Editor
 
 Lightweight, offline-first video editor for the web (installable PWA) and Android (Capacitor).
