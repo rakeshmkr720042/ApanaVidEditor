@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { firebaseAuth } from '../lib/firebase'
 import {
-  authMessage, cleanName, currentProfile, deleteAccount, listMyPayments, nameError, normalisePhone, saveProfile, signInKind, signOut,
+  authMessage, cleanName, currentProfile, deleteAccount, setMarketingConsent, listMyPayments, nameError, normalisePhone, saveProfile, signInKind, signOut,
   type Payment,
 } from '../lib/account'
 import { rupees, serverEntitlement, serverProUntil, serverTrialUntil, usePremium } from '../lib/premium'
@@ -25,6 +25,7 @@ export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlan
   const [view, setView] = useState<View>('main')
   const [busy, setBusy] = useState(false)
   const profile = currentProfile()
+  const [offers, setOffers] = useState(!!profile?.marketingOptIn)
   const name = profile?.fullName || user?.displayName || user?.email?.split('@')[0] || ''
   const out = async () => {
     if (!confirm(t('Sign out of Apna Editor on this device? Your projects stay on this device.'))) return
@@ -70,6 +71,15 @@ export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlan
             <button className="btn wide" onClick={() => setView('payments')} data-testid="account-payments"><Icon name="note" size={16} /> {t('My payments')}</button>
             {admin && <button className="btn wide" onClick={() => { onClose(); location.hash = 'admin' }} data-testid="account-admin"><Icon name="lock" size={16} /> {t('Admin: users, plans, Pro features')}</button>}
           </div>
+          <label className="account-offers">
+            <input type="checkbox" checked={offers} disabled={busy} data-testid="account-offers"
+              onChange={async (e) => {
+                const on = e.target.checked
+                setOffers(on); setBusy(true)
+                try { await setMarketingConsent(on) } catch (x) { setOffers(!on); alert(authMessage(x)) } finally { setBusy(false) }
+              }} />
+            <span><b>{t('Email me offers and updates')}</b><small className="muted">{t('Only if you want. We never sell or share your email.')}</small></span>
+          </label>
           <p className="muted small">{t('Projects and videos are saved only on this device. Uninstalling the app or clearing its data deletes them, so save important projects as .avp files.')}</p>
           <p className="muted small">{t('To keep a backup: open a project, tap the save button at the top and choose "Save as .avp file". To bring it back, use "Open project file (.avp)" on the Home screen.')}</p>
           <button className="btn wide" disabled={busy} onClick={out} data-testid="account-signout">{t('Sign out')}</button>

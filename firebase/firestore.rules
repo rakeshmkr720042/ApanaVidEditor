@@ -47,12 +47,21 @@ service cloud.firestore {
         && validName(request.resource.data.fullName)
         && validPhone(request.resource.data.phoneNumber)
         && request.resource.data.updatedAt == request.time;
+      // Email offers and updates: the user's own choice (off unless they tick it), with the server's time
+      // of the last change as the record of consent.
+      allow update: if isOwner(uid)
+        && resource.data.accountStatus == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['marketingOptIn', 'marketingOptInAt', 'updatedAt'])
+        && request.resource.data.marketingOptIn is bool
+        && request.resource.data.marketingOptInAt == request.time
+        && request.resource.data.updatedAt == request.time;
       // Owner deletes their account: the profile is emptied and marked deleted (kept only so payment
       // records still point at something); the app then deletes the sign-in itself. No way back.
       allow update: if isOwner(uid)
         && resource.data.accountStatus == 'active'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'email', 'emailLower', 'phoneNumber', 'photoURL', 'accountStatus', 'deletedAt', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'email', 'emailLower', 'phoneNumber', 'photoURL', 'accountStatus', 'deletedAt', 'updatedAt', 'marketingOptIn'])
         && request.resource.data.accountStatus == 'deleted'
+        && (!('marketingOptIn' in request.resource.data) || request.resource.data.marketingOptIn == false)
         && request.resource.data.fullName == '' && request.resource.data.email == '' && request.resource.data.emailLower == ''
         && request.resource.data.phoneNumber == '' && request.resource.data.photoURL == ''
         && request.resource.data.deletedAt == request.time
@@ -175,7 +184,7 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isAdmin()
         && request.resource.data.keys().hasOnly(['type', 'actorUid', 'actorEmail', 'targetUid', 'target', 'details', 'createdAt'])
-        && request.resource.data.type in ['plan_change', 'entitlements_change', 'user_suspend', 'user_activate', 'pro_grant', 'pro_remove']
+        && request.resource.data.type in ['plan_change', 'entitlements_change', 'user_suspend', 'user_activate', 'pro_grant', 'pro_remove', 'users_export']
         && request.resource.data.actorUid == request.auth.uid
         && request.resource.data.actorEmail == request.auth.token.email
         && request.resource.data.createdAt == request.time

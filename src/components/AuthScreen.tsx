@@ -73,6 +73,7 @@ export function AuthScreen({ onLang, onClose }: { onLang: () => void; onClose?: 
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [rememberMe, setRemember] = useState(true)
+  const [offers, setOffers] = useState(false)
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,7 +106,7 @@ export function AuthScreen({ onLang, onClose }: { onLang: () => void; onClose?: 
     }
     if (Object.values(errs).some(Boolean)) return
     if (mode === 'login') return run(() => signIn(email, password, rememberMe))
-    return run(() => register({ name, email, password, phone: phoneNorm ?? '', remember: rememberMe }))
+    return run(() => register({ name, email, password, phone: phoneNorm ?? '', remember: rememberMe, offers }))
   }
 
   const title = mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create your account' : 'Reset password'
@@ -157,6 +158,12 @@ export function AuthScreen({ onLang, onClose }: { onLang: () => void; onClose?: 
             </label>
             {mode === 'login' && <button type="button" className="link" onClick={() => go('forgot')}>{t('Forgot password?')}</button>}
           </div>
+        )}
+        {mode === 'register' && (
+          <label className="auth-check auth-offers">
+            <input type="checkbox" checked={offers} onChange={(e) => setOffers(e.target.checked)} data-testid="auth-offers" />
+            <span>{t('Email me offers and updates (optional). You can stop them any time in Account.')}</span>
+          </label>
         )}
         {error && <p className="auth-alert" role="alert" data-testid="auth-error">{error}</p>}
         {note && <p className="auth-ok" role="status" data-testid="auth-note">{note}</p>}

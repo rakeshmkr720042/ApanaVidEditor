@@ -31,7 +31,7 @@ export async function saveNative(blob: Blob, name: string, share: boolean) {
  * Saves small text files such as subtitles. On Android they go to
  * Documents/Apna Editor and the share sheet opens; elsewhere the browser downloads them.
  */
-export async function saveTextFiles(files: { name: string; text: string }[]) {
+export async function saveTextFiles(files: { name: string; text: string }[], type = 'application/x-subrip') {
   if (isNative) {
     const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
     const uris: string[] = []
@@ -42,14 +42,14 @@ export async function saveTextFiles(files: { name: string; text: string }[]) {
       uris.push(uri)
     }
     const { Share } = await import('@capacitor/share')
-    await Share.share({ title: files.length === 1 ? files[0].name : 'Subtitles', files: uris }).catch(() => {})
+    await Share.share({ title: files.length === 1 ? files[0].name : 'Files', files: uris }).catch(() => {})
     return
   }
   for (const [i, f] of files.entries()) {
     // a short gap so the browser does not drop downloads that start together
     if (i) await new Promise((r) => setTimeout(r, 400))
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([f.text], { type: 'application/x-subrip;charset=utf-8' }))
+    a.href = URL.createObjectURL(new Blob([f.text], { type: `${type};charset=utf-8` }))
     a.download = f.name
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 2000)

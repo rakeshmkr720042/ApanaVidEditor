@@ -883,3 +883,10 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .trial-strip > span { display: grid; }
 .trial-strip small { opacity: .75; }
 .trial-strip.ending { border-color: #ffcc33; background: rgba(255, 204, 51, .08); }
+.auth-offers { align-items: flex-start; font-size: 13px; line-height: 1.4; margin-top: 4px; }
+.auth-offers input { margin-top: 2px; flex: none; }
+.account-offers { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); cursor: pointer; }
+.account-offers > span { display: grid; gap: 2px; }
+.account-offers input { margin-top: 3px; flex: none; }
+.admin-export { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.admin-export > small { flex-basis: 100%; }

@@ -61,6 +61,15 @@ time) and `trialDays` together with `trials/{sha256(lowercase email)}`; the rule
 that, only once per account and once per email, so a deleted account signed up again gets no second
 trial. Trial end = start + days. A purchase during the trial starts after the trial ends (payments/).
 
+## Offer emails and the email list
+
+Signing up shows "Email me offers and updates", unticked. The Account sheet can turn it on or off at
+any time. The rules allow the user to change only `marketingOptIn` (true/false) with
+`marketingOptInAt` = the server's time, which is the record of consent. Deleting the account sets it
+to false. Admin > Users > "Export email list (CSV)" downloads only active accounts that agreed;
+"All users (CSV)" is every account that is not deleted, for records. Both are admin-only (rules), and
+each export adds a `users_export` record to History.
+
 ## Account sheet (every user)
 
 - **Edit name and mobile number**: the only profile fields a user may change (the rules check them).

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { QueryDocumentSnapshot } from 'firebase/firestore/lite'
 import {
-  listAllPlans, listEvents, listUsers, loadEntitlements, saveEntitlements, savePlan, setUserPro, setUserStatus, useIsAdmin,
+  exportUsersCsv, listAllPlans, listEvents, listUsers, loadEntitlements, saveEntitlements, savePlan, setUserPro, setUserStatus, useIsAdmin,
   type AdminEvent, type AdminPlan, type AdminUser, type Entitlements,
 } from '../lib/admin'
 import { FEATURES, rupees, type Feature } from '../lib/premium'
@@ -9,6 +9,7 @@ import { Chips, Toggle } from '../ui/kit'
 import { Icon } from './Icon'
 import { firebaseAuth } from '../lib/firebase'
 import { t } from '../lib/i18n'
+import { saveTextFiles } from '../lib/save'
 
 /**
  * Admin screen (#admin): users, plans and prices, which features are Pro, and the change history.
@@ -89,8 +90,22 @@ function UsersTab() {
     try { await setUserStatus(u, to); replace({ ...u, accountStatus: to }); setNote(t(to === 'suspended' ? 'Account suspended.' : 'Account active again.')) } catch (e) { setNote(msg(e)) } finally { setBusy(false) }
   }
 
+  const exportCsv = async (kind: 'consent' | 'all') => {
+    setBusy(true); setNote(null)
+    try {
+      const r = await exportUsersCsv(kind)
+      await saveTextFiles([{ name: r.name, text: r.text }], 'text/csv')
+      setNote(`${t(kind === 'consent' ? 'Email list saved' : 'All users saved')}: ${r.count} ${t('people')} (${r.name})`)
+    } catch (e) { setNote(msg(e)) } finally { setBusy(false) }
+  }
+
   return (
     <section className="admin-section">
+      <div className="admin-export">
+        <button className="btn small" disabled={busy} onClick={() => exportCsv('consent')} data-testid="admin-export-consent"><Icon name="download" size={16} /> {t('Export email list (CSV)')}</button>
+        <button className="btn small ghost" disabled={busy} onClick={() => exportCsv('all')} data-testid="admin-export-all">{t('All users (CSV)')}</button>
+        <small className="muted">{t('The email list has only people who ticked "Email me offers and updates". Send offers only to them, and never share or sell the list.')}</small>
+      </div>
       <form className="admin-search" onSubmit={(e) => { e.preventDefault(); load(search.trim() || undefined) }}>
         <input type="search" placeholder={t('Find by email')} value={search} onChange={(e) => setSearch(e.target.value)} data-testid="admin-search" />
         <button className="btn small" disabled={busy}>{t('Find')}</button>
@@ -266,7 +281,7 @@ function FeaturesTab() {
 
 const EVENT_LABEL: Record<string, string> = {
   plan_change: 'Plan changed', entitlements_change: 'Pro features changed', user_suspend: 'Account suspended',
-  user_activate: 'Account activated', pro_grant: 'Pro given', pro_remove: 'Pro removed', role_change: 'Admin role given',
+  user_activate: 'Account activated', pro_grant: 'Pro given', pro_remove: 'Pro removed', role_change: 'Admin role given', users_export: 'User list exported',
 }
 
 function HistoryTab() {
@@ -275,6 +290,7 @@ function HistoryTab() {
   useEffect(() => { listEvents().then(setEvents).catch((e) => setNote(msg(e))) }, [])
   const describe = (e: AdminEvent) => {
     const d = e.details as Record<string, unknown>
+    if (e.type === 'users_export') return `${t(d.list === 'consent' ? 'Email list' : 'All users')}: ${String(d.count)} ${t('people')}`
     if (typeof d.email === 'string') return d.email + (typeof d.until === 'string' ? ` → ${day(Date.parse(d.until))}` : '')
     if (e.type === 'plan_change' && d.after) return `${String(d.plan)}: ${Object.entries(d.after as Record<string, unknown>).map(([k, v]) => `${k} ${k === 'price' ? rupees(Number(v)) : String(v)}`).join(', ')}`
     if (e.type === 'entitlements_change' && d.after) {
