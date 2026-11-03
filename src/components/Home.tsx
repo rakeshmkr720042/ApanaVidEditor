@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { interruptedJob } from '../engine/background'
 import { importProjectFile } from '../lib/projectFile'
 import { deleteProject, listProjects, storageEstimate, type ProjectRecord } from '../lib/db'
 import { createProject } from '../lib/newProject'
@@ -29,6 +30,8 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [usage, setUsage] = useState<string | null>(null)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // the app was closed in the middle of saving a video last time (usually: the phone ran out of memory)
+  const [stopped] = useState(() => interruptedJob())
   const fileInput = useRef<HTMLInputElement>(null)
   const [aiSheet, setAiSheet] = useState(false)
   const [habitsSheet, setHabitsSheet] = useState(false)
@@ -103,6 +106,12 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         </button>
         <input ref={fileInput} type="file" accept=".avp,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
         {error && <p className="error-text">{error}</p>}
+        {stopped && (
+          <p className="error-text" data-testid="job-stopped">
+            {t(stopped.kind === 'compress' ? 'Last time the app closed while compressing a video.' : 'Last time the app closed while saving a video.')}{' '}
+            {t('Your project is saved. The phone probably ran out of memory: close other apps, then try a lower quality (720p) or the Small file size.')}
+          </p>
+        )}
         <div className="offline-row">
           <button className="btn small" onClick={() => setNetSheet(true)}>
             {offline === 'ready' ? '✓ ' : <Icon name="download" size={16} />} {t('Offline & online')}

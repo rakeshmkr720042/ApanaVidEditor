@@ -1,5 +1,7 @@
+import { t } from '../lib/i18n'
 import type { AspectRatio, MediaSource, Project } from '../types'
 import { layoutClips } from '../model/timeline'
+import { FFFSType, type FFmpeg } from '@ffmpeg/ffmpeg'
 import { getFFmpeg, runFFmpeg } from '../lib/ffmpeg'
 import { longMix, mixAudio } from './audiomix'
 import { canEncodeLong, mixToOgg } from './longmix'
@@ -62,22 +64,84 @@ async function pickEncoder(format: Format, w: number, h: number, fps: number, bi
   return null
 }
 
-function ivf(chunks: Uint8Array[], fourcc: string, w: number, h: number, fps: number): Uint8Array {
-  const size = 32 + chunks.reduce((s, c) => s + 12 + c.length, 0)
-  const out = new Uint8Array(size)
+/** IVF file header (VP8/VP9 frames for ffmpeg). */
+function ivfHeader(fourcc: string, w: number, h: number, fps: number, frames: number): Uint8Array {
+  const out = new Uint8Array(32)
   const dv = new DataView(out.buffer)
   out.set([68, 75, 73, 70]) // DKIF
   dv.setUint16(4, 0, true); dv.setUint16(6, 32, true)
   out.set([...fourcc].map((c) => c.charCodeAt(0)), 8)
   dv.setUint16(12, w, true); dv.setUint16(14, h, true)
-  dv.setUint32(16, fps, true); dv.setUint32(20, 1, true); dv.setUint32(24, chunks.length, true)
-  let o = 32
-  chunks.forEach((c, i) => {
-    dv.setUint32(o, c.length, true); dv.setUint32(o + 4, i, true); dv.setUint32(o + 8, 0, true)
-    out.set(c, o + 12)
-    o += 12 + c.length
-  })
+  dv.setUint32(16, fps, true); dv.setUint32(20, 1, true); dv.setUint32(24, frames, true)
   return out
+}
+
+/** One IVF frame: 12-byte header (size, frame number) + data. */
+function ivfFrame(data: Uint8Array, n: number): Uint8Array {
+  const out = new Uint8Array(12 + data.length)
+  const dv = new DataView(out.buffer)
+  dv.setUint32(0, data.length, true); dv.setUint32(4, n, true); dv.setUint32(8, 0, true)
+  out.set(data, 12)
+  return out
+}
+
+/**
+ * The encoded video, kept as Blobs of about 8 MB instead of one big array. The browser can move
+ * Blobs out of the page's memory (to disk), which matters on phones: a 20-minute 1080p export is
+ * ~500 MB, and holding it (and copies of it) in memory is what made long exports crash.
+ */
+export class ChunkStore {
+  private parts: Blob[] = []
+  private pending: Uint8Array[] = []
+  private pendingBytes = 0
+  count = 0
+  bytes = 0
+  push(d: Uint8Array) {
+    this.pending.push(d)
+    this.pendingBytes += d.length
+    this.bytes += d.length
+    this.count++
+    if (this.pendingBytes >= 8 << 20) this.flush()
+  }
+  private flush() {
+    if (!this.pending.length) return
+    this.parts.push(new Blob(this.pending as BlobPart[]))
+    this.pending = []
+    this.pendingBytes = 0
+  }
+  blob(head?: Uint8Array): Blob {
+    this.flush()
+    return new Blob(head ? [head as BlobPart, ...this.parts] : this.parts)
+  }
+}
+
+/**
+ * Lets ffmpeg read these Blobs in place (WORKERFS), so big inputs are never copied into its memory.
+ * Falls back to copying them in when mounting is not possible.
+ */
+async function withBlobs<T>(ff: FFmpeg, files: { name: string; data: Blob }[], fn: (path: (name: string) => string) => Promise<T>): Promise<T> {
+  const dir = `/ex${Math.random().toString(36).slice(2, 8)}`
+  await ff.createDir(dir).catch(() => {})
+  let mounted = false
+  if (files.length) {
+    try { await ff.mount(FFFSType.WORKERFS, { blobs: files }, dir); mounted = true } catch {
+      for (const f of files) await ff.writeFile(`${dir}/${f.name}`, new Uint8Array(await f.data.arrayBuffer()))
+    }
+  }
+  try {
+    return await fn((name) => `${dir}/${name}`)
+  } finally {
+    if (mounted) await ff.unmount(dir).catch(() => {})
+    else for (const f of files) await ff.deleteFile(`${dir}/${f.name}`).catch(() => {})
+    await ff.deleteDir(dir).catch(() => {})
+  }
+}
+
+/** Reads ffmpeg's output file into a Blob and frees it inside ffmpeg straight away. */
+async function takeFile(ff: FFmpeg, name: string, type: string): Promise<Blob> {
+  const data = (await ff.readFile(name)) as Uint8Array
+  await ff.deleteFile(name).catch(() => {})
+  return new Blob([data as BlobPart], { type })
 }
 
 const SIZE: Record<SizeMode, { bpp: number; keySecs: number; audioK: number; vorbisQ: number; crf: number }> = {
@@ -143,7 +207,7 @@ export async function exportProject(
   const aac = ['-c:a', 'aac', '-b:a', `${size.audioK}k`]
   const vorbis = ['-c:a', 'libvorbis', '-q:a', String(size.vorbisQ)]
   const x264 = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(size.crf), '-g', String(Math.round(fps * size.keySecs)), '-pix_fmt', 'yuv420p']
-  const release = stayAwake()
+  const release = stayAwake('export', t('Saving your video'), t('Apna Editor keeps working'))
   const ff = await getFFmpeg().catch((e) => { release(); throw e })
   const cleanup: string[] = []
   const write = async (name: string, data: Uint8Array) => { await ff.writeFile(name, data); cleanup.push(name) }
@@ -152,6 +216,7 @@ export async function exportProject(
     // ---- audio
     let hasAudio = false
     let audioFile = 'a.wav'
+    let audioBlob: Blob | null = null
     if (!gif) {
       onProgress(0.01, 'Mixing audio…')
       const mixing = (p: number) => onProgress(0.01 + p * 0.07, 'Mixing audio…')
@@ -159,21 +224,21 @@ export async function exportProject(
         // an hour of sound as one WAV would need gigabytes on the way; mix and compress it piece by piece instead
         const ogg = await mixToOgg(project, sources, (p) => { check(); mixing(p) })
         check()
-        if (ogg) { audioFile = 'a.ogg'; await write(audioFile, ogg); hasAudio = true }
+        if (ogg) { audioFile = 'a.ogg'; audioBlob = new Blob([ogg as BlobPart]); hasAudio = true }
       } else {
         const mix = await mixAudio(project, sources, mixing)
         check()
-        if (mix) { await write(audioFile, new Uint8Array(await encodeWav(mix).arrayBuffer())); hasAudio = true }
+        if (mix) { audioBlob = encodeWav(mix); hasAudio = true }
       }
     }
     if (job.format === 'mp3') {
       if (!hasAudio) throw new Error('This project has no sound to export')
       onProgress(0.5, 'Encoding MP3…')
-      const { code } = await runFFmpeg(['-i', audioFile, '-c:a', 'libmp3lame', '-b:a', `${size.audioK}k`, 'out.mp3'], (p) => onProgress(0.5 + p * 0.45, 'Encoding MP3…'))
-      if (code !== 0) throw new Error('MP3 encoding failed')
       cleanup.push('out.mp3')
-      const data = (await ff.readFile('out.mp3')) as Uint8Array
-      return { blob: new Blob([data.slice().buffer], { type: 'audio/mpeg' }), ext: 'mp3', cover: null, width: 0, height: 0, encoder: 'mp3' }
+      const { code } = await withBlobs(ff, [{ name: audioFile, data: audioBlob! }], (at) =>
+        runFFmpeg(['-i', at(audioFile), '-c:a', 'libmp3lame', '-b:a', `${size.audioK}k`, 'out.mp3'], (p) => onProgress(0.5 + p * 0.45, 'Encoding MP3…')))
+      if (code !== 0) throw new Error('MP3 encoding failed')
+      return { blob: await takeFile(ff, 'out.mp3', 'audio/mpeg'), ext: 'mp3', cover: null, width: 0, height: 0, encoder: 'mp3' }
     }
 
     // ---- video frames
@@ -204,14 +269,18 @@ export async function exportProject(
     const bitrate = gif ? Math.round(Math.min(16e6, w * h * fps * 0.2)) : videoBitrate(w, h, fps, mode, motionShare(project, sources))
     const keyEvery = Math.max(1, Math.round(fps * size.keySecs))
     const target = await pickEncoder(job.format, w, h, fps, bitrate)
-    const chunks: Uint8Array[] = []
+    const chunks = new ChunkStore()
     let encoderName = 'ffmpeg'
 
     if (target) {
       encoderName = target.codec
       let encErr: unknown = null
       const enc = new VideoEncoder({
-        output: (chunk) => { const d = new Uint8Array(chunk.byteLength); chunk.copyTo(d); chunks.push(d) },
+        output: (chunk) => {
+          const d = new Uint8Array(chunk.byteLength)
+          chunk.copyTo(d)
+          chunks.push(target.kind === 'h264' ? d : ivfFrame(d, chunks.count))
+        },
         error: (e) => { encErr = e },
       })
       enc.configure({
@@ -257,50 +326,56 @@ export async function exportProject(
     const ext = job.format
     const out = `out.${ext}`
     cleanup.push(out)
-    const audioIn = hasAudio ? ['-i', audioFile] : []
-    const audioMap = hasAudio ? ['-map', '1:a:0'] : []
-    let args: string[]
+    // ffmpeg reads the video, sound and cover from Blobs in place (see withBlobs)
+    const inputs: { name: string; data: Blob }[] = []
+    if (hasAudio && audioBlob) inputs.push({ name: audioFile, data: audioBlob })
+    const vfile = target?.kind === 'h264' ? 'v.h264' : 'v.ivf'
     if (target) {
-      const vfile = target.kind === 'h264' ? 'v.h264' : 'v.ivf'
-      if (target.kind === 'h264') {
-        const all = new Uint8Array(chunks.reduce((s, c) => s + c.length, 0))
-        let o = 0
-        for (const c of chunks) { all.set(c, o); o += c.length }
-        await write(vfile, all)
-      } else await write(vfile, ivf(chunks, target.kind === 'vp9' ? 'VP90' : 'VP80', w, h, fps))
-      chunks.length = 0
-      const vin = target.kind === 'h264' ? ['-r', String(fps), '-i', vfile] : ['-i', vfile]
-      if (gif) {
-        args = [...vin, '-vf', `fps=${fps},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0', out]
-      } else if (ext === 'webm') {
-        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'copy', ...vorbis, out]
-      } else if (target.kind === 'h264') {
-        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'copy', ...aac, '-movflags', '+faststart', out]
-      } else {
-        // H.264 encoder not available on this device: transcode in software
-        args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, ...x264, ...aac, '-movflags', '+faststart', out]
-        encoderName = `${target.codec} → x264`
-      }
-    } else {
-      const vin = ['-framerate', String(fps), '-i', 'f%06d.jpg']
-      if (gif) args = [...vin, '-vf', `split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0', out]
-      else if (ext === 'webm') args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'libvpx', '-b:v', String(bitrate), '-g', String(keyEvery), '-deadline', 'realtime', '-cpu-used', '8', ...vorbis, out]
-      else args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, ...x264, ...aac, '-movflags', '+faststart', out]
+      const head = target.kind === 'h264' ? undefined : ivfHeader(target.kind === 'vp9' ? 'VP90' : 'VP80', w, h, fps, chunks.count)
+      inputs.push({ name: vfile, data: chunks.blob(head) })
     }
-    const { code, logs } = await runFFmpeg(args, (p) => onProgress(0.9 + Math.max(0, Math.min(1, p)) * 0.09, 'Finishing…'))
-    if (code !== 0) throw new Error('Could not write the video file: ' + logs.slice(-3).join(' '))
-
-    let final = out
-    if (cover && (ext === 'mp4' || ext === 'mov')) {
-      await write('cover.jpg', new Uint8Array(await cover.arrayBuffer()))
-      const res = await runFFmpeg(['-i', out, '-i', 'cover.jpg', '-map', '0', '-map', '1', '-c', 'copy', '-disposition:v:1', 'attached_pic', `cov.${ext}`])
-      cleanup.push(`cov.${ext}`)
-      if (res.code === 0) final = `cov.${ext}`
-    }
-    const data = (await ff.readFile(final)) as Uint8Array
+    // MP4/MOV with a cover: put it in on the same pass when the video is copied (no second full-size file)
+    const coverNow = !!cover && (ext === 'mp4' || ext === 'mov') && target?.kind === 'h264'
+    if (cover && (ext === 'mp4' || ext === 'mov')) inputs.push({ name: 'cover.jpg', data: cover })
     const type = { mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', gif: 'image/gif' }[ext as 'mp4']
+    const blob = await withBlobs(ff, inputs, async (at) => {
+      const audioIn = hasAudio ? ['-i', at(audioFile)] : []
+      const audioMap = hasAudio ? ['-map', '1:a:0'] : []
+      let args: string[]
+      if (target) {
+        const vin = target.kind === 'h264' ? ['-r', String(fps), '-i', at(vfile)] : ['-i', at(vfile)]
+        if (gif) {
+          args = [...vin, '-vf', `fps=${fps},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0', out]
+        } else if (ext === 'webm') {
+          args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'copy', ...vorbis, out]
+        } else if (target.kind === 'h264') {
+          const coverIn = coverNow ? ['-i', at('cover.jpg')] : []
+          const coverMap = coverNow ? ['-map', `${hasAudio ? 2 : 1}:v:0`, '-disposition:v:1', 'attached_pic'] : []
+          args = [...vin, ...audioIn, ...coverIn, '-map', '0:v:0', ...audioMap, ...coverMap, '-c:v', 'copy', ...aac, '-movflags', '+faststart', out]
+        } else {
+          // H.264 encoder not available on this device: transcode in software
+          args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, ...x264, ...aac, '-movflags', '+faststart', out]
+          encoderName = `${target.codec} → x264`
+        }
+      } else {
+        const vin = ['-framerate', String(fps), '-i', 'f%06d.jpg']
+        if (gif) args = [...vin, '-vf', `split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0', out]
+        else if (ext === 'webm') args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'libvpx', '-b:v', String(bitrate), '-g', String(keyEvery), '-deadline', 'realtime', '-cpu-used', '8', ...vorbis, out]
+        else args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, ...x264, ...aac, '-movflags', '+faststart', out]
+      }
+      const { code, logs } = await runFFmpeg(args, (p) => onProgress(0.9 + Math.max(0, Math.min(1, p)) * 0.09, 'Finishing…'))
+      if (code !== 0) throw new Error('Could not write the video file: ' + logs.slice(-3).join(' '))
+
+      let final = out
+      if (cover && !coverNow && (ext === 'mp4' || ext === 'mov')) {
+        const res = await runFFmpeg(['-i', out, '-i', at('cover.jpg'), '-map', '0', '-map', '1', '-c', 'copy', '-disposition:v:1', 'attached_pic', `cov.${ext}`])
+        cleanup.push(`cov.${ext}`)
+        if (res.code === 0) { await ff.deleteFile(out).catch(() => {}); final = `cov.${ext}` }
+      }
+      return takeFile(ff, final, type)
+    })
     onProgress(1, 'Done')
-    return { blob: new Blob([data.slice().buffer], { type }), ext, cover, width: w, height: h, encoder: encoderName }
+    return { blob, ext, cover, width: w, height: h, encoder: encoderName }
   } finally {
     release()
     for (const f of cleanup) await ff.deleteFile(f).catch(() => {})

@@ -890,3 +890,24 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .account-offers input { margin-top: 3px; flex: none; }
 .admin-export { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
 .admin-export > small { flex-basis: 100%; }
+
+/* ---------- small phones: the project name keeps some room in the editor's top bar */
+@media (max-width: 400px) {
+  .top .top-actions .icon-btn { width: 34px; }
+  .top .title { min-width: 56px; }
+}
+
+/* ---------- phone turned sideways: everything (tools included) has to fit in ~360px of height */
+@media (orientation: landscape) and (max-height: 500px) {
+  .top { min-height: 40px; padding-top: 2px; padding-bottom: 2px; }
+  .top .icon-btn { height: 36px; }
+  .stage-wrap { min-height: 80px; }
+  .transport { padding: 0 10px; }
+  .transport .icon-btn { height: 34px; }
+  .transport .icon-btn.play { width: 36px; height: 36px; }
+  .tl-scroll { min-height: 64px; max-height: 28dvh; }
+  .tools { min-height: 50px; padding: 2px 4px 4px; }
+  .tool { padding: 2px 4px; gap: 1px; }
+  .panel, .panel.tall { max-height: 72dvh; }
+  .sheet { max-height: 96dvh; }
+}
