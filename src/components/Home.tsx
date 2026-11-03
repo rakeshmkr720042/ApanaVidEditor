@@ -38,14 +38,14 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [openNotes, setOpenNotes] = useState(0)
   const [premiumSheet, setPremiumSheet] = useState(false)
   const [accountSheet, setAccountSheet] = useState(false)
-  const { premium } = usePremium()
+  const { premium, paid, trialDays } = usePremium()
   const account = useAccountState()
   // Android, Free plan: a Google banner under Home only (never in the editor).
   useEffect(() => {
-    if (premium) { hideHomeBanner(); return }
+    if (paid) { hideHomeBanner(); return }
     showHomeBanner()
     return () => { hideHomeBanner() }
-  }, [premium])
+  }, [paid])
 
   const openFile = async (f: File) => {
     setError(null); setOpening(true)
@@ -110,6 +110,13 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           {offline === 'ready' && <span className="badge">✓ {t('Offline ready')}</span>}
           {usage && <span className="muted small">{t('Storage used')}: {usage}</span>}
         </div>
+        {trialDays > 0 && (
+          <button className={`trial-strip${trialDays <= 5 ? ' ending' : ''}`} onClick={() => setPremiumSheet(true)} data-testid="home-trial">
+            <Icon name="crown" size={18} />
+            <span><b>{t('Free trial:')} {trialDays} {t(trialDays === 1 ? 'day left' : 'days left')}</b>
+              <small>{t(trialDays <= 5 ? 'Your trial ends soon. Subscribe now so nothing gets locked.' : 'Every Pro feature is on for you.')}</small></span>
+          </button>
+        )}
         <ProAd where="home" />
         <h3>{t('Projects')}</h3>
         {projects && !projects.length && <p className="muted">{t('No projects yet. Tap New project to start editing.')}</p>}

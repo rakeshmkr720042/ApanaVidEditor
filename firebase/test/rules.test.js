@@ -3,6 +3,7 @@ import { test, before, after, beforeEach } from 'node:test'
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing'
+import { createHash } from 'node:crypto'
 import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, Timestamp, writeBatch, query, orderBy, limit, where } from 'firebase/firestore'
 
 let env
@@ -84,6 +85,57 @@ test('users: owner deletes own account by emptying the profile; no way back', as
   await assertFails(updateDoc(doc(alice(), 'users/alice'), { fullName: 'Back', updatedAt: serverTimestamp() }))
   await assertFails(adminChange(admin(), 'users/alice', { accountStatus: 'active' }, 'user_activate'))
   await assertFails(adminChange(admin(), 'users/alice', { accountStatus: 'deleted', proUntil: Timestamp.now(), planId: 'monthly' }, 'pro_grant'))
+})
+
+// ---- free trial
+const emailKey = (e) => createHash('sha256').update(e.toLowerCase()).digest('hex')
+const asha = (claims = {}) => env.authenticatedContext('alice', { email: 'Asha@Example.com', email_verified: true, ...claims }).firestore()
+function startTrial(db, { uid = 'alice', key = emailKey('asha@example.com'), days = 30, userPatch = {}, trialDoc = {}, skipTrialDoc = false } = {}) {
+  const b = writeBatch(db)
+  b.update(doc(db, `users/${uid}`), { trialStartedAt: serverTimestamp(), trialDays: days, updatedAt: serverTimestamp(), ...userPatch })
+  if (!skipTrialDoc) b.set(doc(db, `trials/${key}`), { userId: 'alice', startedAt: serverTimestamp(), ...trialDoc })
+  return b.commit()
+}
+
+test('trial: starts once, with the server time and the admin days, once per email', async () => {
+  await assertFails(startTrial(asha({ email_verified: false })), 'email not verified')
+  await assertFails(startTrial(asha(), { skipTrialDoc: true }), 'without the per-email record')
+  await assertFails(startTrial(asha(), { days: 60 }), 'more days than the admin set')
+  await assertFails(startTrial(asha(), { key: emailKey('other@example.com') }), 'someone else\'s email key')
+  await assertFails(startTrial(asha(), { userPatch: { trialStartedAt: Timestamp.fromMillis(Date.now() + 9e9) } }), 'a start date from the phone')
+  await assertFails(startTrial(asha(), { userPatch: { proUntil: Timestamp.fromMillis(Date.now() + 9e9) } }), 'Pro on the side')
+  await assertFails(startTrial(asha(), { trialDoc: { userId: 'bob' } }), 'record for another user')
+  await assertSucceeds(startTrial(asha()))
+  const u = (await getDoc(doc(asha(), 'users/alice'))).data()
+  assert.equal(u.trialDays, 30)
+  assert.ok(u.trialStartedAt instanceof Timestamp)
+  // never again: not on this account, and not by changing the start or the days
+  await assertFails(startTrial(asha()))
+  await assertFails(updateDoc(doc(asha(), 'users/alice'), { trialDays: 90, updatedAt: serverTimestamp() }))
+  await assertFails(updateDoc(doc(asha(), 'users/alice'), { trialStartedAt: serverTimestamp(), updatedAt: serverTimestamp() }))
+  await assertFails(deleteDoc(doc(asha(), `trials/${emailKey('asha@example.com')}`)))
+  await assertFails(getDoc(doc(asha(), `trials/${emailKey('asha@example.com')}`)))
+  await assertSucceeds(getDoc(doc(admin(), `trials/${emailKey('asha@example.com')}`)))
+  // a new account (bob) with the same email: the email already had its trial
+  const bobSameEmail = env.authenticatedContext('bob', { email: 'asha@example.com', email_verified: true }).firestore()
+  const b = writeBatch(bobSameEmail)
+  b.update(doc(bobSameEmail, 'users/bob'), { trialStartedAt: serverTimestamp(), trialDays: 30, updatedAt: serverTimestamp() })
+  b.set(doc(bobSameEmail, `trials/${emailKey('asha@example.com')}`), { userId: 'bob', startedAt: serverTimestamp() })
+  await assertFails(b.commit())
+})
+
+test('trial: suspended accounts get none; the admin sets the days (0 = no trial)', async () => {
+  const sus = env.authenticatedContext('sus', { email: 'sus@example.com', email_verified: true }).firestore()
+  const b = writeBatch(sus)
+  b.update(doc(sus, 'users/sus'), { trialStartedAt: serverTimestamp(), trialDays: 30, updatedAt: serverTimestamp() })
+  b.set(doc(sus, `trials/${emailKey('sus@example.com')}`), { userId: 'sus', startedAt: serverTimestamp() })
+  await assertFails(b.commit())
+  await assertSucceeds(adminChange(admin(), 'config/entitlements', { proFeatures: ['dub'], freeExportMaxHeight: 1080, freeWatermark: true, offlineGraceDays: 7, trialDays: 0 }, 'entitlements_change'))
+  await assertFails(startTrial(asha(), { days: 0 }))
+  await assertFails(adminChange(admin(), 'config/entitlements', { proFeatures: ['dub'], freeExportMaxHeight: 1080, freeWatermark: true, offlineGraceDays: 7, trialDays: 365 }, 'entitlements_change'))
+  await assertSucceeds(adminChange(admin(), 'config/entitlements', { proFeatures: ['dub'], freeExportMaxHeight: 1080, freeWatermark: true, offlineGraceDays: 7, trialDays: 7 }, 'entitlements_change'))
+  await assertFails(startTrial(asha(), { days: 30 }))
+  await assertSucceeds(startTrial(asha(), { days: 7 }))
 })
 
 test('payments: a user lists only their own', async () => {

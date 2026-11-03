@@ -87,7 +87,7 @@ function emit() { listeners.forEach((f) => f()) }
 export function usePremium() {
   const [, setV] = useState(0)
   useEffect(() => { const f = () => setV((n) => n + 1); listeners.add(f); return () => { listeners.delete(f) } }, [])
-  return { premium: isPremium(), locked: lockActive() }
+  return { premium: isPremium(), paid: isPaid(), trialDays: trialDaysLeft(), locked: lockActive() }
 }
 
 /** Is anything locked on this device? */
@@ -130,6 +130,10 @@ export interface ServerEntitlement {
   uid: string
   /** Pro paid until (ms), or null for Free. */
   proUntil: number | null
+  /** Free trial ends (ms): all Pro features, but ads stay. Null when the account never had one. */
+  trialUntil?: number | null
+  /** Days of free trial a new account gets (admin setting). */
+  trialDays?: number
   /** Feature keys that need Pro; null = not read (defaults). */
   proFeatures: string[] | null
   freeExportMaxHeight: number
@@ -147,9 +151,20 @@ export function setServerPlans(p: Plan[] | null) { plans = p; emit() }
 /** Paid until (ms) according to the server, if that is in the future. */
 export function serverProUntil(now = Date.now()) { return server?.proUntil && server.proUntil > now ? server.proUntil : null }
 
-export function isPremium() {
+/** Free trial still running (ms end), and nothing paid. */
+export function serverTrialUntil(now = Date.now()) { return server?.trialUntil && server.trialUntil > now && !isPaid(now) ? server.trialUntil : null }
+/** Whole days of trial left (rounded up), or 0. */
+export const trialDaysLeft = (now = Date.now()) => { const u = serverTrialUntil(now); return u ? Math.ceil((u - now) / 86400000) : 0 }
+
+/** Paid Pro (bought, not a trial). Only this removes ads. */
+export function isPaid(now = Date.now()) {
   const s = load()
-  return (DEV_BUILD && s.dev && s.devPremium) || !!activeLicence() || !!serverProUntil()
+  return (DEV_BUILD && s.dev && s.devPremium) || !!activeLicence() || !!serverProUntil(now)
+}
+
+/** Pro features are on: paid, or during the free trial. */
+export function isPremium() {
+  return isPaid() || !!serverTrialUntil()
 }
 
 /** Does this feature need Pro? The admin decides (config/entitlements); defaults to yes. */

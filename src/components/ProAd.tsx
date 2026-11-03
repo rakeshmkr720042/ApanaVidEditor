@@ -9,7 +9,7 @@ import { PremiumSheet } from './PremiumSheet'
  * Our own ad for Pro, shown to Free users on the website and Windows (Android shows Google ads instead).
  * Opens the Pro screen; it never tracks anyone.
  */
-export function ProAd({ where }: { where: 'home' | 'export' }) {
+export function ProAd({ where }: { where: 'home' | 'export' | 'account' }) {
   usePremium()
   const [open, setOpen] = useState(false)
   if (nativeAds || !adsOn()) return null

@@ -201,6 +201,18 @@ test('a second purchase adds to the time left', async () => {
   assert.equal((await db.get('users/uid_a')).planId, 'annual')
 })
 
+test('bought during the free trial: paid months start after the trial', async () => {
+  await seed()
+  const started = new Date(Date.now() - 10 * 86400000)
+  await db.transaction(async (tx) => tx.update('users/uid_a', { trialStartedAt: started, trialDays: 30 }))
+  const o = (await order()).body
+  const p = pay(o.orderId)
+  const r = await (await call('POST', '/razorpay/verify', { body: { orderId: o.orderId, paymentId: p, signature: await sign(o.orderId, p) } })).json()
+  const trialEnd = started.getTime() + 30 * 86400000
+  const days = (r.proUntil - trialEnd) / 86400000
+  assert.ok(days > 27 && days < 32, `one month after the trial ends, got ${days}`)
+})
+
 test('webhook: checked signature, grants once, ignores other orders', async () => {
   await seed()
   const o = (await order()).body

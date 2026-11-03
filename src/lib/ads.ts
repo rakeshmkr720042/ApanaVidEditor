@@ -1,8 +1,8 @@
 import { Capacitor } from '@capacitor/core'
-import { isPremium } from './premium'
+import { isPaid } from './premium'
 
 /**
- * Ads for the Free plan (no account needed). Pro removes them.
+ * Ads for the Free plan and the free trial. Only paid Pro removes them.
  * - Android: Google AdMob. A banner under the Home screen and, now and then, a full-screen ad after an
  *   export finishes. Never while editing. Without internet nothing loads and the app works as usual.
  * - Website and Windows: our own "Pro" card (Google does not allow AdSense in desktop apps, and the
@@ -21,8 +21,8 @@ const ids = {
 const testing = ids.banner === TEST_BANNER
 
 export const nativeAds = Capacitor.getPlatform() === 'android'
-/** Free users see ads (or our Pro card on the web and Windows). */
-export const adsOn = () => !isPremium()
+/** Everyone who has not paid sees ads (or our Pro card on the web and Windows), also during the free trial. */
+export const adsOn = () => !isPaid()
 
 type AdMobModule = typeof import('@capacitor-community/admob')
 let mod: Promise<AdMobModule> | null = null
