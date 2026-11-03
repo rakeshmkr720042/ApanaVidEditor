@@ -116,7 +116,7 @@ export function CompressSheet({ file: given, onClose }: { file?: File; onClose: 
           <>
             <h2>{t(running.label)}</h2>
             <div className="progress"><div style={{ width: `${Math.round(running.p * 100)}%` }} /></div>
-            <p className="muted">{Math.round(running.p * 100)}% · {t(runsInBackground ? 'you can switch to other apps meanwhile' : isNative ? 'keep this screen open' : 'you can switch tabs, just keep this tab open')}</p>
+            <p className="muted">{Math.round(running.p * 100)}% · {t(runsInBackground ? 'you can switch to other apps meanwhile' : isNative ? 'keep this screen open (it stays on by itself)' : 'you can switch tabs, just keep this tab open')}</p>
             <button className="btn wide" onClick={cancel}>{t('Cancel')}</button>
           </>
         ) : (

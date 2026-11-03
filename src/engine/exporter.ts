@@ -1,3 +1,4 @@
+import { t } from '../lib/i18n'
 import type { AspectRatio, MediaSource, Project } from '../types'
 import { layoutClips } from '../model/timeline'
 import { getFFmpeg, runFFmpeg } from '../lib/ffmpeg'
@@ -143,7 +144,7 @@ export async function exportProject(
   const aac = ['-c:a', 'aac', '-b:a', `${size.audioK}k`]
   const vorbis = ['-c:a', 'libvorbis', '-q:a', String(size.vorbisQ)]
   const x264 = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(size.crf), '-g', String(Math.round(fps * size.keySecs)), '-pix_fmt', 'yuv420p']
-  const release = stayAwake()
+  const release = stayAwake('export', t('Saving your video'), t('Apna Editor keeps working'))
   const ff = await getFFmpeg().catch((e) => { release(); throw e })
   const cleanup: string[] = []
   const write = async (name: string, data: Uint8Array) => { await ff.writeFile(name, data); cleanup.push(name) }

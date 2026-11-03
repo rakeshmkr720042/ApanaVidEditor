@@ -2,7 +2,32 @@
 // Browsers throttle timers on hidden pages (to once a second, later once a minute) and stop
 // requestAnimationFrame and requestVideoFrameCallback, so the export loop waits on a timer that
 // lives in a worker, where that throttling does not apply.
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { desktop } from '../lib/desktop'
+
+/** The Android app's own plugin (MainActivity): a "Saving your video" foreground service + screen kept on. */
+interface KeepAlive { start(o: { title: string; text: string }): Promise<{ background: boolean }>; stop(): Promise<void> }
+const keepAlive = Capacitor.isNativePlatform() ? registerPlugin<KeepAlive>('KeepAlive') : null
+
+/** Marks a long job as running, so the next start can tell if the app was closed in the middle (out of memory). */
+const JOB_KEY = 'job-running'
+function markJob(kind: string | null) {
+  try { if (kind) localStorage.setItem(JOB_KEY, JSON.stringify({ kind, at: Date.now() })); else localStorage.removeItem(JOB_KEY) } catch { /* storage off */ }
+}
+
+/**
+ * The job (export / compress) that was still running when the app last closed, or null. Read once:
+ * the mark is cleared, so the warning is shown one time.
+ */
+export function interruptedJob(): { kind: string; at: number } | null {
+  try {
+    const raw = localStorage.getItem(JOB_KEY)
+    if (!raw) return null
+    localStorage.removeItem(JOB_KEY)
+    const j = JSON.parse(raw) as { kind: string; at: number }
+    return typeof j?.kind === 'string' && Date.now() - j.at < 7 * 864e5 ? j : null
+  } catch { return null }
+}
 
 let worker: Worker | null | undefined
 let nextId = 0
@@ -31,9 +56,18 @@ export function sleep(ms: number): Promise<void> {
  * Asks the system not to freeze the page or put the device to sleep while an export runs.
  * Returns a function that lets go again. Everything here is best effort.
  */
-export function stayAwake(): () => void {
+export function stayAwake(kind: 'export' | 'compress' = 'export', title = 'Saving your video', text = 'Apna Editor keeps working'): () => void {
   let done = false
   const cleanups: (() => void)[] = []
+
+  markJob(kind)
+  cleanups.push(() => markJob(null))
+
+  // Android: a foreground service so the system does not stop the app mid-export, and the screen stays on
+  if (keepAlive) {
+    keepAlive.start({ title, text }).catch(() => {})
+    cleanups.push(() => { keepAlive.stop().catch(() => {}) })
+  }
 
   // a held Web Lock keeps Chrome from freezing the page while it is in the background
   if (navigator.locks) {

@@ -1,3 +1,4 @@
+import { t } from '../lib/i18n'
 import { FFFSType } from '@ffmpeg/ffmpeg'
 import type { MediaSource } from '../types'
 import { getFFmpeg, runFFmpeg } from '../lib/ffmpeg'
@@ -172,7 +173,7 @@ export async function compressVideo(
   signal?: AbortSignal,
 ): Promise<CompressOutput> {
   const check = () => { if (signal?.aborted) throw new Cancelled() }
-  const release = stayAwake()
+  const release = stayAwake('compress', t('Compressing your video'), t('Apna Editor keeps working'))
   const ff = await getFFmpeg().catch((e) => { release(); throw e })
   const cleanup: string[] = []
   let revoke = ''
