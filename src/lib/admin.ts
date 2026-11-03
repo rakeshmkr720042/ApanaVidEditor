@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
-  collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, startAfter, Timestamp, where, writeBatch,
-  type DocumentData, type QueryDocumentSnapshot,
+  collection, doc, documentId, getDoc, getDocs, limit, orderBy, query, serverTimestamp, startAfter, Timestamp, where, writeBatch,
+  type DocumentData, type QueryDocumentSnapshot, type QuerySnapshot,
 } from 'firebase/firestore/lite'
 import { onIdTokenChanged } from 'firebase/auth'
 import { firebaseAuth, firestore } from './firebase'
@@ -33,7 +33,7 @@ export function useIsAdmin() {
   return admin
 }
 
-export type EventType = 'plan_change' | 'entitlements_change' | 'user_suspend' | 'user_activate' | 'pro_grant' | 'pro_remove'
+export type EventType = 'plan_change' | 'entitlements_change' | 'user_suspend' | 'user_activate' | 'pro_grant' | 'pro_remove' | 'users_export'
 
 /** Writes `patch` into `path` together with its audit record (one batch: both or neither). */
 async function change(path: string, patch: DocumentData, type: EventType, details: Record<string, unknown>, targetUid: string | null = null) {
@@ -149,6 +149,50 @@ export function setUserPro(u: AdminUser, until: number | null, planId: string) {
     { email: u.email, plan: until === null ? 'free' : planId, until: until === null ? null : new Date(until).toISOString(), was: u.proUntil ? new Date(u.proUntil).toISOString() : null },
     u.uid,
   )
+}
+
+// ---------- email list export
+
+/** A spreadsheet cell: quoted, and never read as a formula (=, +, -, @ at the start). */
+export const csvCell = (v: unknown) => {
+  let s = v === null || v === undefined ? '' : String(v)
+  if (/^[=+\-@\t\r]/.test(s) && !/^\+\d{8,15}$/.test(s)) s = `'${s}`
+  return `"${s.replace(/"/g, '""')}"`
+}
+const day = (v: unknown) => (v instanceof Timestamp ? v.toDate().toISOString().slice(0, 10) : '')
+
+/**
+ * The users as a CSV file. 'consent': only active accounts that ticked "Email me offers and updates"
+ * (the list for sending offers). 'all': every active or suspended account, for records; it is not a
+ * mailing list. Deleted accounts are never in it. Each export is logged in the admin history.
+ */
+export async function exportUsersCsv(kind: 'consent' | 'all') {
+  const user = firebaseAuth().currentUser
+  if (!user) throw new Error('Not signed in')
+  const col = collection(firestore(), 'users')
+  const rows: DocumentData[] = []
+  let after: QueryDocumentSnapshot | null = null
+  for (;;) {
+    const base = kind === 'consent' ? [where('marketingOptIn', '==', true)] : []
+    const snap: QuerySnapshot = await getDocs(query(col, ...base, orderBy(documentId()), ...(after ? [startAfter(after)] : []), limit(500)))
+    rows.push(...snap.docs.map((d) => ({ uid: d.id, ...d.data() })))
+    if (snap.docs.length < 500) break
+    after = snap.docs[snap.docs.length - 1]
+  }
+  const keep = rows.filter((r) => (kind === 'consent' ? r.accountStatus === 'active' && r.marketingOptIn === true && r.email : r.accountStatus !== 'deleted'))
+  const head = kind === 'consent'
+    ? ['Name', 'Email', 'Agreed on', 'Plan']
+    : ['Name', 'Email', 'Mobile', 'Status', 'Plan', 'Pro until', 'Trial started', 'Emails OK', 'Agreed on', 'Joined']
+  const lines = keep.map((r) => (kind === 'consent'
+    ? [r.fullName, r.email, day(r.marketingOptInAt), r.planId]
+    : [r.fullName, r.email, r.phoneNumber, r.accountStatus, r.planId, day(r.proUntil), day(r.trialStartedAt), r.marketingOptIn ? 'yes' : 'no', day(r.marketingOptInAt), day(r.createdAt)]))
+  const text = '\ufeff' + [head, ...lines].map((l) => l.map(csvCell).join(',')).join('\r\n') + '\r\n'
+  const b = writeBatch(firestore())
+  b.set(doc(collection(firestore(), 'security_events')), {
+    type: 'users_export', actorUid: user.uid, actorEmail: user.email ?? '', targetUid: null, target: 'users', details: { list: kind, count: keep.length }, createdAt: serverTimestamp(),
+  })
+  await b.commit()
+  return { name: `apna-editor-${kind === 'consent' ? 'email-list' : 'all-users'}-${new Date().toISOString().slice(0, 10)}.csv`, text, count: keep.length }
 }
 
 // ---------- history

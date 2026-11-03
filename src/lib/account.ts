@@ -28,6 +28,9 @@ export interface Profile {
   /** Free trial: started at the server's time, for this many days (the rules check both; once per email). */
   trialStartedAt?: Timestamp | null
   trialDays?: number
+  /** Agreed to emails about offers and updates (never ticked for them); when they last changed it. */
+  marketingOptIn?: boolean
+  marketingOptInAt?: Timestamp | null
 }
 
 export type AccountState =
@@ -104,13 +107,14 @@ function track<T>(p: Promise<T>): Promise<T> {
   return done
 }
 
-export function register(o: { name: string; email: string; password: string; phone: string; remember: boolean }) {
+export function register(o: { name: string; email: string; password: string; phone: string; remember: boolean; offers?: boolean }) {
   return track((async () => {
     await remember(o.remember)
     const cred = await createUserWithEmailAndPassword(firebaseAuth(), o.email.trim(), o.password)
     await updateProfile(cred.user, { displayName: cleanName(o.name) })
     // The account exists now: a profile write that fails (offline, server busy) is retried on the next sign-in.
     await ensureAccount(cred.user, { fullName: cleanName(o.name), phoneNumber: o.phone }).catch(() => {})
+    if (o.offers) await setMarketingConsent(true).catch(() => { /* can be ticked later in the Account screen */ })
     await sendEmailVerification(cred.user).catch(() => {})
     return cred.user
   })())
@@ -236,6 +240,15 @@ export const currentProfile = () => {
   return u && profileCache?.uid === u.uid ? profileCache.profile : null
 }
 
+/** Email offers and updates: on only when the user ticks it; saved with the server's time. */
+export async function setMarketingConsent(on: boolean) {
+  const u = firebaseAuth().currentUser
+  if (!u) throw new Error(t('Please sign in again.'))
+  await updateDoc(doc(firestore(), 'users', u.uid), { marketingOptIn: on, marketingOptInAt: serverTimestamp(), updatedAt: serverTimestamp() })
+  await readProfile(u)
+  emit()
+}
+
 /** Changes the name and mobile number (the only profile fields a user may change). */
 export async function saveProfile(name: string, phone: string) {
   const u = firebaseAuth().currentUser
@@ -297,7 +310,7 @@ export async function deleteAccount(password: string) {
   else await reauthenticateWithPopup(u, googleProvider())
   await updateDoc(doc(firestore(), 'users', u.uid), {
     fullName: '', email: '', emailLower: '', phoneNumber: '', photoURL: '',
-    accountStatus: 'deleted', deletedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    accountStatus: 'deleted', deletedAt: serverTimestamp(), updatedAt: serverTimestamp(), marketingOptIn: false,
   })
   profileCache = null
   setServerEntitlement(null)

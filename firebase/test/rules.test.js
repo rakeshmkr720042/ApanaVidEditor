@@ -138,6 +138,27 @@ test('trial: suspended accounts get none; the admin sets the days (0 = no trial)
   await assertSucceeds(startTrial(asha(), { days: 7 }))
 })
 
+test('email offers: only the user sets their own choice, with the server time; only admins list it', async () => {
+  const set = (db, uid, on, extra = {}) => updateDoc(doc(db, `users/${uid}`), { marketingOptIn: on, marketingOptInAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra })
+  await assertFails(set(alice(), 'bob', true), 'someone else')
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), { marketingOptIn: true, marketingOptInAt: Timestamp.fromMillis(0), updatedAt: serverTimestamp() }), 'a back-dated consent')
+  await assertFails(set(alice(), 'alice', 'yes'), 'not a yes/no')
+  await assertFails(set(alice(), 'alice', true, { planId: 'annual' }), 'with other fields')
+  await assertFails(set(env.authenticatedContext('sus').firestore(), 'sus', true), 'suspended account')
+  await assertSucceeds(set(alice(), 'alice', true))
+  await assertSucceeds(set(alice(), 'alice', false))
+  await assertSucceeds(set(alice(), 'alice', true))
+  // the email list: admins only
+  await assertFails(getDocs(query(collection(alice(), 'users'), where('marketingOptIn', '==', true), limit(50))))
+  await assertSucceeds(getDocs(query(collection(admin(), 'users'), where('marketingOptIn', '==', true), limit(50))))
+  await assertSucceeds(addDoc(collection(admin(), 'security_events'), { type: 'users_export', actorUid: 'root', actorEmail: 'root@example.com', targetUid: null, target: 'users', details: { list: 'consent', count: 1 }, createdAt: serverTimestamp() }))
+  await assertFails(addDoc(collection(alice(), 'security_events'), { type: 'users_export', actorUid: 'alice', actorEmail: 'asha@example.com', targetUid: null, target: 'users', details: {}, createdAt: serverTimestamp() }))
+  // deleting the account turns emails off; a deleted account cannot keep them on
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), wipe({ marketingOptIn: true })))
+  await assertSucceeds(updateDoc(doc(alice(), 'users/alice'), wipe({ marketingOptIn: false })))
+  await assertFails(set(alice(), 'alice', true))
+})
+
 test('payments: a user lists only their own', async () => {
   await assertSucceeds(getDocs(query(collection(alice(), 'payments'), where('userId', '==', 'alice'), limit(50))))
   await assertFails(getDocs(query(collection(alice(), 'payments'), limit(50))))
