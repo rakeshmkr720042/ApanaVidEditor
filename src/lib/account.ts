@@ -25,6 +25,9 @@ export interface Profile {
   planId: string
   /** Pro paid until; written only by the server. */
   proUntil?: Timestamp | null
+  /** Free trial: started at the server's time, for this many days (the rules check both; once per email). */
+  trialStartedAt?: Timestamp | null
+  trialDays?: number
 }
 
 export type AccountState =
@@ -161,6 +164,8 @@ export async function checkVerified() {
   if (!u) return false
   await u.reload()
   await u.getIdToken(true)
+  // Confirmed now: this is when the free trial can start.
+  if (u.emailVerified) await refreshAccount().catch(() => { /* offline: next launch */ })
   emit()
   return u.emailVerified
 }
@@ -306,14 +311,45 @@ const ms = (v: unknown) => (v && typeof (v as Timestamp).toMillis === 'function'
 /** Reads which features are Pro (admin's choice) and hands it, with the account's Pro date, to premium.ts. No user = Free, no account. */
 export async function loadEntitlement(user: User | null, profile: Profile | null) {
   const snap = await getDoc(doc(firestore(), 'config', 'entitlements'))
-  const c = (snap.exists() ? snap.data() : {}) as { proFeatures?: unknown; freeExportMaxHeight?: unknown; freeWatermark?: unknown }
+  const c = (snap.exists() ? snap.data() : {}) as { proFeatures?: unknown; freeExportMaxHeight?: unknown; freeWatermark?: unknown; trialDays?: unknown }
+  // First sign-in with a confirmed email: start the free trial (once per account and per email).
+  const days = typeof c.trialDays === 'number' ? c.trialDays : 30
+  if (user && profile && user.emailVerified && !profile.trialStartedAt && days > 0 && profile.accountStatus === 'active') {
+    profile = await startTrial(user, days).catch(() => profile)
+  }
+  const start = ms(profile?.trialStartedAt)
   setServerEntitlement({
     uid: user?.uid ?? '',
     proUntil: user ? ms(profile?.proUntil) : null,
+    trialUntil: user && start && profile?.trialDays ? start + profile.trialDays * 86400000 : null,
+    trialDays: days,
     proFeatures: Array.isArray(c.proFeatures) ? c.proFeatures.filter((x): x is string => typeof x === 'string') : null,
     freeExportMaxHeight: typeof c.freeExportMaxHeight === 'number' ? c.freeExportMaxHeight : 1080,
     freeWatermark: c.freeWatermark !== false,
   })
+}
+
+const tried = new Set<string>()
+/**
+ * Starts the free trial: the server's time and the admin's days, plus a record for this email (hashed)
+ * so the same email never gets a second one. The rules refuse anything else, e.g. an email that
+ * already had its trial on a deleted account; then nothing changes.
+ */
+async function startTrial(user: User, days: number): Promise<Profile | null> {
+  if (tried.has(user.uid) || !user.email) return currentProfileFor(user)
+  tried.add(user.uid)
+  const db = firestore()
+  const key = await sha256Hex(user.email.toLowerCase())
+  const b = writeBatch(db)
+  b.update(doc(db, 'users', user.uid), { trialStartedAt: serverTimestamp(), trialDays: days, updatedAt: serverTimestamp() })
+  b.set(doc(db, 'trials', key), { userId: user.uid, startedAt: serverTimestamp() })
+  await b.commit()
+  return readProfile(user)
+}
+const currentProfileFor = (user: User) => (profileCache?.uid === user.uid ? profileCache.profile : null)
+async function sha256Hex(s: string) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
+  return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, '0')).join('')
 }
 
 /** The paid plans the admin has switched on, cheapest first. Read when the upgrade screen opens. */

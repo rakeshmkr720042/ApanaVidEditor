@@ -171,7 +171,9 @@ async function complete(ctx, orderId, paymentId) {
       return { ok: false, status: 'paid_no_account', proUntil: null }
     }
     const now = ctx.now()
-    const from = Math.max(now, user.proUntil?.getTime?.() ?? 0)
+    // Bought during the free trial: the paid months start when the trial ends, so no trial day is lost.
+    const trialEnd = user.trialStartedAt?.getTime && user.trialDays > 0 ? user.trialStartedAt.getTime() + user.trialDays * 86400000 : 0
+    const from = Math.max(now, user.proUntil?.getTime?.() ?? 0, trialEnd)
     const until = new Date(addMonths(from, p.durationMonths))
     tx.update(`users/${p.userId}`, { proUntil: until, planId: p.planId }, ['updatedAt'])
     tx.update(ref, { status: 'success', paymentId, paidAt: new Date(now), proUntil: until })

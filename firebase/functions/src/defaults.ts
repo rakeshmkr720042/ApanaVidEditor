@@ -39,4 +39,6 @@ export const DEFAULT_ENTITLEMENTS = {
   freeWatermark: true,
   /** Days Pro keeps working offline before the app must check online again. */
   offlineGraceDays: 7,
+  /** Free trial for new accounts (all Pro features, ads stay), once per email. 0 = no trial. */
+  trialDays: 30,
 }

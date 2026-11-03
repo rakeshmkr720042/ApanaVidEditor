@@ -4,19 +4,23 @@ import {
   authMessage, cleanName, currentProfile, deleteAccount, listMyPayments, nameError, normalisePhone, saveProfile, signInKind, signOut,
   type Payment,
 } from '../lib/account'
-import { rupees, serverProUntil, usePremium } from '../lib/premium'
+import { rupees, serverEntitlement, serverProUntil, serverTrialUntil, usePremium } from '../lib/premium'
+import { ProAd } from './ProAd'
 import { useIsAdmin } from '../lib/admin'
 import { SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { Icon } from './Icon'
 import { Field } from './AuthScreen'
 
+/** The trial is over and nothing was paid. */
+const trialEnded = () => { const u = serverEntitlement()?.trialUntil; return !!u && u <= Date.now() && !serverProUntil() }
+
 type View = 'main' | 'profile' | 'payments' | 'delete'
 
 /** Signed-in account: who, which plan, profile, payments, sign out, delete account. */
 export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlans: () => void }) {
   const user = firebaseAuth().currentUser
-  const { premium } = usePremium()
+  const { paid, trialDays } = usePremium()
   const admin = useIsAdmin()
   const [view, setView] = useState<View>('main')
   const [busy, setBusy] = useState(false)
@@ -45,14 +49,22 @@ export function AccountSheet({ onClose, onPlans }: { onClose: () => void; onPlan
               {profile?.phoneNumber && <small className="muted" data-testid="account-phone">{profile.phoneNumber}</small>}
             </div>
           </div>
-          <div className="account-plan">
+          <div className={`account-plan${trialDays && trialDays <= 5 ? ' ending' : ''}`}>
             <Icon name="crown" size={18} />
             <div>
-              <b>{premium ? t('Pro') : t('Free Forever')}</b>
-              <small className="muted" data-testid="account-plan">{premium && serverProUntil() ? `${t('Pro until')} ${new Date(serverProUntil()!).toLocaleDateString()}` : premium ? t('All Pro features are on.') : t('Basic editing, unlimited projects, exports up to 1080p.')}</small>
+              <b>{paid ? t('Pro') : trialDays ? t('Free trial: all Pro features') : t('Free Forever')}</b>
+              <small className="muted" data-testid="account-plan">
+                {paid && serverProUntil() ? `${t('Pro until')} ${new Date(serverProUntil()!).toLocaleDateString()}`
+                  : paid ? t('All Pro features are on.')
+                  : trialDays ? `${t('Trial:')} ${trialDays} ${t(trialDays === 1 ? 'day left' : 'days left')} · ${t('ends')} ${new Date(serverTrialUntil()!).toLocaleDateString()}`
+                  : trialEnded() ? t('Your free trial has ended. Choose a plan to keep Pro features.')
+                  : t('Basic editing, unlimited projects, exports up to 1080p.')}
+              </small>
+              {trialDays > 0 && trialDays <= 5 && <small className="account-remind" data-testid="trial-reminder">{t('Your trial ends soon. Subscribe now so nothing gets locked.')}</small>}
             </div>
-            {!premium && <button className="btn small primary" onClick={onPlans}>{t('See plans')}</button>}
+            {!paid && <button className="btn small primary" onClick={onPlans} data-testid="account-plans">{t(trialDays ? 'Remove ads: get Pro' : 'See plans')}</button>}
           </div>
+          <ProAd where="account" />
           <div className="account-links">
             <button className="btn wide" onClick={() => setView('profile')} data-testid="account-edit"><Icon name="user" size={16} /> {t('Edit name and mobile number')}</button>
             <button className="btn wide" onClick={() => setView('payments')} data-testid="account-payments"><Icon name="note" size={16} /> {t('My payments')}</button>

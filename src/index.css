@@ -872,3 +872,14 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .pay-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 16px; }
 .pay-sum > span { font-size: 22px; font-weight: 700; }
 .pay-sum .pay-test { flex-basis: 100%; }
+.account-plan.ending { border-color: #ffcc33; }
+.account-remind { color: #ffcc33; margin-top: 4px; }
+.pro-trial { padding: 10px 12px; border-radius: 10px; border: 1px solid #ffcc33; background: rgba(255, 204, 51, .08); font-size: 13px; display: grid; gap: 2px; }
+.admin-trial { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); margin: 12px 0; }
+.admin-trial > span { display: grid; flex: 1; }
+.admin-trial select { flex: none; }
+.trial-strip { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; margin: 8px 0; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; cursor: pointer; }
+.trial-strip svg { color: #ffcc33; flex: none; }
+.trial-strip > span { display: grid; }
+.trial-strip small { opacity: .75; }
+.trial-strip.ending { border-color: #ffcc33; background: rgba(255, 204, 51, .08); }

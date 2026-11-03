@@ -232,7 +232,7 @@ function FeaturesTab() {
   useEffect(() => { loadEntitlements().then((e) => { setEnt(e); setSaved(e) }).catch((e) => setNote(msg(e))) }, [])
   if (!ent || !saved) return <section className="admin-section">{note && <p className="muted">{note}</p>}</section>
   const flip = (f: Feature) => setEnt({ ...ent, proFeatures: ent.proFeatures.includes(f) ? ent.proFeatures.filter((x) => x !== f) : [...ent.proFeatures, f] })
-  const changed = JSON.stringify([...ent.proFeatures].sort()) !== JSON.stringify([...saved.proFeatures].sort())
+  const changed = JSON.stringify([...ent.proFeatures].sort()) !== JSON.stringify([...saved.proFeatures].sort()) || ent.trialDays !== saved.trialDays
   const save = async () => {
     setBusy(true); setNote(null)
     // keep the list in the app's order
@@ -250,6 +250,12 @@ function FeaturesTab() {
           </label>
         ))}
       </div>
+      <label className="admin-trial">
+        <span><b>{t('Free trial for new accounts')}</b><small className="muted">{t('All Pro features (ads stay) for this many days after the first sign-in. Once per email. Changes apply to trials that start later.')}</small></span>
+        <select value={ent.trialDays} onChange={(e) => setEnt({ ...ent, trialDays: Number(e.target.value) })} data-testid="admin-trial-days">
+          {[0, 7, 15, 30, 45, 60, 90].map((d) => <option key={d} value={d}>{d === 0 ? t('No trial') : `${d} ${t('days')}`}</option>)}
+        </select>
+      </label>
       <button className="btn primary wide" disabled={busy || !changed} onClick={save} data-testid="admin-features-save">{t('Save')}</button>
       {note && <p className="muted small" role="status">{note}</p>}
     </section>
@@ -271,7 +277,11 @@ function HistoryTab() {
     const d = e.details as Record<string, unknown>
     if (typeof d.email === 'string') return d.email + (typeof d.until === 'string' ? ` → ${day(Date.parse(d.until))}` : '')
     if (e.type === 'plan_change' && d.after) return `${String(d.plan)}: ${Object.entries(d.after as Record<string, unknown>).map(([k, v]) => `${k} ${k === 'price' ? rupees(Number(v)) : String(v)}`).join(', ')}`
-    if (e.type === 'entitlements_change' && d.after) return ((d.after as { proFeatures?: string[] }).proFeatures ?? []).map((f) => t(FEATURES[f as Feature]?.label ?? f)).join(', ') || t('none')
+    if (e.type === 'entitlements_change' && d.after) {
+      const a = d.after as { proFeatures?: string[]; trialDays?: number }
+      const list = (a.proFeatures ?? []).map((f) => t(FEATURES[f as Feature]?.label ?? f)).join(', ') || t('none')
+      return typeof a.trialDays === 'number' ? `${list} · ${t('Free trial')}: ${a.trialDays} ${t('days')}` : list
+    }
     return e.target
   }
   return (

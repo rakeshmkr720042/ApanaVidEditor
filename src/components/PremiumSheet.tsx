@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   activeLicence, DEFAULT_PLANS, devSettings, FEATURES, LOCK_ON, needsCheck, paymentProvider, proFeatureList, rupees, serverPlans, serverProUntil,
-  setDev, setLicence, storedLicence, usePremium, type Feature, type Plan, type PlanId,
+  serverEntitlement, serverTrialUntil, setDev, setLicence, storedLicence, usePremium, type Feature, type Plan, type PlanId,
 } from '../lib/premium'
 import { loadPlans, refreshAccount, useAccountState } from '../lib/account'
 import { SignInOverlay } from './AuthScreen'
@@ -25,7 +25,9 @@ function value(p: Plan, monthly: Plan | undefined) {
   return { per, save }
 }
 export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose: () => void }) {
-  const { premium, locked } = usePremium()
+  const { premium, paid, trialDays, locked } = usePremium()
+  const trialUntil = serverTrialUntil()
+  const trialLength = serverEntitlement()?.trialDays ?? 30
   const plans = serverPlans() ?? DEFAULT_PLANS
   const [picked, setPlan] = useState<PlanId | null>(null)
   const plan = picked && plans.some((p) => p.id === picked) ? picked : plans[plans.length - 1]?.id
@@ -70,11 +72,17 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
       <div className="sheet premium" onClick={(e) => e.stopPropagation()} data-testid="premium-sheet">
         <div className="sheet-grab" />
         <SheetClose onClose={onClose} />
-        <h2><Icon name="crown" size={20} /> {t(premium ? 'You have Pro' : 'Apna Editor Pro')}</h2>
+        <h2><Icon name="crown" size={20} /> {t(paid ? 'You have Pro' : 'Apna Editor Pro')}</h2>
         {feature && !premium && <p className="premium-why"><b>{t(FEATURES[feature].label)}</b> {t('is a Pro feature.')}</p>}
         {!locked && !premium && <p className="muted small">{t('Right now every feature is free for everyone.')}</p>}
-        {premium && proUntil && <p className="muted small" data-testid="pro-until">{t('Pro until')} {new Date(proUntil).toLocaleDateString()}</p>}
-        {premium && !proUntil && lic && (
+        {trialDays > 0 && trialUntil && (
+          <p className="pro-trial" data-testid="pro-trial">
+            <b>{t('Free trial:')} {trialDays} {t(trialDays === 1 ? 'day left' : 'days left')}</b>
+            <span>{t('All Pro features until')} {new Date(trialUntil).toLocaleDateString()}. {t('Ads stay during the trial; they go away when you subscribe.')}</span>
+          </p>
+        )}
+        {paid && proUntil && <p className="muted small" data-testid="pro-until">{t('Pro until')} {new Date(proUntil).toLocaleDateString()}</p>}
+        {paid && !proUntil && lic && (
           <p className="muted small">
             {t(plans.find((p) => p.id === lic.plan)?.planName ?? 'Pro')} · {t('renews or ends on')} {new Date(lic.until).toLocaleDateString()}
             {needsCheck() && <> · {t('connect to the internet soon so we can check your plan')}</>}
@@ -99,7 +107,7 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
             ) : <small className="muted">{t('Every feature is in the Free plan right now.')}</small>}
           </div>
         </div>
-        {!premium && plans.length > 0 && (
+        {!paid && plans.length > 0 && (
           <>
             <div className="plans" data-testid="plans">
               {plans.map((p) => {
@@ -129,6 +137,7 @@ export function PremiumSheet({ feature, onClose }: { feature?: Feature; onClose:
                 <button className="btn small ghost" onClick={() => stop.current?.abort()}>{t('Cancel')}</button>
               </div>
             )}
+            {!signedIn && trialLength > 0 && <p className="muted small" data-testid="trial-offer">{t('New accounts get every Pro feature free for')} {trialLength} {t('days')}.</p>}
             {!provider && <p className="muted small" data-testid="no-payments">{t('Payments are not switched on yet. You will be able to subscribe here soon.')}</p>}
           </>
         )}

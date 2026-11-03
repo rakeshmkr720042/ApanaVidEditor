@@ -80,7 +80,7 @@ export function savePlan(before: AdminPlan, after: Pick<AdminPlan, 'planName' | 
 
 // ---------- Free / Pro split
 
-export interface Entitlements { proFeatures: Feature[]; freeExportMaxHeight: number; freeWatermark: boolean; offlineGraceDays: number }
+export interface Entitlements { proFeatures: Feature[]; freeExportMaxHeight: number; freeWatermark: boolean; offlineGraceDays: number; trialDays: number }
 
 export async function loadEntitlements(): Promise<Entitlements> {
   const s = await getDoc(doc(firestore(), 'config', 'entitlements'))
@@ -91,13 +91,14 @@ export async function loadEntitlements(): Promise<Entitlements> {
     freeExportMaxHeight: x.freeExportMaxHeight ?? 1080,
     freeWatermark: x.freeWatermark !== false,
     offlineGraceDays: x.offlineGraceDays ?? 7,
+    trialDays: typeof x.trialDays === 'number' ? x.trialDays : 30,
   }
 }
 
 export function saveEntitlements(before: Entitlements, after: Entitlements) {
   return change('config/entitlements', { ...after }, 'entitlements_change', {
-    before: { proFeatures: before.proFeatures },
-    after: { proFeatures: after.proFeatures },
+    before: { proFeatures: before.proFeatures, trialDays: before.trialDays },
+    after: { proFeatures: after.proFeatures, trialDays: after.trialDays },
   })
 }
 

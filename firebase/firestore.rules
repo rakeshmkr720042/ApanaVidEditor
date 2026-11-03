@@ -57,6 +57,21 @@ service cloud.firestore {
         && request.resource.data.phoneNumber == '' && request.resource.data.photoURL == ''
         && request.resource.data.deletedAt == request.time
         && request.resource.data.updatedAt == request.time;
+      // Free trial: once per account, started by the app after sign-in with a verified email. It starts at
+      // the server's time and lasts the admin's number of days (config/entitlements.trialDays, default 30),
+      // both checked here, so neither the phone's clock nor the app can stretch it (end = start + days). The same batch must create trials/{sha256(email)}, which
+      // can never be created twice: a deleted account signed up again with that email gets no new trial.
+      allow update: if isOwner(uid)
+        && resource.data.accountStatus == 'active'
+        && !('trialStartedAt' in resource.data)
+        && request.auth.token.email_verified == true
+        && trialDays() > 0
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['trialStartedAt', 'trialDays', 'updatedAt'])
+        && request.resource.data.trialStartedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.trialDays == trialDays()
+        && !exists(/databases/$(database)/documents/trials/$(emailKey()))
+        && getAfter(/databases/$(database)/documents/trials/$(emailKey())).data.userId == uid;
       // Admin: suspend / activate (never their own account, never a deleted one) and give or remove Pro.
       allow update: if isAdmin()
         && resource.data.accountStatus in ['active', 'suspended']
@@ -67,6 +82,26 @@ service cloud.firestore {
         && request.resource.data.planId is string && request.resource.data.planId.size() <= 40
         && request.resource.data.updatedAt == request.time
         && audited();
+    }
+
+    // Days of free trial the admin set (0 = no trial).
+    function trialDays() {
+      let p = /databases/$(database)/documents/config/entitlements;
+      return exists(p) && ('trialDays' in get(p).data) ? get(p).data.trialDays : 30;
+    }
+    // The signed-in email, hashed, so emails of deleted accounts are not kept in plain text.
+    function emailKey() { return hashing.sha256(request.auth.token.email.lower().toUtf8()).toHexString().lower(); }
+
+    // One record per email that ever had a trial. Never changed or removed.
+    match /trials/{key} {
+      allow read: if isAdmin();
+      allow create: if signedIn() && request.auth.token.email_verified == true
+        && key == emailKey()
+        && request.resource.data.keys().hasOnly(['userId', 'startedAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.startedAt == request.time
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.trialStartedAt == request.time;
+      allow update, delete: if false;
     }
 
     function validName(n) { return n is string && n.size() >= 1 && n.size() <= 80; }
@@ -102,7 +137,8 @@ service cloud.firestore {
     }
 
     function validEntitlements(d) {
-      return d.keys().hasOnly(['proFeatures', 'freeExportMaxHeight', 'freeWatermark', 'offlineGraceDays', 'updatedAt', 'lastChangeId'])
+      return d.keys().hasOnly(['proFeatures', 'freeExportMaxHeight', 'freeWatermark', 'offlineGraceDays', 'trialDays', 'updatedAt', 'lastChangeId'])
+        && (!('trialDays' in d) || (d.trialDays is int && d.trialDays >= 0 && d.trialDays <= 90))
         && d.proFeatures is list
         && d.proFeatures.hasOnly(['export2k', 'batch', 'nomark', 'dub', 'audio', 'greenscreen', 'presenter', 'scenes'])
         && d.freeExportMaxHeight in [720, 1080, 1440, 2160]

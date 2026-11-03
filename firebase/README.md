@@ -52,6 +52,15 @@ The app opens without signing in (Free, with ads). An account is asked for only 
 (Pro screen: "Sign in to get Pro", or the Sign in button on Home). So `subscription_plans` and
 `config/entitlements` can be read by anyone; everything else still needs a signed-in user.
 
+## Free trial (new accounts)
+
+The first sign-in with a confirmed email starts a free trial: every Pro feature for
+`config/entitlements.trialDays` days (default 30, admin screen > Pro features; 0 = off). Ads stay
+during the trial; only paid Pro removes them. The app writes `users/{uid}.trialStartedAt` (server
+time) and `trialDays` together with `trials/{sha256(lowercase email)}`; the rules accept only exactly
+that, only once per account and once per email, so a deleted account signed up again gets no second
+trial. Trial end = start + days. A purchase during the trial starts after the trial ends (payments/).
+
 ## Account sheet (every user)
 
 - **Edit name and mobile number**: the only profile fields a user may change (the rules check them).
