@@ -26,7 +26,7 @@ The picture generator's small sparkle mark (bottom right) is cropped off where a
 - `01-poster-tall`: placeholder text "Feature 1 / Feature 2 / Feature 3", typos "Subtttle", "shtile Layers".
 - `03-promo-square`: Apple "App Store" badge (there is no iPhone app), garbled phone screen text.
 - `04-features-infographic`: garbled labels ("AI aur …", "No d/ Outo", "Presets GIF)", "Expert formats"); counts (113+ features, 132 filters, 184 stickers …) must match the app.
-- `05-premium-features-banner`: made-up screen text ("Auto-totey Text", "Motion Tracking", "132 Filters").
+- `05-premium-features-banner`: garbled screen text ("Auto-totey Text", "Desktop editor" mockup labels); check "132 Filters" matches the app.
 - `08-promo-wide`: Apple "App Store" badge, screen text "Video Video", "Accees".
 - `06-go-pro-banner` (used on Home): fine, but "1 month free" is the sign-in trial, and ads stay during the trial; only a paid plan removes them.
 
