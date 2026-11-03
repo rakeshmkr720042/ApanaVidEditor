@@ -41,6 +41,8 @@ import { copyTrack, useCopiedTrack, type PasteTrackHow } from '../model/trackCop
 import { PasteTrackSheet } from './PasteTrackSheet'
 import { KeysSheet } from './KeysSheet'
 import { MarkerSheet } from './MarkerSheet'
+import { TrimPanel, LayerTrimPanel } from '../panels/TrimPanel'
+import { rippleDeleteLayer, trimClipToPlayhead, trimLayerToPlayhead } from '../model/trim'
 import { PasteStyleSheet } from './PasteStyleSheet'
 import { AudioMeter } from './AudioMeter'
 import { meterWanted, setMeterWanted } from '../engine/meter'
@@ -96,7 +98,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -252,6 +254,33 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const edges = list.length ? list : ed.layout.items.flatMap((it) => [it.start, it.start + it.dur])
     const next = dir > 0 ? edges.filter((x) => x > time + 0.02).sort((a, b) => a - b)[0] : edges.filter((x) => x < time - 0.02).sort((a, b) => b - a)[0]
     if (next !== undefined) seek(next)
+  }
+
+  // ---- pro trims: ripple trim to the playhead (Q / W), ripple delete (Shift+Delete)
+  const trimToPlayhead = (side: 'in' | 'out') => {
+    const l = sel?.type === 'layer' ? ed.project.layers.find((x) => x.id === sel.id) : undefined
+    if (l) {
+      if (ed.project.tracks?.find((x) => x.id === l.track)?.locked) { setToast(t('This track is locked. Unlock it first.')); return }
+      const patch = trimLayerToPlayhead(l, time, side)
+      if (!patch) { setToast(t('Put the playhead inside the selected item first.')); return }
+      ed.patchItems({ [l.id]: patch })
+      return
+    }
+    if (ed.project.main?.locked) { setToast(t('The main video is locked. Unlock it first.')); return }
+    const r = trimClipToPlayhead(ed.project, time, side, sel?.type === 'clip' ? sel.id : undefined)
+    if (!r) { setToast(t('Put the playhead inside a clip first.')); return }
+    ed.patchItems(r.patch)
+    seek(r.at)
+    setToast(t(side === 'in' ? 'Start cut to the playhead; the video closed up.' : 'End cut to the playhead; the video closed up.'))
+  }
+  const rippleDelete = () => {
+    if (!sel) return
+    if (sel.type === 'clip' || sel.all) { ed.remove(false); return }
+    const l = ed.project.layers.find((x) => x.id === sel.id)
+    if (!l || ed.project.tracks?.find((x) => x.id === l.track)?.locked) return
+    ed.replaceProject(rippleDeleteLayer(ed.project, l.id))
+    ed.setSel(null)
+    setToast(t('Deleted; the later items on this track moved back to close the gap.'))
   }
 
   // ---- copy style / paste style (look, sound, speed, crop, animation, text style)
@@ -610,6 +639,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       else if (mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); jumpMarker(e.key === 'ArrowLeft' ? -1 : 1) }
       else if (!mod && key === 'k' && !e.shiftKey) { if (player?.playing) player.pause() }
       else if (!mod && key === 't' && !e.shiftKey) toggleTimecode()
+      else if (!mod && !e.altKey && key === 'q') trimToPlayhead('in')
+      else if (!mod && !e.altKey && key === 'w') trimToPlayhead('out')
+      else if (e.shiftKey && e.key === 'Delete') { e.preventDefault(); rippleDelete() }
       else if (mod && !e.shiftKey && key === 'c' && !window.getSelection()?.toString()) {
         // copy the picked track row (or the row of the selected item; the main video for a clip)
         const row = currentRow()
@@ -736,6 +768,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'user', label: 'Remove BG', on: () => setPanel('cutout'), active: !!selClip.cutout?.enabled },
       { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!selClip.chroma?.enabled },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
+      { icon: 'trim', label: 'Trim', on: () => setPanel('trim') },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
       { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !!selClip.ramp },
@@ -805,6 +838,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...('box' in selLayer ? [{ icon: 'keyframe', label: 'Keyframes', on: () => setPanel('keys'), active: !!selLayer.keys?.length } as Tool] : []),
       ...('box' in selLayer ? [{ icon: 'track', label: 'Track', on: () => setPanel('track'), active: !!selStored && isTracked(selStored) } as Tool] : []),
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
+      { icon: 'trim', label: 'Trim', on: () => setPanel('trim') },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
       ...(selLayer.type !== 'blur' && selLayer.type !== 'wave' ? [{ icon: 'brush', label: 'Copy style', on: () => copyStyleOf(selLayer.id) } as Tool] : []),
       ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
@@ -993,7 +1027,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const closePanel = () => setPanel(null)
   let panelView: React.ReactNode = null
   const tclip = targetClip
-  if (panel === 'speed' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <LayerSpeedPanel ed={ed} layer={selLayer} onClose={closePanel} />
+  if (panel === 'trim' && selClip) panelView = <TrimPanel ed={ed} clip={selClip} onTrim={trimToPlayhead} onClose={closePanel}
+    onPreview={(id, st) => { if (!player) return; if (id) { player.pause(); player.previewSource(id, st) } else player.endPreviewSource() }} />
+  else if (panel === 'trim' && selLayer) panelView = <LayerTrimPanel onTrim={trimToPlayhead} onRippleDelete={rippleDelete} onClose={closePanel} />
+  else if (panel === 'speed' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <LayerSpeedPanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'speed' && tclip) panelView = <SpeedPanel ed={ed} clip={tclip} onClose={closePanel} />
   else if (panel === 'volume' && selLayer?.type === 'audio') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, fadeIn: selLayer.fadeIn, fadeOut: selLayer.fadeOut }} onClose={closePanel} />
   else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} />

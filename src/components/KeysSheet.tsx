@@ -24,6 +24,8 @@ const KEYS: [string, string][] = [
   ['Ctrl+← / Ctrl+→', 'Jump to the previous / next marker'],
   ['K', 'Pause'],
   ['T', 'Time as minutes or timecode (HH:MM:SS:FF)'],
+  ['Q / W', 'Cut the start / end of the clip to the playhead (the video closes up)'],
+  ['Shift+Delete', 'Delete and close the gap'],
   ['S', 'Split at the playhead'],
   ['Delete', 'Delete the selected item'],
   ['Enter', 'Open the tool of the selected item'],
@@ -45,6 +47,9 @@ const MOUSE: [string, string][] = [
   ['Double-click an item', 'Open its tool'],
   ['Double-click a track name', 'Rename the track'],
   ['Right-click', 'Menu: copy, paste, split, duplicate, lock, delete…'],
+  ['Alt+drag a clip', 'Slip: show another part of its video'],
+  ['Alt+Shift+drag a clip', 'Slide: move it between its neighbours'],
+  ['Alt+drag a clip edge', 'Roll: move the cut between two clips'],
   ['Drag a track name up / down', 'Change which track is in front'],
   ['Wheel on the preview', 'Make the selected item bigger / smaller'],
 ]
