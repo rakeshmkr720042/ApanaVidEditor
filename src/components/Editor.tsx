@@ -10,7 +10,7 @@ import { gradeIsEmpty } from '../engine/grade'
 import { REVERSE_MAX, reverseClip as reverseVideo, stillFrame } from '../engine/reverse'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
 import { getMedia, getProject, saveMedia, saveProject } from '../lib/db'
-import { fmtTime, uid } from '../lib/format'
+import { fmtTime, fmtTimecode, uid } from '../lib/format'
 import { projectToFile } from '../lib/projectFile'
 import { isNative, saveNative } from '../lib/save'
 import { t } from '../lib/i18n'
@@ -40,6 +40,11 @@ import { playable, trackName } from '../model/tracks'
 import { copyTrack, useCopiedTrack, type PasteTrackHow } from '../model/trackCopy'
 import { PasteTrackSheet } from './PasteTrackSheet'
 import { KeysSheet } from './KeysSheet'
+import { MarkerSheet } from './MarkerSheet'
+import { PasteStyleSheet } from './PasteStyleSheet'
+import { AudioMeter } from './AudioMeter'
+import { meterWanted, setMeterWanted } from '../engine/meter'
+import { copyStyle, pasteableParts, pastePatches, PARTS, useCopiedStyle, type StylePart } from '../model/styleCopy'
 import { atTime } from '../model/keyframes'
 import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../panels/LayerTools'
 import { ClipOrderPanel, type OrderMode } from '../panels/ClipOrderPanel'
@@ -156,6 +161,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   useEffect(() => {
     const p = new Player(canvasRef.current!, Math.min(screen.width, screen.height) > 700 ? 720 : 540)
     p.onTick = (tt, pl) => { setTime(tt); setPlaying(pl) }
+    p.meterOn = meterWanted()
     setPlayer(p)
     return () => p.destroy()
   }, [])
@@ -223,6 +229,64 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const seek = useCallback((tt: number) => { if (player?.playing) player.pause(); player?.seek(tt) }, [player])
   /** Fast backward / forward: jumps without stopping playback. */
   const skip = useCallback((d: number) => { if (player) player.seek(player.t + d) }, [player])
+
+  // ---- time display: m:ss.t or editor timecode HH:MM:SS:FF (tap the time to switch)
+  const [timecode, setTimecode] = useState(() => { try { return localStorage.getItem('time-format') === 'tc' } catch { return false } })
+  const toggleTimecode = () => setTimecode((v) => { try { localStorage.setItem('time-format', v ? 'm' : 'tc') } catch { /* private mode */ } return !v })
+  const showTime = (tt: number) => (timecode ? fmtTimecode(tt, ed.project.settings.fps) : fmtTime(tt))
+  // ---- audio meter (tap it to switch off / on)
+  const [meter, setMeter] = useState(meterWanted)
+  const toggleMeter = () => setMeter((v) => { setMeterWanted(!v); if (player) player.meterOn = !v; return !v })
+
+  // ---- markers
+  const [markerSheet, setMarkerSheet] = useState<{ focus: string | null } | null>(null)
+  const markers = ed.project.markers ?? []
+  const addMarkerHere = (open = false) => {
+    const m = ed.addMarker(time)
+    setToast(`${t('Marker added at')} ${fmtTime(time)}. ${t('Tap the flag on the ruler to name it.')}`)
+    if (open) setMarkerSheet({ focus: m.id })
+  }
+  /** Jumps to the marker before / after the playhead (with none: to the clip edge). */
+  const jumpMarker = (dir: -1 | 1) => {
+    const list = markers.map((m) => m.t)
+    const edges = list.length ? list : ed.layout.items.flatMap((it) => [it.start, it.start + it.dur])
+    const next = dir > 0 ? edges.filter((x) => x > time + 0.02).sort((a, b) => a - b)[0] : edges.filter((x) => x < time - 0.02).sort((a, b) => b - a)[0]
+    if (next !== undefined) seek(next)
+  }
+
+  // ---- copy style / paste style (look, sound, speed, crop, animation, text style)
+  const styleCopied = useCopiedStyle()
+  const [styleSheet, setStyleSheet] = useState(false)
+  const itemOf = (id: string) => ed.project.clips.find((c) => c.id === id) ?? ed.project.layers.find((l) => l.id === id)
+  const itemName = (id: string) => {
+    const c = ed.project.clips.find((x) => x.id === id)
+    if (c) return `${t('Clip')} ${ed.project.clips.indexOf(c) + 1}`
+    const l = ed.project.layers.find((x) => x.id === id)
+    return l ? (l.type === 'text' ? `"${l.text.slice(0, 20)}"` : t({ sticker: 'Sticker', media: 'Overlay', blur: 'Blur', audio: 'Audio', wave: 'Waveform', text: 'Text' }[l.type])) : ''
+  }
+  const copyStyleOf = (id: string) => {
+    const x = itemOf(id)
+    if (!x) return
+    const st = copyStyle(x, ed.sources, itemName(id))
+    setToast(st ? t('Style copied. Select other clips or items and tap Paste style (Ctrl+Alt+V).') : t('This item has no style to copy.'))
+  }
+  /** Ids the paste goes on: the selected group, else the selected item. */
+  const styleTargets = () => (sel ? selectedIds(ed.project, sel) : [])
+  const styleParts = (): StylePart[] => {
+    if (!styleCopied) return []
+    const set = new Set<StylePart>()
+    for (const id of styleTargets()) { const x = itemOf(id); if (x) for (const p of pasteableParts(styleCopied, x, ed.sources)) set.add(p) }
+    return PARTS.filter((p) => set.has(p))
+  }
+  const pasteStyle = (parts: StylePart[]) => {
+    setStyleSheet(false)
+    if (!styleCopied) return
+    const patches = pastePatches(styleCopied, ed.project, styleTargets(), parts, ed.sources)
+    const n = Object.keys(patches).length
+    if (!n) { setToast(t('Nothing of the copied style fits this item.')); return }
+    ed.patchItems(patches)
+    setToast(`${t('Style pasted on')} ${n} ${t(n === 1 ? 'item' : 'items')}. ${t('Undo takes it back.')}`)
+  }
   const [rate, setRate] = useState(1)
   const nextRate = () => {
     const r = RATES[(RATES.indexOf(rate) + 1) % RATES.length]
@@ -538,6 +602,14 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); ed.redo() }
       // ---- track shortcuts (see the Keyboard & mouse sheet, "?")
       else if (e.key === '?' || (e.key === '/' && e.shiftKey)) { e.preventDefault(); setKeysSheet(true) }
+      // ---- style, markers, timecode
+      else if (mod && e.altKey && key === 'c') { if (sel) { e.preventDefault(); copyStyleOf(sel.id) } }
+      else if (mod && e.altKey && key === 'v') { if (sel && styleCopied) { e.preventDefault(); pasteStyle(styleParts()) } }
+      else if (mod && e.shiftKey && key === 'm') { e.preventDefault(); setMarkerSheet({ focus: null }) }
+      else if (!mod && e.shiftKey && key === 'm') { e.preventDefault(); addMarkerHere() }
+      else if (mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); jumpMarker(e.key === 'ArrowLeft' ? -1 : 1) }
+      else if (!mod && key === 'k' && !e.shiftKey) { if (player?.playing) player.pause() }
+      else if (!mod && key === 't' && !e.shiftKey) toggleTimecode()
       else if (mod && !e.shiftKey && key === 'c' && !window.getSelection()?.toString()) {
         // copy the picked track row (or the row of the selected item; the main video for a clip)
         const row = currentRow()
@@ -646,6 +718,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'color', label: 'Color', on: () => setPanel('color') },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') } },
       { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateAllClips(() => ({ fit: selClip.fit === 'fit' ? 'fill' : 'fit' })) },
+      ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
       { icon: 'trash', label: 'Delete', on: removeSel },
     ]
   } else if (selClip) {
@@ -682,6 +755,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') }, disabled: ed.project.clips.at(-1)?.id === selClip.id },
       { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
+      { icon: 'brush', label: 'Copy style', on: () => copyStyleOf(selClip.id) },
+      ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
       { icon: 'copy', label: 'Copy track', on: () => copyRow('main') },
       ...(copied ? [{ icon: 'paste', label: 'Paste track', on: () => setPasteSheet(true) } as Tool] : []),
       { icon: 'trash', label: 'Delete', on: removeSel },
@@ -719,6 +794,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'selectAll', label: 'One item', on: selectOne, active: true },
       // a row with different kinds of items: the look tools change the ones like the picked item
       ...looks,
+      ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
       { icon: 'trash', label: 'Delete', on: removeSel },
     ]
   } else if (selLayer) {
@@ -730,6 +806,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...('box' in selLayer ? [{ icon: 'track', label: 'Track', on: () => setPanel('track'), active: !!selStored && isTracked(selStored) } as Tool] : []),
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
+      ...(selLayer.type !== 'blur' && selLayer.type !== 'wave' ? [{ icon: 'brush', label: 'Copy style', on: () => copyStyleOf(selLayer.id) } as Tool] : []),
+      ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
       ...(selLayer.track ? [{ icon: 'copy', label: 'Copy track', on: () => copyRow(selLayer.track!) } as Tool] : []),
       ...(copied ? [{ icon: 'paste', label: 'Paste track', on: () => setPasteSheet(true) } as Tool] : []),
       { icon: 'trash', label: 'Delete', on: removeSel },
@@ -803,6 +881,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'title', label: 'Titles', on: () => { ed.addText(time); setPanel('text-titles') }, disabled: empty },
       { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); openClipPanel('order') }, disabled: !targetClip || ed.project.clips.length < 2 },
       { icon: 'selectAll', label: 'Select all', on: selectAllClips, disabled: empty || !!ed.project.main?.locked },
+      { icon: 'marker', label: markers.length ? `${t('Markers')} (${markers.length})` : 'Add marker', on: () => (markers.length ? setMarkerSheet({ focus: null }) : addMarkerHere(true)), disabled: empty },
       { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
       { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
       { icon: 'smartcut', label: 'Smart cut', on: () => setPanel('smartcut'), disabled: empty },
@@ -1029,7 +1108,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       </div>
 
       <div className="transport">
-        <span className="time">{fmtTime(time)} <span className="muted">/ {fmtTime(ed.layout.total)}</span></span>
+        <span className="time-wrap">
+          <span className={`time${timecode ? ' tc' : ''}`} onClick={toggleTimecode} title={t('Tap to switch between minutes and timecode (T)')} data-testid="time">{showTime(time)} <span className="muted">/ {showTime(ed.layout.total)}</span></span>
+          {meter ? <span onClick={toggleMeter}><AudioMeter player={player} playing={playing} /></span>
+            : <button className="rate-btn meter-off" onClick={toggleMeter} title={t('Show the sound level meter')}>dB</button>}
+        </span>
         <span className="play-group">
           <button className="icon-btn" disabled={empty} onClick={() => player?.seek(0)} aria-label="Go to start" title={t('Go to start')}><Icon name="toStart" /></button>
           <button className="icon-btn" disabled={empty} onClick={() => skip(-SKIP)} aria-label="Back 5 seconds" title={t('Back 5 s (← or J)')}><Icon name="rewind" /></button>
@@ -1059,6 +1142,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           onSelectAll={selectAllClips} onSelectRow={selectRow}
           onCopyTrack={copyRow} onPasteTrack={() => setPasteSheet(true)} onDuplicateTrack={duplicateRow}
           onOpenItem={openItem} onDelete={removeSel}
+          onMarker={(id) => { const m = markers.find((x) => x.id === id); if (m) seek(m.t); setMarkerSheet({ focus: id }) }}
+          onAddMarker={() => addMarkerHere(true)}
+          onCopyStyle={copyStyleOf} onPasteStyle={styleCopied ? () => setStyleSheet(true) : undefined}
           snap={snap}
           picking={swapFrom} onPicked={swapWith}
         />
@@ -1106,6 +1192,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
       {keysSheet && <KeysSheet onClose={() => setKeysSheet(false)} />}
+      {markerSheet && (
+        <MarkerSheet markers={markers} focus={markerSheet.focus} time={time} onAdd={() => { const m = ed.addMarker(time); setMarkerSheet({ focus: m.id }) }}
+          onUpdate={ed.updateMarker} onRemove={ed.removeMarker} onSeek={seek} onClose={() => setMarkerSheet(null)} onToast={setToast} />
+      )}
+      {styleSheet && styleCopied && sel && <PasteStyleSheet style={styleCopied} parts={styleParts()} count={styleTargets().length} onPaste={pasteStyle} onClose={() => setStyleSheet(false)} />}
       {pasteSheet && copied && <PasteTrackSheet copy={copied} time={time} mainLocked={!!ed.project.main?.locked} onPaste={pasteRow} onClose={() => setPasteSheet(false)} />}
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder mode={screenRec} onClose={() => setScreenRec(null)} onDone={addRecording} />}

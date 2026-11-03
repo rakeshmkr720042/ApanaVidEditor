@@ -946,3 +946,31 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .ctx-menu hr { border: 0; border-top: 1px solid var(--line); margin: 3px 4px; }
 .ctx-menu .ctx-key { margin-left: auto; font-size: 11px; opacity: .6; }
 @media (hover: none) { .keys-btn { display: none; } }
+
+/* audio meter (transport) */
+.lvl { display: inline-flex; cursor: pointer; align-items: center; gap: 6px; margin-left: 8px; vertical-align: middle; }
+.lvl-bars { display: inline-flex; flex-direction: column; gap: 2px; width: 64px; }
+.lvl-bar { position: relative; height: 4px; border-radius: 2px; overflow: hidden;
+  background: linear-gradient(90deg, #3ecf6a 0%, #3ecf6a 75%, #f5c542 75%, #f5c542 93.75%, #ff4d4d 93.75%); }
+.lvl-mask { position: absolute; right: 0; top: 0; bottom: 0; width: 100%; background: var(--line, #333); }
+.lvl-peak { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; left: 0; background: #fff; opacity: .8; }
+.lvl-db { font-size: 10px; min-width: 38px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lvl.clip .lvl-db { color: #fff; background: #e53935; border-radius: 3px; padding: 0 4px; font-weight: 700; }
+.time { cursor: pointer; }
+
+.time-wrap { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 0; min-width: 0; }
+@media (max-width: 520px) { .lvl-bars { width: 44px; } .lvl-db { min-width: 0; } }
+
+/* markers on the ruler */
+.tl-marker { position: absolute; top: 0; width: 12px; height: 14px; margin-left: -6px; padding: 0; border: 0; background: none; cursor: pointer; z-index: 3; }
+.tl-marker::before { content: ''; position: absolute; left: 1px; top: 0; width: 10px; height: 10px; background: var(--c, #ffcc00);
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%); }
+.tl-marker-line { position: absolute; top: 20px; bottom: 0; width: 0; border-left: 1px dashed var(--c, #ffcc00); opacity: .55; pointer-events: none; z-index: 2; }
+.marker-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow: auto; margin: 8px 0; }
+.marker-row { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; }
+.marker-row.on { outline: 1px solid var(--accent, #7c5cff); border-radius: 8px; padding: 2px; }
+.marker-row input { min-width: 0; }
+.marker-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; }
+.marker-dot.on { border-color: #fff; }
+.marker-colors { display: flex; gap: 6px; }
+.style-parts { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
