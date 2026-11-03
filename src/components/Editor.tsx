@@ -43,6 +43,7 @@ import { KeysSheet } from './KeysSheet'
 import { MarkerSheet } from './MarkerSheet'
 import { TrimPanel, LayerTrimPanel } from '../panels/TrimPanel'
 import { ZoomMovePanel } from '../panels/ClipKeysPanel'
+import { MaskPanel } from '../panels/MaskPanel'
 import { clipSrcAt, layerSrcAt } from '../model/clipKeys'
 import { rippleDeleteLayer, trimClipToPlayhead, trimLayerToPlayhead } from '../model/trim'
 import { PasteStyleSheet } from './PasteStyleSheet'
@@ -100,7 +101,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -788,6 +789,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') },
       { icon: 'color', label: 'Color', on: () => setPanel('color'), active: !gradeIsEmpty(selClip.grade) },
       { icon: 'crop', label: 'Crop', on: () => setPanel('crop') },
+      { icon: 'mask', label: 'Mask', on: () => setPanel('mask'), active: !!selClip.shapeMask },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') }, disabled: ed.project.clips.at(-1)?.id === selClip.id },
       { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
@@ -876,6 +878,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       media: [
         { icon: 'overlay', label: 'Size & opacity', on: () => setPanel('overlay') } as Tool,
         { icon: 'crop', label: 'Crop', on: () => setPanel('layer-crop') } as Tool,
+        { icon: 'mask', label: 'Mask', on: () => setPanel('mask'), active: !!(selLayer as MediaLayer).shapeMask } as Tool,
         { icon: 'anim', label: 'Animation', on: () => setPanel('media-anim') } as Tool,
         { icon: 'blend', label: 'Blend', on: () => setPanel('blend') } as Tool,
         { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!(selLayer as MediaLayer).chroma?.enabled } as Tool,
@@ -1043,6 +1046,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'volume' && selLayer?.type === 'audio') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, fadeIn: selLayer.fadeIn, fadeOut: selLayer.fadeOut, volKeys: selLayer.volKeys }} onClose={closePanel}
     src={group ? undefined : time >= selLayer.start && time < selLayer.end ? layerSrcAt(selLayer, time - selLayer.start) : null} />
   else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} src={group ? undefined : srcOfClip(tclip)} />
+  else if (panel === 'mask' && selLayer?.type === 'media') panelView = <MaskPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
+  else if (panel === 'mask' && selClip) panelView = <MaskPanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
   else if (panel === 'zoommove' && selClip) panelView = <ZoomMovePanel ed={ed} clip={selClip} src={srcOfClip(selClip)} start={ed.layout.items.find((x) => x.clip.id === selClip.id)?.start ?? 0} onSeek={seek} onClose={closePanel} />
   else if (panel === 'noise' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <NoisePanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'noise' && selClip) panelView = <NoisePanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />

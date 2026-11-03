@@ -5,6 +5,7 @@ import { drawPhoto3d, photo3dKey } from './photo3d'
 import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
 import { posAt } from '../model/clipKeys'
+import { applyMask } from './shapeMask'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
@@ -407,6 +408,18 @@ export class Renderer {
       }
     }
     if (clip.motionBlur) this.smear(i, clip, out, inp.t)
+    if (clip.shapeMask) {
+      // pro mask: outside the shape the project background shows (or nothing, when this frame goes on a backdrop)
+      applyMask(c, clip.shapeMask, W, H)
+      if (!clear) {
+        c.save()
+        c.setTransform(1, 0, 0, 1, 0, 0)
+        c.globalCompositeOperation = 'destination-over'
+        c.fillStyle = bg === 'white' ? '#fff' : bg === 'black' || bg === 'blur' ? '#000' : bg
+        c.fillRect(0, 0, W, H)
+        c.restore()
+      }
+    }
     return out
   }
 
@@ -541,6 +554,8 @@ export class Renderer {
     return { w: sq ? Math.min(w, h) : w, h: sq ? Math.min(w, h) : h, fw: w, fh: h }
   }
 
+  private maskScratch: Canvas | null = null
+
   private drawMediaLayer(l: MediaLayer, inp: RenderInput, seed: number) {
     const f = inp.frame(layerKey(l))
     if (!f) return
@@ -579,6 +594,19 @@ export class Renderer {
       cc.globalCompositeOperation = 'source-over'
       mask = personMask(cs, layerKey(l), `${inp.t.toFixed(3)}:${JSON.stringify(l.crop ?? null)}:${cw}x${ch}`, l.cutout.soft, this.onNeedsRedraw)
       if (mask) { img = keepPerson(cs, mask, cw, ch); sx = 0; sy = 0; sw = cw; sh = ch }
+    }
+    if (l.shapeMask) {
+      // pro mask: a copy of the shown picture with the hidden part taken out
+      const mw = Math.max(2, Math.round(fw)), mh = Math.max(2, Math.round(fh))
+      const ms = (this.maskScratch ??= makeCanvas(mw, mh))
+      if (ms.width !== mw || ms.height !== mh) { ms.width = mw; ms.height = mh }
+      const mc = ctx2d(ms)
+      mc.setTransform(1, 0, 0, 1, 0, 0)
+      mc.globalCompositeOperation = 'copy'
+      mc.drawImage(img, sx, sy, sw, sh, 0, 0, mw, mh)
+      mc.globalCompositeOperation = 'source-over'
+      applyMask(mc, l.shapeMask, mw, mh)
+      img = ms; sx = 0; sy = 0; sw = mw; sh = mh
     }
     const a = animState({ start: l.start, end: l.end, animIn: l.animIn ?? 'none', animOut: l.animOut ?? 'none' }, inp.t)
     if (a.alpha <= 0.001 || a.scale <= 0.001) return
