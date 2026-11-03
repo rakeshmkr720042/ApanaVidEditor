@@ -1,0 +1,107 @@
+name: Android release (Play Store)
+# Run by hand: Actions -> "Android release (Play Store)" -> "Run workflow".
+# Makes a signed .aab for Play Console (and a signed .apk for sharing).
+#
+# Secrets (Settings -> Secrets and variables -> Actions -> Secrets):
+#   ANDROID_KEY_PASSWORD  a password you choose, 12+ characters. Required.
+#   ANDROID_UPLOAD_KEY    the text of upload-key-base64.txt. Leave it unset on the very first run:
+#                         that run makes a new upload key and gives it to you as a download.
+# Variables (same page, "Variables" tab), optional until AdMob is ready:
+#   ADMOB_APP_ID, VITE_ADMOB_BANNER_ID, VITE_ADMOB_INTERSTITIAL_ID
+on:
+  workflow_dispatch:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || 'ci-test-only-password' }}
+      ANDROID_UPLOAD_KEY: ${{ secrets.ANDROID_UPLOAD_KEY }}
+      ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
+      VITE_ADMOB_BANNER_ID: ${{ vars.VITE_ADMOB_BANNER_ID }}
+      VITE_ADMOB_INTERSTITIAL_ID: ${{ vars.VITE_ADMOB_INTERSTITIAL_ID }}
+      # Every run gets a higher version code, which Play Console needs for each new upload.
+      VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the password secret
+        run: |
+          if [ ${#ANDROID_KEY_PASSWORD} -lt 12 ]; then
+            echo "::error::ANDROID_KEY_PASSWORD secret missing ya 12 akshar se chhota hai. Settings -> Secrets and variables -> Actions mein banayein."
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Upload key
+        id: key
+        run: |
+          mkdir -p "$RUNNER_TEMP/key"
+          KEY="$RUNNER_TEMP/key/upload-key.jks"
+          if [ -n "$ANDROID_UPLOAD_KEY" ]; then
+            echo "$ANDROID_UPLOAD_KEY" | base64 -d > "$KEY"
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            keytool -genkeypair -keystore "$KEY" -storetype PKCS12 -alias upload \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$ANDROID_KEY_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
+              -dname "CN=Apna Editor, C=IN"
+            base64 -w0 "$KEY" > "$RUNNER_TEMP/key/upload-key-base64.txt"
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+          # Fails here (not after a long build) if the password does not open the key.
+          keytool -list -keystore "$KEY" -storepass "$ANDROID_KEY_PASSWORD" -alias upload > /dev/null \
+            || { echo "::error::ANDROID_KEY_PASSWORD is key ka password nahi hai."; exit 1; }
+          echo "ANDROID_KEYSTORE_FILE=$KEY" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=upload" >> "$GITHUB_ENV"
+      - name: Save the new upload key
+        if: steps.key.outputs.new == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEW-upload-key-SAVE-THIS
+          path: |
+            ${{ runner.temp }}/key/upload-key.jks
+            ${{ runner.temp }}/key/upload-key-base64.txt
+          retention-days: 1
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+      - name: Version name from package.json
+        run: echo "VERSION_NAME=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+      - name: Download built-in AI models
+        run: node scripts/fetch-models.mjs
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build signed AAB and APK
+        working-directory: android
+        run: ./gradlew bundleRelease assembleRelease --no-daemon
+      - name: Check the signature
+        run: |
+          jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab | grep -q "jar verified"
+          mkdir out
+          cp android/app/build/outputs/bundle/release/app-release.aab "out/Apna-Editor-$VERSION_NAME-$VERSION_CODE.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk "out/Apna-Editor-$VERSION_NAME-$VERSION_CODE.apk"
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Apna-Editor-play-store-${{ env.VERSION_NAME }}-${{ github.run_number }}
+          path: out/
+          retention-days: 7
+      - name: Summary
+        run: |
+          {
+            echo "### Apna Editor $VERSION_NAME (version code $VERSION_CODE)"
+            echo "Download **Apna-Editor-play-store-...** below. Upload the .aab file in Play Console."
+            if [ "${{ steps.key.outputs.new }}" = "true" ]; then
+              echo ""
+              echo "**NEW upload key banayi gayi hai.** NEW-upload-key-SAVE-THIS download karein (1 din mein delete ho jaayegi),"
+              echo "upload-key-base64.txt ka poora text ANDROID_UPLOAD_KEY secret mein daalein, aur .jks file Google Drive mein sambhaal kar rakhein."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
