@@ -36,7 +36,10 @@ import { TemplatesPanel } from '../panels/TemplatesPanel'
 import { ScreenRecorder, type CamTake } from './ScreenRecorder'
 import { PlaceSheet } from './PlaceSheet'
 import { FeedbackSheet } from './FeedbackSheet'
-import { playable } from '../model/tracks'
+import { playable, trackName } from '../model/tracks'
+import { copyTrack, useCopiedTrack, type PasteTrackHow } from '../model/trackCopy'
+import { PasteTrackSheet } from './PasteTrackSheet'
+import { KeysSheet } from './KeysSheet'
 import { atTime } from '../model/keyframes'
 import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../panels/LayerTools'
 import { ClipOrderPanel, type OrderMode } from '../panels/ClipOrderPanel'
@@ -453,6 +456,53 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     setPanel(null)
     ed.setSel({ type: 'layer', id, all: true })
   }
+  // ---- copy a whole track (a row, or the main video) and paste it as a new track / back into the main video
+  const copied = useCopiedTrack()
+  const [pasteSheet, setPasteSheet] = useState(false)
+  const copyRow = (id: string) => {
+    const label = rowLabel(id)
+    const done = copyTrack(ed.project, ed.sources, id, label)
+    setToast(done ? `${label}: ${t('track copied. Paste it from + Add track or the Paste track tool.')}` : t('This track is empty: nothing to copy.'))
+  }
+  const rowLabel = (id: string) => {
+    const tracks = ed.project.tracks ?? []
+    const tr = tracks.find((x) => x.id === id)
+    return id === 'main' ? t('Main video') : tr ? trackName(tracks, tr, t) : ''
+  }
+  /** The track the keyboard works on: the picked row, else the row of the selected item (a clip: the main video). */
+  const currentRow = () => ed.track ?? (sel?.type === 'clip' ? 'main' : sel ? ed.project.layers.find((l) => l.id === sel.id)?.track ?? null : null)
+  const [keysSheet, setKeysSheet] = useState(false)
+  /** Double-click / Enter on an item: its main tool. */
+  const openItem = (s: NonNullable<Selection>) => {
+    ed.setSel({ type: s.type, id: s.id } as Selection)
+    if (s.type === 'clip') { setPanel('adjust'); return }
+    const l = ed.project.layers.find((x) => x.id === s.id)
+    if (!l) return
+    const p: Record<typeof l.type, PanelName> = { text: 'text', sticker: 'stickers', media: 'overlay', blur: 'blur', audio: 'volume', wave: 'wave' }
+    setPanel(p[l.type])
+  }
+  /** A copy of the whole track on a new row at the same time (the main video: as a video track). */
+  const duplicateRow = (row: string) => {
+    const label = rowLabel(row)
+    const c = copyTrack(ed.project, ed.sources, row, label)
+    if (c) { ed.pasteTrack(c, 'same', time); setToast(`${label}: ${t('track duplicated. Undo takes it back.')}`) }
+    else setToast(t('This track is empty: nothing to copy.'))
+  }
+  const pasteRow = (how: PasteTrackHow) => {
+    if (!copied) return
+    // media from another project: kept in this project's storage too
+    for (const s of copied.sources) if (!ed.sources[s.id]) saveMedia(s).catch(() => {})
+    setPasteSheet(false)
+    setPanel(null)
+    const placed = ed.pasteTrack(copied, how, time)
+    if (!placed) return
+    if (how === 'same' || how === 'main-end') {
+      const at = how === 'same' ? copied.start : ed.layout.total
+      if (how === 'same' && Math.abs(at - time) > 0.05) seek(at)
+      if (how === 'main-end') seek(at)
+    }
+    setToast(t(how === 'main-end' || how === 'main-playhead' ? 'Track pasted into the main video. Undo takes it back.' : 'Track pasted as a new track. Undo takes it back.'))
+  }
   const selectOne = () => { if (sel) ed.setSel({ type: sel.type, id: sel.id } as Selection) }
   // Delete with several items selected removes them all, so check first
   const removeSel = () => {
@@ -483,8 +533,65 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || exporting || scenes) return
       const mod = e.ctrlKey || e.metaKey
+      const key = e.key.toLowerCase()
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) ed.redo(); else ed.undo() }
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); ed.redo() }
+      // ---- track shortcuts (see the Keyboard & mouse sheet, "?")
+      else if (e.key === '?' || (e.key === '/' && e.shiftKey)) { e.preventDefault(); setKeysSheet(true) }
+      else if (mod && !e.shiftKey && key === 'c' && !window.getSelection()?.toString()) {
+        // copy the picked track row (or the row of the selected item; the main video for a clip)
+        const row = currentRow()
+        if (row) { e.preventDefault(); copyRow(row) }
+      } else if (mod && !e.shiftKey && key === 'v' && copied) {
+        e.preventDefault()
+        pasteRow(copied.kind === 'main' && !ed.project.main?.locked ? 'main-playhead' : 'playhead')
+      } else if (mod && e.shiftKey && key === 'v' && copied) { e.preventDefault(); setPasteSheet(true) }
+      else if (mod && key === 'x') {
+        // cut = copy the row, then delete it (the main video is only copied)
+        const row = currentRow()
+        if (!row) return
+        e.preventDefault()
+        if (row === 'main') { copyRow('main'); return }
+        if (ed.project.tracks?.find((x) => x.id === row)?.locked) { setToast(t('This track is locked. Unlock it first.')); return }
+        if (copyTrack(ed.project, ed.sources, row, rowLabel(row))) { ed.removeTrack(row); setToast(`${rowLabel(row)}: ${t('track cut. Ctrl+V pastes it at the playhead.')}`) }
+      } else if (mod && !e.shiftKey && key === 'd') { if (sel) { e.preventDefault(); ed.duplicate() } }
+      else if (mod && e.shiftKey && key === 'd') {
+        // duplicate the whole track: a copy on a new row at the same time
+        const row = currentRow()
+        if (!row) return
+        e.preventDefault()
+        duplicateRow(row)
+      } else if (mod && key === 'a') {
+        e.preventDefault()
+        const row = currentRow()
+        if (row === 'main' || !row) selectAllClips()
+        else { const first = ed.project.layers.filter((l) => l.track === row).sort((a, b) => a.start - b.start)[0]; if (first) selectRow(first.id) }
+      } else if (!mod && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        // the picked row one place up or down
+        const row = currentRow()
+        if (row && row !== 'main') { e.preventDefault(); ed.moveTrack(row, e.key === 'ArrowUp' ? -1 : 1) }
+      } else if (!mod && !e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        // pick the row above / below (top = the main video)
+        const rows = ed.project.tracks ?? []
+        if (!rows.length) return
+        e.preventDefault()
+        const i = ed.track ? rows.findIndex((x) => x.id === ed.track) : -1
+        const j = e.key === 'ArrowUp' ? (i < 0 ? rows.length - 1 : i - 1) : i + 1
+        ed.setTrack(j >= 0 && j < rows.length ? rows[j].id : null)
+      } else if (!mod && key === 'm') {
+        const row = currentRow()
+        if (row === 'main' || !row) ed.setMain({ muted: !ed.project.main?.muted })
+        else { const tr = ed.project.tracks?.find((x) => x.id === row); if (tr) ed.updateTrack(row, { muted: !tr.muted }) }
+      } else if (!mod && key === 'h') {
+        const tr = ed.project.tracks?.find((x) => x.id === currentRow())
+        if (tr?.kind === 'visual') ed.updateTrack(tr.id, { hidden: !tr.hidden })
+      } else if (!mod && e.shiftKey && key === 'l') {
+        const row = currentRow()
+        if (row === 'main' || !row) ed.setMain({ locked: !ed.project.main?.locked })
+        else { const tr = ed.project.tracks?.find((x) => x.id === row); if (tr) ed.updateTrack(row, { locked: !tr.locked }) }
+      } else if (!mod && (e.key === '+' || e.key === '=')) setPps((z) => Math.min(400, z * 1.5))
+      else if (!mod && (e.key === '-' || e.key === '_')) setPps((z) => Math.max(4, z / 1.5))
+      else if (e.key === 'Enter' && sel) { e.preventDefault(); openItem(sel) }
       else if (e.key === ' ') { e.preventDefault(); togglePlay() }
       else if (e.key === 's' && !mod) ed.split(time)
       else if (e.key === 'Delete' || e.key === 'Backspace') removeSel()
@@ -575,6 +682,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') }, disabled: ed.project.clips.at(-1)?.id === selClip.id },
       { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
+      { icon: 'copy', label: 'Copy track', on: () => copyRow('main') },
+      ...(copied ? [{ icon: 'paste', label: 'Paste track', on: () => setPasteSheet(true) } as Tool] : []),
       { icon: 'trash', label: 'Delete', on: removeSel },
     ]
   } else if (selLayer && group && !groupCaps) {
@@ -621,6 +730,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...('box' in selLayer ? [{ icon: 'track', label: 'Track', on: () => setPanel('track'), active: !!selStored && isTracked(selStored) } as Tool] : []),
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
+      ...(selLayer.track ? [{ icon: 'copy', label: 'Copy track', on: () => copyRow(selLayer.track!) } as Tool] : []),
+      ...(copied ? [{ icon: 'paste', label: 'Paste track', on: () => setPasteSheet(true) } as Tool] : []),
       { icon: 'trash', label: 'Delete', on: removeSel },
     ]
     const capsAll = selLayer.type === 'text' && selLayer.subtitle
@@ -685,6 +796,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     // everyday editing first (Add, Overlay, Text...), the "... to video" makers after, so Overlay is never off-screen
     tools = [
       { icon: 'add', label: 'Add', on: () => mainInput.current?.click() },
+      ...(copied ? [{ icon: 'paste', label: 'Paste track', on: () => setPasteSheet(true) } as Tool] : []),
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'splitscreen', label: 'Split screen', on: () => setPanel('split'), disabled: empty },
@@ -929,6 +1041,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         </span>
         <span className="zoom">
           <button className={`rate-btn${rate !== 1 ? ' on' : ''}`} disabled={empty} onClick={nextRate} aria-label="Playback speed" title={t('Playback speed')}>{rate}x</button>
+          <button className="icon-btn keys-btn" onClick={() => setKeysSheet(true)} aria-label="Keyboard and mouse" title={t('Keyboard & mouse (?)')}><Icon name="keyboard" /></button>
           <button className={`icon-btn snap${snap ? ' on' : ''}`} onClick={toggleSnap} aria-label="Snap" aria-pressed={snap} title={t('Magnetic snap')}><Icon name="magnet" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.max(4, z / 1.5))} aria-label="Zoom out"><Icon name="minus" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.min(400, z * 1.5))} aria-label="Zoom in"><Icon name="plus" /></button>
@@ -944,6 +1057,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           onAdd={() => mainInput.current?.click()}
           onAudioTrack={() => { player?.pause(); setAudioTab('mine'); setPanel('audio') }}
           onSelectAll={selectAllClips} onSelectRow={selectRow}
+          onCopyTrack={copyRow} onPasteTrack={() => setPasteSheet(true)} onDuplicateTrack={duplicateRow}
+          onOpenItem={openItem} onDelete={removeSel}
           snap={snap}
           picking={swapFrom} onPicked={swapWith}
         />
@@ -990,6 +1105,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       <input ref={overlayInput} type="file" accept="video/*,image/*" hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'overlay'); e.target.value = '' }} />
 
       {scenes && <SceneBuilder ed={ed} start={scenes} onClose={() => setScenes(null)} onDone={(msg) => { setScenes(null); ed.setSel(null); setPanel(null); setToast(msg) }} />}
+      {keysSheet && <KeysSheet onClose={() => setKeysSheet(false)} />}
+      {pasteSheet && copied && <PasteTrackSheet copy={copied} time={time} mainLocked={!!ed.project.main?.locked} onPaste={pasteRow} onClose={() => setPasteSheet(false)} />}
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder mode={screenRec} onClose={() => setScreenRec(null)} onDone={addRecording} />}
       {habitsSheet && <HabitsSheet onClose={() => setHabitsSheet(false)} />}

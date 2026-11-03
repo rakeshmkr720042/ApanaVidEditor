@@ -13,6 +13,7 @@ import { outputSize } from '../engine/renderer'
 import { hasSound } from '../engine/denoise'
 import { insertAt, isLocked, newTrack, overlaps, trackKind, withTracks } from './tracks'
 import { defaultChroma } from '../engine/chromakey'
+import type { PasteTrackHow, TrackCopy } from './trackCopy'
 import { atTime, hasBox, keyIndexAt, keyedPatch, splitKeys, withKey } from './keyframes'
 
 /** Where to move a layer among the rows: in front of or behind the layers it overlaps, one step or all the way. */
@@ -518,6 +519,79 @@ export function useEditor(initial: Project) {
     setTrack((t) => (t === id ? null : t))
   }, [h])
 
+  /**
+   * Puts a copied track back in, with fresh ids: a row becomes a new row of its kind right under the original
+   * (or where new rows of its kind go), at the same time or starting at the playhead. The main video goes back
+   * into the main video (at the end or at the playhead) or onto a new video track as overlays.
+   */
+  const pasteTrack = useCallback((copy: TrackCopy, how: PasteTrackHow, t: number): Selection => {
+    let p = ref.current
+    for (const s of copy.sources) if (!sourcesRef.current[s.id]) addSource(s)
+    const luts = [...(p.luts ?? [])]
+    for (const l of copy.luts) if (!luts.some((x) => x.id === l.id)) luts.push(l)
+    if (copy.luts.length) p = { ...p, luts }
+    if (copy.kind === 'main' && (how === 'main-end' || how === 'main-playhead')) {
+      const clips = structuredClone(copy.clips).map((c, i) => ({ ...c, id: uid(), ...(i === 0 ? { gap: undefined } : {}) }))
+      if (!clips.length) return null
+      const list = [...p.clips]
+      let idx = list.length
+      if (how === 'main-playhead') {
+        const { items } = layoutClips(list)
+        idx = items.findIndex((it) => t < it.start + it.dur / 2)
+        if (idx < 0) idx = list.length
+        // the clips after the paste close up behind it instead of keeping a gap in front
+        if (idx < list.length) list[idx] = { ...list[idx], gap: undefined }
+      }
+      list.splice(idx, 0, ...clips)
+      h.set({ ...p, clips: list })
+      const sel: Selection = { type: 'clip', id: clips[0].id }
+      setSel(sel)
+      return sel
+    }
+    let layers: Layer[]
+    if (copy.kind === 'main') {
+      // the main video as overlays, one per clip, filling the frame like the main video does
+      const all = { ...sourcesRef.current, ...Object.fromEntries(copy.sources.map((s) => [s.id, s])) }
+      const laid = layoutClips(copy.clips).items
+      layers = laid.map(({ clip: c, start, dur }, i): MediaLayer => {
+        // clips that blend into each other (transitions) are cut where the next one starts: one row can't overlap
+        const end = Math.max(start + 0.1, Math.min(start + dur, laid[i + 1]?.start ?? Infinity))
+        const src = all[c.sourceId]
+        const cw = c.crop?.w ?? 1, ch = c.crop?.h ?? 1
+        const turned = c.rotate === 90 || c.rotate === 270
+        const ar = src?.width && src.height ? (src.width * cw) / (src.height * ch) : 16 / 9
+        return {
+          id: uid(), type: 'media', sourceId: c.sourceId, in: c.in, start, end,
+          box: { ...centerBox(), rotation: c.rotate, scale: fullFrameScale(p, all, turned ? 1 / ar : ar) },
+          volume: c.volume, chroma: c.chroma ?? defaultChroma(), mask: 'none', border: 0,
+          adjust: { ...c.adjust }, filter: c.filter, filterAmount: c.filterAmount, crop: c.crop,
+          ...(c.speed !== 1 ? { speed: c.speed } : {}), flipH: c.flipH, flipV: c.flipV,
+          ...(c.backdrop ? { backdrop: c.backdrop } : {}), ...(c.denoise ? { denoise: c.denoise } : {}), ...(c.fx ? { fx: c.fx } : {}),
+          ...(c.effect ? { effect: c.effect } : {}), ...(c.grade ? { grade: c.grade } : {}), ...(c.cutout ? { cutout: c.cutout } : {}),
+        }
+      })
+    } else layers = structuredClone(copy.layers)
+    if (!layers.length) return null
+    const from = copy.kind === 'main' ? 0 : copy.start
+    const shift = how === 'playhead' ? Math.max(0, t) - from : 0
+    const kind: Track['kind'] = copy.kind === 'audio' ? 'audio' : 'visual'
+    const tracks = [...(p.tracks ?? [])]
+    const tr: Track = {
+      ...(copy.track ?? {}), id: uid(), kind, keep: true, locked: undefined,
+      // a row the user named keeps its name with a "(2)"; others get the next "Track 3" / "Audio 2"
+      name: copy.track?.name ? `${copy.track.name} (2)` : undefined,
+    }
+    const orig = copy.track ? tracks.findIndex((x) => x.id === copy.track!.id) : -1
+    tracks.splice(orig >= 0 ? orig + 1 : insertAt(tracks, kind, copy.kind !== 'main' && layers.some((l) => l.type !== 'media')), 0, tr)
+    const made = layers.map((l) => ({ ...l, id: uid(), track: tr.id, start: l.start + shift, end: l.end + shift }) as Layer)
+    h.set({ ...p, tracks, layers: [...p.layers, ...made] })
+    setTrack(tr.id)
+    const first = [...made].sort((a, b) => a.start - b.start)[0]
+    const sel: Selection = { type: 'layer', id: first.id }
+    setSel(sel)
+    return sel
+  }, [h, addSource])
+
   const setMain = useCallback((patch: Partial<MainTrack>) => {
     const p = ref.current
     h.set({ ...p, main: { ...p.main, ...patch } })
@@ -846,7 +920,7 @@ export function useEditor(initial: Project) {
     begin, end, live: h.live,
     addSource, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter,
     addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
-    track, setTrack, addTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
+    track, setTrack, addTrack, pasteTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
     remove, duplicate, split, moveClip, moveClipAt, closeGap, swapClips, swapLayers, replaceProject,
   }

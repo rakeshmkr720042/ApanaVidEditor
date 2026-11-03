@@ -3,9 +3,47 @@ import { trackName } from '../model/tracks'
 import { Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { Icon } from './Icon'
+import { useCopiedTrack } from '../model/trackCopy'
 
 /** Everything for one track row: name, show, sound, lock, volume, order and delete. */
-export function TrackSheet({ ed, id, onClose, onSelectAll }: { ed: Editor; id: string; onClose: () => void; onSelectAll?: (firstId: string) => void }) {
+export function TrackSheet({ ed, id, onClose, onSelectAll, onSelectAllClips, onCopy, onPaste }: {
+  ed: Editor; id: string; onClose: () => void; onSelectAll?: (firstId: string) => void; onSelectAllClips?: () => void
+  /** Copies this track ('main' = the main video) with everything on it. */
+  onCopy?: (id: string) => void
+  /** Opens the paste choices for the copied track. */
+  onPaste?: () => void
+}) {
+  const copied = useCopiedTrack()
+  const copyRow = (n: number) => onCopy && (
+    <div className="track-copy">
+      <button className="btn" disabled={!n} onClick={() => { onCopy(id); onClose() }}><Icon name="copy" size={18} /> {t('Copy track')}</button>
+      <button className="btn" disabled={!copied || !onPaste} onClick={() => { onClose(); onPaste?.() }} title={copied ? copied.name : t('Copy a track first')}>
+        <Icon name="paste" size={18} /> {t('Paste track')}
+      </button>
+    </div>
+  )
+  if (id === 'main') {
+    const n = ed.project.clips.length
+    return (
+      <div className="sheet-backdrop" onClick={onClose}>
+        <div className="sheet track-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet-grab" />
+          <SheetClose onClose={onClose} />
+          <h2>{t('Main video')}</h2>
+          <p className="muted small">{n} {t('clips')}</p>
+          <Toggle label="Sound" value={!ed.project.main?.muted} onChange={(v) => ed.setMain({ muted: !v })} />
+          <Toggle label="Lock (no changes)" value={!!ed.project.main?.locked} onChange={(v) => ed.setMain({ locked: v })} />
+          {onSelectAllClips && (
+            <button className="btn wide" disabled={!n || !!ed.project.main?.locked} onClick={() => { onClose(); onSelectAllClips() }}>
+              <Icon name="selectAll" size={18} /> {t('Select all clips')} ({n})
+            </button>
+          )}
+          {copyRow(n)}
+          <button className="btn wide" onClick={onClose}>{t('Done')}</button>
+        </div>
+      </div>
+    )
+  }
   const tracks = ed.project.tracks ?? []
   const tr = tracks.find((x) => x.id === id)
   if (!tr) return null
@@ -42,6 +80,7 @@ export function TrackSheet({ ed, id, onClose, onSelectAll }: { ed: Editor; id: s
             <Icon name="selectAll" size={18} /> {t('Select everything on this track')} ({items.length})
           </button>
         )}
+        {copyRow(items.length)}
         <div className="track-actions">
           <button className="btn" disabled={pos <= 0} onClick={() => ed.moveTrack(id, -1)}><Icon name="up" size={18} /> {t('Move up')}</button>
           <button className="btn" disabled={pos >= same.length - 1} onClick={() => ed.moveTrack(id, 1)}><Icon name="down" size={18} /> {t('Move down')}</button>
