@@ -10,6 +10,8 @@ import { fmtTime } from '../lib/format'
 import { t as tl } from '../lib/i18n'
 import { Icon } from './Icon'
 import { TrackSheet } from './TrackSheet'
+import { useCopiedTrack } from '../model/trackCopy'
+import { CtxMenu } from './TimelineMenu'
 
 interface Props {
   ed: Editor
@@ -25,6 +27,16 @@ interface Props {
   /** Select every clip of the main video / every item on a row (from the row's first item). */
   onSelectAll?: () => void
   onSelectRow?: (firstId: string) => void
+  /** Copies a track row ('main' = the main video) with everything on it. */
+  onCopyTrack?: (id: string) => void
+  /** Opens the paste choices for the copied track. */
+  onPasteTrack?: () => void
+  /** A copy of the whole track on a new row at the same time. */
+  onDuplicateTrack?: (id: string) => void
+  /** Double-click (or Enter) on an item: open its main tool. */
+  onOpenItem?: (s: { type: 'clip' | 'layer'; id: string }) => void
+  /** Deletes the selected item(s), asking first for a group. */
+  onDelete?: () => void
   snap: boolean
   /** Swap is waiting for a second item: taps pick it instead of selecting. */
   picking?: Selection
@@ -56,7 +68,7 @@ function layerLabel(l: Layer) {
   }
 }
 
-export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, onSelectAll, onSelectRow, snap, picking, onPicked }: Props) {
+export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, onSelectAll, onSelectRow, onCopyTrack, onPasteTrack, onDuplicateTrack, onOpenItem, onDelete, snap, picking, onPicked }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const lastSet = useRef(-1)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -75,10 +87,35 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
   const mainLocked = !!project.main?.locked
   const [menu, setMenu] = useState<string | null>(null) // track whose settings sheet is open
   const [addMenu, setAddMenu] = useState(false)
+  const copied = useCopiedTrack()
+  // right-click menu: for an item, a track header or empty timeline
+  const [ctx, setCtx] = useState<{ x: number; y: number; kind: 'clip' | 'layer' | 'track' | 'empty'; id: string } | null>(null)
+  const openCtx = (e: React.MouseEvent, at: { kind: 'clip' | 'layer' | 'track' | 'empty'; id: string }) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setAddMenu(false)
+    setCtx({ x: e.clientX, y: e.clientY, ...at })
+  }
+  useEffect(() => {
+    if (!ctx) return
+    const close = () => setCtx(null)
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('keydown', key)
+    window.addEventListener('blur', close)
+    return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', key); window.removeEventListener('blur', close) }
+  }, [ctx])
+  const renameTrack = (id: string) => {
+    const tr = project.tracks?.find((x) => x.id === id)
+    if (!tr) return
+    const v = prompt(tl('Track name'), trackName(project.tracks ?? [], tr, tl))
+    if (v !== null) ed.updateTrack(id, { name: v.trim() || undefined })
+  }
   // a row header being dragged up or down to change which row is in front
   const rowDrag = useRef<{ id: string; y0: number; from: number; moved: boolean } | null>(null)
   const [rowTo, setRowTo] = useState<{ id: string; to: number } | null>(null)
   const rowDown = (id: string, i: number) => (e: React.PointerEvent) => {
+    if (e.button > 0) return
     e.currentTarget.setPointerCapture(e.pointerId)
     rowDrag.current = { id, y0: e.clientY, from: i, moved: false }
   }
@@ -140,27 +177,45 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
     const el = scroller.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : 1)
+      // Ctrl+wheel (and a touchpad pinch) zooms the timeline instead of the whole page
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        if (dy) setPps((z) => Math.max(4, Math.min(400, z * Math.pow(1.0018, -Math.max(-200, Math.min(200, dy))))))
+        return
+      }
+      // Shift+wheel scrolls the track rows up and down
+      if (e.shiftKey) {
+        e.preventDefault()
+        el.scrollTop += dy || e.deltaX
+        return
+      }
+      if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return
       const onTrack = (e.target as Element).closest?.('.tl-ruler, .tl-track')
       if (!onTrack && el.scrollHeight > el.clientHeight + 1) return
       e.preventDefault()
-      el.scrollLeft += e.deltaY * (e.deltaMode === 1 ? 16 : 1)
+      el.scrollLeft += dy
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [])
+  }, [setPps])
 
   // Mouse drag pans the timeline like a finger swipe does on touch screens.
   const pan = useRef<{ x0: number; left0: number; moved: boolean } | null>(null)
   const onPanStart = (e: React.PointerEvent) => {
-    if (e.pointerType !== 'mouse' || e.button !== 0 || dragRef.current) return
+    // left button on empty space, or the middle button anywhere (it also moves up and down)
+    const middle = e.button === 1
+    if (e.pointerType !== 'mouse' || (e.button !== 0 && !middle) || dragRef.current) return
+    if (middle) e.preventDefault() // no browser auto-scroll
     const el = scroller.current!
     pan.current = { x0: e.clientX, left0: el.scrollLeft, moved: false }
+    const y0 = e.clientY, top0 = el.scrollTop
     const move = (ev: PointerEvent) => {
       const p = pan.current
       if (!p || dragRef.current) return
-      if (Math.abs(ev.clientX - p.x0) > 4) { p.moved = true; clearTimeout(longPress.current) }
+      if (Math.abs(ev.clientX - p.x0) > 4 || (middle && Math.abs(ev.clientY - y0) > 4)) { p.moved = true; clearTimeout(longPress.current) }
       if (p.moved) el.scrollLeft = p.left0 - (ev.clientX - p.x0)
+      if (p.moved && middle) el.scrollTop = top0 - (ev.clientY - y0)
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
@@ -341,11 +396,12 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       onPointerUp={(e) => { onPointerUpWrap(e); onUp() }}
       onPointerCancel={(e) => { onPointerUpWrap(e); onUp() }}
     >
-      <div className="tl-scroll" ref={scroller} onScroll={onScroll} onPointerDown={onPanStart} onClick={() => ed.setSel(null)}>
+      <div className="tl-scroll" ref={scroller} onScroll={onScroll} onPointerDown={onPanStart} onClick={() => ed.setSel(null)}
+        onContextMenu={(e) => openCtx(e, { kind: 'empty', id: '' })} onAuxClick={(e) => { if (e.button === 1) e.preventDefault() }}>
         <div className="tl-heads" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <div className="tl-head-ruler" />
           <div className={`tl-head main${mainLocked ? ' locked' : ''}`}>
-            <span className="tl-head-name">{tl('Main')}</span>
+            <button className="tl-head-name" onClick={() => setMenu('main')} onContextMenu={(e) => openCtx(e, { kind: 'track', id: 'main' })} title={tl('Main video settings: copy, paste, select all')}>{tl('Main')}</button>
             <button className={project.main?.muted ? 'off' : ''} onClick={() => ed.setMain({ muted: !project.main?.muted })} aria-label="Main sound" aria-pressed={!project.main?.muted} title={tl('Sound')}>
               <Icon name={project.main?.muted ? 'mute' : 'volume'} size={16} />
             </button>
@@ -365,7 +421,9 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                 <div key={tr.id} className={`tl-head${ed.track === tr.id ? ' on' : ''}${tr.locked ? ' locked' : ''}${dragging ? ' dragging' : ''}`}
                   style={{ height: LANE, ...(dragging ? { transform: `translateY(${(rowTo.to - i) * LANE}px)` } : {}) }}>
                   <button className="tl-head-name" onPointerDown={rowDown(tr.id, i)} onPointerMove={rowMove} onPointerUp={rowUp} onPointerCancel={rowUp}
-                    onClick={() => { if (!rowTo) ed.setTrack(ed.track === tr.id ? null : tr.id) }} title={tl('Tap: new items go here. Drag up or down: change which row is in front')}>
+                    onClick={() => { if (!rowTo) ed.setTrack(ed.track === tr.id ? null : tr.id) }}
+                    onDoubleClick={() => renameTrack(tr.id)}
+                    onContextMenu={(e) => { ed.setTrack(tr.id); openCtx(e, { kind: 'track', id: tr.id }) }} title={tl('Tap: new items go here. Drag up or down: change which row is in front')}>
                     {trackName(tracks, tr, tl)}
                   </button>
                   <button className={off ? 'off' : ''} onClick={() => ed.updateTrack(tr.id, visual ? { hidden: !tr.hidden } : { muted: !tr.muted })}
@@ -386,6 +444,9 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
               <div className="tl-addmenu">
                 <button onClick={() => { ed.addTrack('visual'); setAddMenu(false) }}><Icon name="overlay" size={16} /> {tl('Video track')}</button>
                 <button onClick={() => { ed.addTrack('audio'); setAddMenu(false); onAudioTrack?.() }}><Icon name="music" size={16} /> {tl('Audio track')}</button>
+                {copied && onPasteTrack && (
+                  <button onClick={() => { setAddMenu(false); onPasteTrack() }} title={copied.name}><Icon name="paste" size={16} /> {tl('Paste track')}</button>
+                )}
               </div>
             )}
           </div>
@@ -418,8 +479,10 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                     if (picking) onPicked?.({ type: 'clip', id: clip.id })
                     else if (!mainLocked) ed.setSel({ type: 'clip', id: clip.id })
                   }}
+                  onDoubleClick={(e) => { e.stopPropagation(); if (!mainLocked && !picking) onOpenItem?.({ type: 'clip', id: clip.id }) }}
+                  onContextMenu={(e) => { if (picking) return; if (!mainLocked) ed.setSel({ type: 'clip', id: clip.id }); openCtx(e, { kind: 'clip', id: clip.id }) }}
                   onPointerDown={(e) => {
-                    if (pointers.current.size > 1 || mainLocked || picking || (snap && project.clips.length < 2)) return
+                    if (e.button > 0 || pointers.current.size > 1 || mainLocked || picking || (snap && project.clips.length < 2)) return
                     const x = e.clientX, y = e.clientY
                     // snap off: the clip goes to any time, not just between clips
                     const free = snap ? undefined : { off: timeAt(x) - it.start, at: it.start }
@@ -508,8 +571,10 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
                     if (picking) onPicked?.({ type: 'layer', id: l.id })
                     else if (!locked) ed.setSel({ type: 'layer', id: l.id })
                   }}
+                  onDoubleClick={(e) => { e.stopPropagation(); if (!locked && !picking) onOpenItem?.({ type: 'layer', id: l.id }) }}
+                  onContextMenu={(e) => { if (picking) return; if (!locked) ed.setSel({ type: 'layer', id: l.id }); openCtx(e, { kind: 'layer', id: l.id }) }}
                   onPointerDown={(e) => {
-                    if (!selected || locked || picking || pointers.current.size > 1) return
+                    if (e.button > 0 || !selected || locked || picking || pointers.current.size > 1) return
                     capture(e)
                     setDrag({ kind: 'layer-move', id: l.id, x0: e.clientX, y0: e.clientY, start0: l.start, end0: l.end, moved: false })
                   }}
@@ -549,7 +614,9 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
           </div>
         </>
       })()}
-      {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} onSelectAll={onSelectRow} />}
+      {ctx && <CtxMenu at={ctx} ed={ed} t={t} copied={!!copied} close={() => setCtx(null)} onCopyTrack={onCopyTrack} onPasteTrack={onPasteTrack} onDuplicateTrack={onDuplicateTrack}
+        onDelete={onDelete} onOpenItem={onOpenItem} onSettings={(id) => setMenu(id)} onRename={renameTrack} onSelectRow={onSelectRow} onSelectAll={onSelectAll} />}
+      {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} onSelectAll={onSelectRow} onSelectAllClips={onSelectAll} onCopy={onCopyTrack} onPaste={onPasteTrack} />}
     </div>
   )
 }
