@@ -35,6 +35,8 @@ interface Props {
   onPasteTrack?: () => void
   /** A copy of the whole track on a new row at the same time. */
   onDuplicateTrack?: (id: string) => void
+  /** Opens the Main frame tool (size and place of the whole main video). */
+  onMainFrame?: () => void
   /** Double-click (or Enter) on an item: open its main tool. */
   onOpenItem?: (s: { type: 'clip' | 'layer'; id: string }) => void
   /** Deletes the selected item(s), asking first for a group. */
@@ -78,7 +80,7 @@ function layerLabel(l: Layer) {
   }
 }
 
-export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, onSelectAll, onSelectRow, onCopyTrack, onPasteTrack, onDuplicateTrack, onOpenItem, onDelete, onMarker, onAddMarker, onCopyStyle, onPasteStyle, snap, picking, onPicked }: Props) {
+export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransition, onAdd, onAudioTrack, onSelectAll, onSelectRow, onCopyTrack, onPasteTrack, onDuplicateTrack, onOpenItem, onDelete, onMarker, onAddMarker, onCopyStyle, onPasteStyle, snap, picking, onPicked, onMainFrame }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const lastSet = useRef(-1)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -651,7 +653,7 @@ export function Timeline({ ed, t, pps, setPps, onScrub, onTrimPreview, onTransit
       })()}
       {ctx && <CtxMenu at={ctx} ed={ed} t={t} copied={!!copied} close={() => setCtx(null)} onCopyTrack={onCopyTrack} onPasteTrack={onPasteTrack} onDuplicateTrack={onDuplicateTrack}
         onDelete={onDelete} onOpenItem={onOpenItem} onAddMarker={onAddMarker} onCopyStyle={onCopyStyle} onPasteStyle={onPasteStyle} onSettings={(id) => setMenu(id)} onRename={renameTrack} onSelectRow={onSelectRow} onSelectAll={onSelectAll} />}
-      {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} onSelectAll={onSelectRow} onSelectAllClips={onSelectAll} onCopy={onCopyTrack} onPaste={onPasteTrack} />}
+      {menu && <TrackSheet ed={ed} id={menu} onClose={() => setMenu(null)} onSelectAll={onSelectRow} onSelectAllClips={onSelectAll} onCopy={onCopyTrack} onPaste={onPasteTrack} onMainFrame={onMainFrame} />}
     </div>
   )
 }

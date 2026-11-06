@@ -31,6 +31,9 @@ import { AdjustmentPanel, BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, 
 import { AudioPanel } from '../panels/AudioPanel'
 import { AIPanel } from '../panels/AIPanel'
 import { WatermarkPanel } from '../panels/WatermarkPanel'
+import { MainFramePanel } from '../panels/MainFramePanel'
+import { MiniTimeline } from './MiniTimeline'
+import { mainFrameOn } from '../model/mainFrame'
 import { PresenterPanel } from '../panels/PresenterPanel'
 import { PhotoPanel, SlideshowPanel } from '../panels/SlideshowPanel'
 import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
@@ -134,7 +137,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'adjlayer' | 'scenes' | 'join' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'adjlayer' | 'scenes' | 'join' | 'frame' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -156,6 +159,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const getCanvas = useCallback(() => canvasRef.current, [])
   const toggleScopes = () => setScopes((v) => { try { localStorage.setItem('scopes', v ? 'off' : 'on') } catch { /* private mode */ } return !v })
   const toggleSnap = () => setSnap((v) => { try { localStorage.setItem('snap', v ? 'off' : 'on') } catch { /* private mode */ } return !v })
+  // the timeline folded into one bar (more room for the video); remembered for next time
+  const [tlMin, setTlMin] = useState(() => { try { return localStorage.getItem('timeline-min') === '1' } catch { return false } })
+  const toggleTlMin = () => setTlMin((v) => { try { localStorage.setItem('timeline-min', v ? '0' : '1') } catch { /* private mode */ } return !v })
   const [panel, showPanel] = useState<PanelName>(null)
   // a locked Premium tool opens the plans instead
   const setPanel = (p: PanelName) => { const f = p && PREMIUM_PANELS[p]; if (f && !isAllowed(f)) setPaywall(f); else showPanel(p) }
@@ -714,7 +720,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? (ed.project.main?.locked ? null : clipAtPlayhead)
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'beat', 'smartcut', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'beat', 'smartcut', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop', 'frame'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -741,6 +747,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       else if (mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); jumpMarker(e.key === 'ArrowLeft' ? -1 : 1) }
       else if (!mod && key === 'k' && !e.shiftKey) { if (player?.playing) player.pause() }
       else if (!mod && key === 't' && !e.shiftKey) toggleTimecode()
+      else if (!mod && !e.altKey && key === 't' && e.shiftKey) { e.preventDefault(); toggleTlMin() }
       else if (!mod && !e.altKey && key === 'q') trimToPlayhead('in')
       else if (!mod && !e.altKey && key === 'w') trimToPlayhead('out')
       else if (e.shiftKey && e.key === 'Delete') { e.preventDefault(); rippleDelete() }
@@ -895,6 +902,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'mask', label: 'Mask', on: () => setPanel('mask'), active: !!selClip.shapeMask },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') }, disabled: ed.project.clips.at(-1)?.id === selClip.id },
       { key: 'fit', icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
+      { key: 'Main frame', icon: 'fit', label: 'Main frame', on: () => setPanel('frame'), active: mainFrameOn(ed.project.main?.frame) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
       { icon: 'brush', label: 'Copy style', on: () => copyStyleOf(selClip.id) },
       ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
@@ -1024,6 +1032,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'splitscreen', label: 'Split screen', on: () => setPanel('split'), disabled: empty },
+      { icon: 'fit', label: 'Main frame', on: () => setPanel('frame'), disabled: empty, active: mainFrameOn(ed.project.main?.frame) },
       { icon: 'title', label: 'Titles', on: () => { ed.addText(time); setPanel('text-titles') }, disabled: empty },
       { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); openClipPanel('order') }, disabled: !targetClip || ed.project.clips.length < 2 },
       { icon: 'selectAll', label: 'Select all', on: selectAllClips, disabled: empty || !!ed.project.main?.locked },
@@ -1204,6 +1213,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'blend' && selLayer?.type === 'media') panelView = <BlendPanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'blur' && selLayer?.type === 'blur') panelView = <BlurPanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'wave' && selLayer?.type === 'wave') panelView = <WavePanel ed={ed} layer={selLayer} onClose={closePanel} />
+  else if (panel === 'frame') panelView = <MainFramePanel ed={ed} W={player?.renderer.W ?? 16} H={player?.renderer.H ?? 9} onClose={closePanel} />
   else if (panel === 'watermark') panelView = <WatermarkPanel ed={ed} time={time} onClose={closePanel} />
   else if (panel === 'presenter') panelView = <PresenterPanel ed={ed} onSeek={seek} onClose={closePanel} />
   else if (panel === 'slideshow') panelView = <SlideshowPanel ed={ed} onClose={closePanel} onAddPhotos={pickPhotos} onMusic={() => setPanel('audio')} />
@@ -1260,7 +1270,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {dock === 'left' && toolbar}
       <div className="stage-wrap">
         <Preview ed={ed} player={player} canvasRef={canvasRef} t={time} onTogglePlay={togglePlay}
-          onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} compare={compare} onCompare={setCompare} />
+          onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} frameEdit={panel === 'frame'} compare={compare} onCompare={setCompare} />
         {!empty && !fs && (
           <div className="stage-corner">
             <button className={compare !== null ? 'on' : ''} onClick={toggleCompare} aria-label="Before / after" aria-pressed={compare !== null} title={t('Before / after (B)')} data-testid="compare-btn"><Icon name="compare" size={18} /></button>
@@ -1319,6 +1329,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         <span className="zoom">
           <button className={`rate-btn${rate !== 1 ? ' on' : ''}`} disabled={empty} onClick={nextRate} aria-label="Playback speed" title={t('Playback speed')}>{rate}x</button>
           <button className="icon-btn keys-btn" onClick={() => setKeysSheet(true)} aria-label="Keyboard and mouse" title={t('Keyboard & mouse (?)')}><Icon name="keyboard" /></button>
+          <button className={`icon-btn tl-min${tlMin ? ' on' : ''}`} disabled={empty} onClick={toggleTlMin} aria-pressed={tlMin} data-testid="tl-min"
+            aria-label={t(tlMin ? 'Show timeline' : 'Minimize timeline')} title={t(tlMin ? 'Show timeline (Shift+T)' : 'Minimize timeline (Shift+T)')}><Icon name={tlMin ? 'up' : 'down'} /></button>
           <button className={`icon-btn snap${snap ? ' on' : ''}`} onClick={toggleSnap} aria-label="Snap" aria-pressed={snap} title={t('Magnetic snap')}><Icon name="magnet" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.max(4, z / 1.5))} aria-label="Zoom out"><Icon name="minus" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.min(400, z * 1.5))} aria-label="Zoom in"><Icon name="plus" /></button>
@@ -1333,7 +1345,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           <button className="icon-btn" onClick={() => setFsEdit(false)} aria-label={t('Close')} title={t('Hide the edit panel (E)')}><Icon name="close" /></button>
         </div>
       )}
-      {!empty && (
+      {!empty && tlMin && <MiniTimeline ed={ed} t={time} pps={pps} setPps={setPps} onScrub={seek} onExpand={toggleTlMin} />}
+      {!empty && !tlMin && (
         <Timeline
           ed={ed} t={time} pps={pps} setPps={setPps}
           onScrub={seek}
@@ -1343,6 +1356,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           onAudioTrack={() => { player?.pause(); setAudioTab('mine'); setPanel('audio') }}
           onSelectAll={selectAllClips} onSelectRow={selectRow}
           onCopyTrack={copyRow} onPasteTrack={() => setPasteSheet(true)} onDuplicateTrack={duplicateRow}
+          onMainFrame={() => { ed.setSel(null); setPanel('frame') }}
           onOpenItem={openItem} onDelete={removeSel}
           onMarker={(id) => { const m = markers.find((x) => x.id === id); if (m) seek(m.t); setMarkerSheet({ focus: id }) }}
           onAddMarker={() => addMarkerHere(true)}
