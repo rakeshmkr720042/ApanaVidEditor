@@ -139,6 +139,10 @@ function buildMenu() {
     {
       label: '&Help',
       submenu: [
+        { label: 'User Guide / Manual  (उपयोगकर्ता गाइड)', accelerator: 'F1', click: () => win?.webContents.send('desktop:help', null) },
+        { label: 'Keyboard Shortcuts', click: () => win?.webContents.send('desktop:help', 'shortcuts') },
+        { label: 'Getting Started', click: () => win?.webContents.send('desktop:help', 'first-video') },
+        { type: 'separator' },
         { label: 'Website', click: () => shell.openExternal('https://rakeshmkr720042.github.io/ApanaVidEditor/') },
         { label: 'About Apna Editor', click: about },
       ],

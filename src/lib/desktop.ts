@@ -17,6 +17,8 @@ interface DesktopBridge {
   /** A request to www.googleapis.com from the main process. */
   /** Stops Windows from sleeping while an export runs. */
   keepAwake?(on: boolean): void
+  /** Help → User guide / Keyboard shortcuts in the menu bar (topic id, or null for the contents). */
+  onHelp?(cb: (topic: string | null) => void): () => void
   googleFetch?(r: { url: string; method: string; headers: Record<string, string>; body?: Uint8Array | string }): Promise<{ status: number; location: string | null; range: string | null; text: string }>
 }
 

@@ -9,6 +9,7 @@ import './lib/razorpay'
 import { requestPersistence } from './lib/db'
 import { hasPendingFiles, listenForOpenedFiles } from './lib/desktop'
 import { createProject } from './lib/newProject'
+import { HelpHost } from './help/HelpHost'
 
 /** Set when the Windows app opened the website to sign in with Google (read once, before anything else). */
 const desktopSignIn = desktopSignInRequest()
@@ -59,7 +60,12 @@ function Workspace() {
   const back = () => { history.length > 1 && location.hash ? history.back() : (location.hash = '') }
 
   if (admin) return <AdminScreen onBack={back} />
-  return projectId
-    ? <Editor key={projectId + langKey} projectId={projectId} onBack={back} />
-    : <Home key={langKey} onOpen={open} onLang={() => setLangKey((k) => k + 1)} />
+  return (
+    <>
+      {projectId
+        ? <Editor key={projectId + langKey} projectId={projectId} onBack={back} />
+        : <Home key={langKey} onOpen={open} onLang={() => setLangKey((k) => k + 1)} />}
+      <HelpHost />
+    </>
+  )
 }
