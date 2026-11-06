@@ -2,7 +2,7 @@ import type { AudioLayer, CaptionFramePreset, Clip, MediaSource, Project, TextLa
 import { uid } from '../lib/format'
 import { layoutClips, newClip } from './timeline'
 import { MIX_TRANSITIONS } from './slideshow'
-import { defaultFrame, subtitleStyle } from '../engine/text'
+import { defaultFrame, hasHindiLetters, preferredHindiFont, subtitleStyle } from '../engine/text'
 import { newWave, subtitleLook } from './useEditor'
 import { captionY, type AudioPart } from '../lib/audioScenes'
 import type { MindScene } from '../lib/mindmap'
@@ -209,7 +209,7 @@ export function placeScenes(p: Project, built: BuiltScene[], o: SceneOptions, tr
     if (o.captions && b.scene.text.trim() && !(mixed && b.scene.card && !b.scene.own)) {
       const style = look ? { ...look.style } : subtitleStyle()
       if (!look && narrow) style.size = 0.03
-      if (devanagari(b.scene.text)) style.font = 'Noto Sans Devanagari'
+      if (devanagari(b.scene.text) && (!look || !hasHindiLetters(style.font))) style.font = preferredHindiFont()
       const caption = (text: string, from: number, to: number): TextLayer => ({
         id: uid(), type: 'text', text, subtitle: true, start: from, end: Math.min(total, to), style,
         box: { x: 0.5, y: capY, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none',

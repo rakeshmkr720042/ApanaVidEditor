@@ -5,6 +5,7 @@ import { useBack } from '../lib/back'
 import { findTopic, searchHelp, SECTIONS, TOPICS } from './index'
 import { KEYS, MOUSE } from './shortcuts'
 import { findTarget, spotlight } from './spotlight'
+import { setToolbar } from '../lib/toolbar'
 import type { HelpFind, HelpLang, HelpSection, HelpTopic, Platform } from './types'
 
 /** The guide's own words, in both languages (the guide can be read in either, whatever the app's language). */
@@ -77,9 +78,15 @@ export default function HelpSheet({ start, onClose, onAside }: { start: string |
   const results = useMemo(() => (query.trim() ? searchHelp(query, lang) : null), [query, lang])
   const ref = view.kind === 'topic' ? findTopic(view.id) : null
 
-  const showMe = (topic: HelpTopic) => {
+  const showMe = async (topic: HelpTopic) => {
     const f = topic.find as HelpFind
-    const el = findTarget(f)
+    let el = findTarget(f)
+    // a toolbar tool may sit in another tool group: show All tools and look again
+    if (!el && f.tool && document.querySelector('[data-group]')) {
+      setToolbar({ group: 'all' })
+      await new Promise((r) => setTimeout(r, 60))
+      el = findTarget(f)
+    }
     if (!el) {
       const inEditor = !!document.querySelector('.app.editor')
       const need = !inEditor && f.needs !== 'home' ? 'project' : f.needs ?? 'none'

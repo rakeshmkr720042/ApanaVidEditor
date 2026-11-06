@@ -4,7 +4,8 @@ import type { Editor } from '../model/useEditor'
 import { isSub, subtitleLook } from '../model/useEditor'
 import { CaptionFrameEditor } from './CaptionFramePanel'
 import { CaptionStyle } from './CaptionStyle'
-import { ANIMS, FILLS, FONTS, LOOPS, STICKERS, TEXT_ONLY_ANIMS, TEXT_PRESETS, TITLE_PRESETS, ensureFont, prefetchFonts } from '../engine/text'
+import { ANIMS, FILLS, LOOPS, STICKERS, TEXT_ONLY_ANIMS, TEXT_PRESETS, TITLE_PRESETS, ensureFont, hasHindiLetters, isDevanagari, preferredHindiFont, prefetchFonts, rememberHindiFont } from '../engine/text'
+import { FontPicker, HindiTextInput } from './HindiText'
 import { SHOWER_MOTIONS, SHOWER_PRESETS } from '../engine/shower'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { parseSrt, toSrt } from '../lib/srt'
@@ -60,7 +61,12 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
       <Chips options={[{ value: 'edit', label: 'Edit' }, { value: 'titles', label: 'Titles' }, { value: 'font', label: 'Font' }, { value: 'style', label: 'Style' }, { value: 'words', label: 'Captions' }, { value: 'frame', label: 'Position' }, { value: 'anim', label: 'Animation' }]} value={tab} onChange={setTab} />
       {tab === 'edit' && (
         <>
-          <textarea className="text-input" value={layer.text} autoFocus rows={3} onChange={(e) => set({ text: e.target.value })} placeholder={t('Type here')} />
+          <HindiTextInput value={layer.text} onChange={(text) => set({ text })} placeholder={t('Type here')} />
+          {isDevanagari(layer.text) && !hasHindiLetters(layer.style.font) && (
+            <button className="btn small hindi-font-tip" onClick={() => { const f = preferredHindiFont(); ensureFont(f); style({ font: f }) }}>
+              {t('Use a Hindi font')}: {preferredHindiFont()}
+            </button>
+          )}
           <span className="field-label">{t('Motion')}</span>
           <Chips
             options={MOTION_PRESETS.map((m) => ({ value: m.label, label: m.label }))}
@@ -97,13 +103,7 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
         </>
       )}
       {tab === 'font' && (
-        <div className="font-grid">
-          {FONTS.map((f) => (
-            <button key={f} className={layer.style.font === f ? 'on' : ''} style={{ fontFamily: `"${f}"` }} onClick={() => { ensureFont(f); style({ font: f }) }} onPointerEnter={() => ensureFont(f)}>
-              {f.includes('Devanagari') || ['Kalam', 'Yatra One', 'Hind', 'Teko'].includes(f) ? 'Aa अआ' : 'Aa'} <small>{f}</small>
-            </button>
-          ))}
-        </div>
+        <FontPicker value={layer.style.font} text={layer.text} onPick={(f) => { if (isDevanagari(layer.text)) rememberHindiFont(f); style({ font: f }) }} />
       )}
       {tab === 'style' && (
         <>
@@ -309,7 +309,9 @@ export function SubtitlePanel({ ed, name, t: time, onClose, onSeek, onSelectAll 
     const p = ed.project
     const like = subtitleLook(p.layers)
     const layers: TextLayer[] = cues.map((c) => ({
-      id: uid(), type: 'text', text: c.text, subtitle: true, start: c.start, end: c.end, style: like?.style ?? subtitleStyle(),
+      id: uid(), type: 'text', text: c.text, subtitle: true, start: c.start, end: c.end,
+      // Hindi .srt files get the Hindi font picked last
+      style: like?.style ?? (isDevanagari(c.text) ? { ...subtitleStyle(), font: preferredHindiFont() } : subtitleStyle()),
       box: { x: 0.5, y: like?.y ?? 0.86, scale: 1, rotation: 0, opacity: 1 }, animIn: 'none', animOut: 'none', frame: like?.frame ?? null, words: like?.words ?? null,
     }))
     ed.replaceProject({ ...p, layers: [...p.layers, ...layers] })

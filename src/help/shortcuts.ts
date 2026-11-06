@@ -18,6 +18,7 @@ export const KEYS: [string, string][] = [
   ['Ctrl+Alt+V', 'Paste style on the selected item(s)'],
   ['Shift+M', 'Add a marker at the playhead'],
   ['Ctrl+Shift+M', 'All markers (rename, colour, YouTube chapters)'],
+  ['Ctrl+Shift+L', 'Blackbox log (what happened, errors, crash reasons)'],
   ['Ctrl+← / Ctrl+→', 'Jump to the previous / next marker'],
   ['K', 'Pause'],
   ['T', 'Time as minutes or timecode (HH:MM:SS:FF)'],
@@ -32,6 +33,7 @@ export const KEYS: [string, string][] = [
   ['+ / −', 'Zoom the timeline in / out'],
   ['F', 'Full screen (in full screen: E = edit panel)'],
   ['B', 'Before / after: the original next to your edit'],
+  ['Shift+T', 'Minimize / show the timeline (more room for the video)'],
   ['Esc', 'Close / go back'],
   ['?', 'This list'],
   ['F1', 'User guide'],
@@ -53,5 +55,8 @@ export const MOUSE: [string, string][] = [
   ['Alt+drag a clip edge', 'Roll: move the cut between two clips'],
   ['Drag a track name up / down', 'Change which track is in front'],
   ['Wheel on the preview', 'Make the selected item bigger / smaller'],
+  ['Main frame: drag the yellow box', 'Move the whole main video (corners and sides resize it; Alt: no snapping)'],
+  ['Main frame: Shift+drag a corner', 'Resize without keeping the shape'],
+  ['Main frame: wheel / two fingers', 'Make the main video bigger / smaller'],
 ]
 

@@ -11,7 +11,7 @@ const section: HelpSection = {
       id: 'add-text',
       find: { tool: 'Text', needs: 'nothing' },
       keywords: ['text', 'write', 'likhna', 'words', 'font', 'type'],
-      related: ['text-style', 'titles', 'hindi-text'],
+      related: ['text-style', 'titles', 'hindi-fonts', 'hindi-typing'],
       en: {
         title: 'Add text',
         what: 'Write any words on the video, for as long as you want.',
@@ -35,33 +35,6 @@ const section: HelpSection = {
           'कब दिखे और कब छिपे, यह टाइमलाइन पर उसके सिरे खींचकर तय करें।',
           'बाद में शब्द बदलने के लिए प्रीव्यू पर टेक्स्ट को दो बार दबाएँ (या "बदलें" दबाएँ)।',
         ],
-      },
-    },
-    {
-      id: 'hindi-text',
-      find: { tool: 'Text', needs: 'nothing' },
-      keywords: ['hindi', 'devanagari', 'hindi font', 'हिंदी', 'kalam', 'yatra', 'hind'],
-      en: {
-        title: 'Write in Hindi (Devanagari fonts)',
-        what: 'Text, titles and captions can be written in Hindi, with fonts made for Devanagari.',
-        where: 'Text → Style → Font',
-        steps: [
-          'Add a text and type in Hindi with your phone or computer keyboard (on Windows, add the Hindi keyboard in Settings → Language; on Android, use Gboard\'s Hindi keyboard).',
-          'Open Style and pick a Font made for Hindi: Noto Sans Devanagari (clean), Hind (modern), Teko (tall), Kalam (handwriting) or Yatra One (bold, festive).',
-          'Change the size, colour, outline and shadow as for any text.',
-        ],
-        tips: ['English fonts such as Poppins or Bebas Neue do not have Hindi letters; the app falls back to a Hindi font for those letters.'],
-      },
-      hi: {
-        title: 'हिंदी में लिखें (देवनागरी फ़ॉन्ट)',
-        what: 'टेक्स्ट, टाइटल और कैप्शन हिंदी में लिख सकते हैं, देवनागरी के लिए बने फ़ॉन्ट के साथ।',
-        where: 'टेक्स्ट → स्टाइल → फ़ॉन्ट',
-        steps: [
-          'टेक्स्ट जोड़ें और फ़ोन या कंप्यूटर के कीबोर्ड से हिंदी में लिखें (Windows पर Settings → Language में हिंदी कीबोर्ड जोड़ें; Android पर Gboard का हिंदी कीबोर्ड)।',
-          '"स्टाइल" खोलकर हिंदी वाला फ़ॉन्ट चुनें: Noto Sans Devanagari (साफ़), Hind (आधुनिक), Teko (लंबा), Kalam (हाथ की लिखावट) या Yatra One (मोटा, त्योहार वाला)।',
-          'साइज़, रंग, आउटलाइन और परछाईं किसी भी टेक्स्ट की तरह बदलें।',
-        ],
-        tips: ['Poppins या Bebas Neue जैसे अंग्रेज़ी फ़ॉन्ट में हिंदी अक्षर नहीं होते; उन अक्षरों के लिए ऐप अपने आप हिंदी फ़ॉन्ट लगा देता है।'],
       },
     },
     {

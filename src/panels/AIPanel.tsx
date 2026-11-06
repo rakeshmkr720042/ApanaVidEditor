@@ -5,7 +5,7 @@ import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { toSrt, type Cue } from '../lib/srt'
 import { uid } from '../lib/format'
 import { t } from '../lib/i18n'
-import { ensureFont, subtitleStyle } from '../engine/text'
+import { ensureFont, hasHindiLetters, preferredHindiFont, subtitleStyle } from '../engine/text'
 import { encodeWav } from '../engine/music'
 import { decodeAudio, loadSource, sharedAudioContext } from '../lib/media'
 import { deleteVoiceSample, getVoiceSample, saveMedia, saveVoiceSample } from '../lib/db'
@@ -179,7 +179,12 @@ export function AIPanel({ ed, name, onClose }: P) {
     // listening again to one caption keeps it, new captions for the whole video drop it
     const originalSubs = translated ? p.originalSubs ?? (cues.length ? { lang: memo.subLang, cues } : null) : range ? p.originalSubs : null
     const style = subs[0]?.style ?? subtitleStyle()
-    const font = DEVANAGARI.includes(lang) ? 'Noto Sans Devanagari' : style.font === 'Noto Sans Devanagari' ? subtitleStyle().font : style.font
+    // Hindi/Marathi/Nepali captions get the Hindi font picked last (unless they already use a Hindi font of their own);
+    // switching back to another language drops the Hindi font
+    const hindiFont = preferredHindiFont()
+    const font = DEVANAGARI.includes(lang)
+      ? (hasHindiLetters(style.font) && style.font !== subtitleStyle().font ? style.font : hindiFont)
+      : style.font === hindiFont || style.font === 'Noto Sans Devanagari' ? subtitleStyle().font : style.font
     ensureFont(font)
     const y = subs[0]?.box.y ?? 0.86
     const layers: TextLayer[] = next.map((c) => ({

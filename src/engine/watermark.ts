@@ -14,7 +14,7 @@ export function watermarkVisible(wm: Watermark | null | undefined, t: number): w
   return wm.range === 'full' || (t >= wm.start && t < wm.end)
 }
 
-export const wmFont = (wm: Watermark, px: number) => `${wm.bold ? 700 : 400} ${px}px "${wm.font}", Poppins, system-ui, sans-serif`
+export const wmFont = (wm: Watermark, px: number) => `${wm.bold ? 700 : 400} ${px}px "${wm.font}", Poppins, "Noto Sans Devanagari", system-ui, sans-serif`
 
 /** 0→1→0 over each unit of u: a bounce between two walls. */
 const tri = (u: number) => 1 - Math.abs(2 * (u - Math.floor(u)) - 1)

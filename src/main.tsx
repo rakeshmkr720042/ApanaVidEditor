@@ -5,6 +5,11 @@ import App from './App.tsx'
 import { isDesktop } from './lib/desktop'
 import { finishWebSignIn } from './lib/youtube'
 import { listenForBack } from './lib/back'
+import { startBlackbox } from './lib/blackbox'
+import { BlackboxHost, CrashGuard } from './components/BlackboxSheet'
+
+// the flight recorder starts first, so even a failure while the app loads is kept
+startBlackbox()
 
 if (import.meta.env.PROD && !isDesktop && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { scope: './' }))
@@ -21,7 +26,8 @@ if (!finishWebSignIn()) {
   listenForBack()
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App />
+      <CrashGuard><App /></CrashGuard>
+      <BlackboxHost />
     </StrictMode>,
   )
 }
