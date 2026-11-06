@@ -9,9 +9,10 @@ const section: HelpSection = {
   topics: [
     {
       id: 'auto-captions',
+      isNew: true,
       find: { tool: 'AI Dub', needs: 'nothing' },
       keywords: ['caption', 'subtitle', 'speech to text', 'whisper', 'auto', 'transcribe', 'awaaz se text'],
-      related: ['caption-models', 'edit-subtitles', 'caption-style'],
+      related: ['caption-models', 'captions-not-working', 'edit-subtitles', 'caption-style'],
       en: {
         title: 'Auto captions (speech to text)',
         what: 'The AI listens to your video and writes the captions with the right timing. It runs on your device; the model downloads once.',
@@ -20,13 +21,15 @@ const section: HelpSection = {
           'Tap AI Dub (in the main toolbar) and stay on the Auto captions tab.',
           'Language spoken in the video: pick it, or leave Detect automatically.',
           'Quality: Fast, Balanced, Accurate or Best (computer). For Hindi and Hinglish choose Accurate or Best.',
-          'Tap Generate captions. The first time, the AI model downloads (needs internet), then it works offline.',
+          'Tap Generate captions. The first time, the AI model downloads (needs internet), then it works offline. You see "Opening the AI model…" while it starts, then the percentage and about how many minutes are left.',
           'Captions appear on their own track. Edit any line in Subtitles, and style them with Caption style.',
         ],
         tips: [
           'A caption is wrong? Tap it on the timeline and choose Listen again, or fix the words in Subtitles.',
           'Long videos work too; the sound is read in parts so the phone does not run out of memory.',
           'Best is about 1 GB and needs a computer; on phones use Balanced or Accurate.',
+          'If the chosen quality cannot run on this device (not enough memory, damaged files, or not downloaded and no internet), a smaller quality that is on the device makes the captions instead, and the message says which one and why.',
+          'If captions fail, the message ends with "Details:" and the exact reason. A screenshot of it helps to fix the problem.',
         ],
       },
       hi: {
@@ -37,13 +40,15 @@ const section: HelpSection = {
           'मुख्य टूलबार में "AI डब" दबाएँ और "ऑटो कैप्शन" टैब पर रहें।',
           '"वीडियो में बोली गई भाषा" चुनें, या "अपने आप पहचानें" रहने दें।',
           '"क्वालिटी": Fast, Balanced, Accurate या Best (कंप्यूटर)। हिंदी और हिंग्लिश के लिए Accurate या Best चुनें।',
-          '"कैप्शन बनाएं" दबाएँ। पहली बार AI मॉडल डाउनलोड होगा (इंटरनेट चाहिए), फिर बिना इंटरनेट चलेगा।',
+          '"कैप्शन बनाएं" दबाएँ। पहली बार AI मॉडल डाउनलोड होगा (इंटरनेट चाहिए), फिर बिना इंटरनेट चलेगा। शुरू होते समय "AI मॉडल खुल रहा है…" दिखेगा, फिर प्रतिशत और लगभग कितने मिनट बाकी हैं।',
           'कैप्शन अपने अलग ट्रैक पर आ जाएँगे। कोई भी लाइन "सबटाइटल" में ठीक करें, और "कैप्शन स्टाइल" से सजाएँ।',
         ],
         tips: [
           'कोई कैप्शन गलत है? टाइमलाइन पर उसे दबाकर "फिर से सुनें" चुनें, या "सबटाइटल" में शब्द ठीक करें।',
           'लंबी वीडियो भी चलती हैं; आवाज़ टुकड़ों में पढ़ी जाती है ताकि फ़ोन की मेमोरी न भरे।',
           'Best लगभग 1 GB का है और कंप्यूटर पर चलता है; फ़ोन पर Balanced या Accurate लें।',
+          'अगर चुनी हुई क्वालिटी इस डिवाइस पर नहीं चल पाती (मेमोरी कम, फ़ाइलें खराब, या डाउनलोड नहीं और इंटरनेट नहीं), तो डिवाइस पर मौजूद छोटी क्वालिटी से कैप्शन बन जाते हैं, और मैसेज बताता है कि कौन सी और क्यों।',
+          'कैप्शन न बनें तो मैसेज के आख़िर में "जानकारी:" के बाद असली कारण लिखा होता है। उसका स्क्रीनशॉट गड़बड़ ठीक करने में मदद करता है।',
         ],
       },
     },
@@ -62,7 +67,11 @@ const section: HelpSection = {
           'Best (computer, ~1 GB): the most accurate; use it in the Windows app or on a computer browser.',
           'Download a model once in Offline & online so captions also work without internet.',
         ],
-        tips: ['If captions do not come out on a phone, close other apps and try Balanced, or make captions on a computer.'],
+        tips: [
+          'If captions do not come out on a phone, close other apps and try Balanced, or make captions on a computer.',
+          'Speed on a usual computer: Balanced finishes in less time than the video lasts, Accurate takes about as long as the video, Best several times longer. For 20 minutes or more of audio start with Balanced, then redo single captions with a higher quality using Listen again.',
+          'Downloading in Offline & online also opens the model once, so you know it works on this device.',
+        ],
       },
       hi: {
         title: 'कैप्शन मॉडल: कौन सा चुनें',
@@ -75,7 +84,51 @@ const section: HelpSection = {
           'Best (कंप्यूटर, ~1 GB): सबसे सही; Windows ऐप या कंप्यूटर के ब्राउज़र में इस्तेमाल करें।',
           '"ऑफ़लाइन और ऑनलाइन" में मॉडल एक बार डाउनलोड कर लें, ताकि बिना इंटरनेट भी कैप्शन बनें।',
         ],
-        tips: ['फ़ोन पर कैप्शन न बनें तो दूसरे ऐप बंद करके Balanced आज़माएँ, या कैप्शन कंप्यूटर पर बनाएँ।'],
+        tips: [
+          'फ़ोन पर कैप्शन न बनें तो दूसरे ऐप बंद करके Balanced आज़माएँ, या कैप्शन कंप्यूटर पर बनाएँ।',
+          'आम कंप्यूटर पर रफ़्तार: Balanced वीडियो की लंबाई से कम समय में पूरा करता है, Accurate लगभग वीडियो जितना समय लेता है, Best कई गुना ज़्यादा। 20 मिनट या ज़्यादा के ऑडियो के लिए Balanced से शुरू करें, फिर किसी एक कैप्शन को "फिर से सुनें" से बड़ी क्वालिटी में बनाएँ।',
+          '"ऑफ़लाइन और ऑनलाइन" में डाउनलोड करते समय मॉडल एक बार खोलकर भी देखा जाता है, ताकि पता रहे कि वह इस डिवाइस पर चलता है।',
+        ],
+      },
+    },
+    {
+      id: 'captions-not-working',
+      isNew: true,
+      keywords: ['caption nahi ban raha', 'not working', 'stuck', 'error', 'fail', 'atak', 'कैप्शन नहीं', 'audio se caption'],
+      related: ['auto-captions', 'caption-models', 'blackbox'],
+      en: {
+        title: 'Captions are not made, or it seems stuck',
+        what: 'What the messages mean and what to do when speech to text does not finish.',
+        steps: [
+          '"Opening the AI model…" for a while: the model is starting. Big models (Accurate, Best) take longer. Wait for the percentage to appear.',
+          'The percentage moves slowly: the model is working. The "about N min left" tells you how long. Long audio with Accurate or Best can take a long time; Balanced is much faster.',
+          '"… could not run on this device, so … made the captions": your chosen model could not start here; a smaller one did the job. The Details part says why.',
+          '"The computer ran out of memory": pick a smaller quality, or close other apps and try again.',
+          '"The speech model files are damaged": Home → Offline & online → delete that model and download it again.',
+          '"Needs internet the first time": the model is not on the device yet. Connect once, or download it in Offline & online.',
+        ],
+        tips: [
+          'In Audio to video you can tap "Continue without captions" at any time: the scenes are still made, cut at the pauses.',
+          'Every caption attempt is written to the Blackbox log (which model, how long, and the exact error), so it can be copied and sent if something goes wrong.',
+          'Still stuck? Send a screenshot of the message with its "Details:" line, or copy the Blackbox log.',
+        ],
+      },
+      hi: {
+        title: 'कैप्शन नहीं बन रहे, या अटका हुआ लगता है',
+        what: 'मैसेज का मतलब क्या है, और बोली से टेक्स्ट पूरा न हो तो क्या करें।',
+        steps: [
+          'काफ़ी देर तक "AI मॉडल खुल रहा है…": मॉडल शुरू हो रहा है। बड़े मॉडल (Accurate, Best) ज़्यादा समय लेते हैं। प्रतिशत दिखने तक रुकें।',
+          'प्रतिशत धीरे बढ़ रहा है: मॉडल काम कर रहा है। "लगभग N मिनट बाकी" बताता है कितना समय लगेगा। लंबे ऑडियो पर Accurate या Best काफ़ी समय ले सकते हैं; Balanced बहुत तेज़ है।',
+          '"… इस डिवाइस पर नहीं चल सका, इसलिए … से कैप्शन बनाए गए": चुना हुआ मॉडल यहाँ शुरू नहीं हो पाया, छोटे मॉडल ने काम कर दिया। "जानकारी" वाले हिस्से में कारण है।',
+          '"कंप्यूटर की मेमोरी कम पड़ गई": छोटी क्वालिटी चुनें, या दूसरे ऐप बंद करके फिर कोशिश करें।',
+          '"मॉडल की फ़ाइलें खराब हैं": होम → Offline & online → उस मॉडल को हटाकर फिर से डाउनलोड करें।',
+          '"पहली बार इंटरनेट चाहिए": मॉडल अभी डिवाइस पर नहीं है। एक बार इंटरनेट से जुड़ें, या Offline & online में डाउनलोड करें।',
+        ],
+        tips: [
+          'Audio to video में कभी भी "कैप्शन के बिना जारी रखें" दबा सकते हैं: सीन फिर भी बनेंगे, रुकावटों पर कटे हुए।',
+          'कैप्शन की हर कोशिश ब्लैकबॉक्स लॉग में लिखी जाती है (कौन सा मॉडल, कितना समय, और असली गलती), ताकि कुछ गड़बड़ हो तो उसे कॉपी करके भेज सकें।',
+          'फिर भी अटका है? "जानकारी:" वाली लाइन के साथ मैसेज का स्क्रीनशॉट भेजें, या ब्लैकबॉक्स लॉग कॉपी करें।',
+        ],
       },
     },
     {

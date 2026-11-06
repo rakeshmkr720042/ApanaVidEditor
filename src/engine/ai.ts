@@ -9,6 +9,7 @@ import { localAI, translateLine } from '../lib/localai'
 import { decodeAudio } from '../lib/media'
 import { cloneLines } from './voiceclone'
 import { t } from '../lib/i18n'
+import * as blackbox from '../lib/blackbox'
 
 // ---------------------------------------------------------------- languages
 
@@ -238,25 +239,35 @@ async function listen(audio: Float32Array, opts: ListenOpts, progress: Progress,
   const chosen = opts.toEnglish && opts.model === NO_TRANSLATE ? ASR_MODELS[2].id : opts.model
   // the samples are handed to the engine, so a copy is kept for a second try
   const spare = audio.slice()
+  const secs = Math.round(audio.length / 16000)
+  blackbox.info(`Captions: listening to ${secs} s with ${chosen}`, { language: opts.language, toEnglish: opts.toEnglish, memory: blackbox.memoryNow() }, true)
+  const t0 = Date.now()
   try {
-    return { ...(await listenWith(chosen, audio, opts, progress, offset)), used: chosen }
+    const out = { ...(await listenWith(chosen, audio, opts, progress, offset)), used: chosen }
+    blackbox.info(`Captions: ${out.cues.length} made by ${chosen} in ${Math.round((Date.now() - t0) / 1000)} s`)
+    return out
   } catch (e) {
-    if (isStop(e)) throw e
+    if (isStop(e)) { blackbox.info('Captions: stopped by the user'); throw e }
     const reason = String((e as Error)?.message ?? e)
     if (/no sound/i.test(reason)) throw e
     console.warn(`Speech to text with ${chosen} failed:`, reason)
+    blackbox.warn(`Captions: ${chosen} could not run`, e)
     let last = e
     for (const model of await smallerModels(chosen)) {
       // a model that failed can leave the engine unable to open any other model: start it fresh
       stopAI('Stopped')
       try {
-        return { ...(await listenWith(model, spare.slice(), opts, progress, offset)), used: model, fallback: { from: chosen, reason } }
+        const out = { ...(await listenWith(model, spare.slice(), opts, progress, offset)), used: model, fallback: { from: chosen, reason } }
+        blackbox.warn(`Captions: made by the smaller ${model} instead of ${chosen}`)
+        return out
       } catch (e2) {
         if (isStop(e2)) throw e2
         console.warn(`Speech to text with ${model} failed too:`, String((e2 as Error)?.message ?? e2))
+        blackbox.warn(`Captions: ${model} could not run either`, e2)
         last = e2
       }
     }
+    blackbox.error('Captions could not be made', last)
     throw last === e ? e : new Error(reason)
   }
 }
