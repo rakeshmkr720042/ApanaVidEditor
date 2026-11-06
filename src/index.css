@@ -1148,3 +1148,10 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 /* with the edit panel open the video is narrower: icons only */
 .app.editor.fs-edit .fs-btn span, .app.editor.fs-edit .fs-row .skip, .app.editor.fs-edit .fs-row .rate-btn { display: none; }
 .app.editor.fs-edit .fs-btn { padding: 0 9px; }
+/* the editor's top bar on narrow phones: the Help button made it one icon wider */
+@media (max-width: 440px) {
+  .editor .top { gap: 2px; padding: 6px 4px; }
+  .editor .top-actions { gap: 0; }
+  .editor .top-actions .icon-btn { width: 34px; }
+}
+@media (max-width: 380px) { .editor .top-actions .icon-btn { width: 30px; } .editor .top > .icon-btn { width: 32px; } }

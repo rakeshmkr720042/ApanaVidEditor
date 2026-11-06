@@ -88,7 +88,7 @@ export default function HelpSheet({ start, onClose, onAside }: { start: string |
     }
     onAside(topic.id)
     // after the guide has closed, so the ring is drawn on the real screen
-    requestAnimationFrame(() => spotlight(el, topic[getLang()].title))
+    requestAnimationFrame(() => spotlight(el, topic[lang].title))
   }
 
   const topicLink = (t: HelpTopic, small?: boolean) => (
