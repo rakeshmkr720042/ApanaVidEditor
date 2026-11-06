@@ -1009,3 +1009,11 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .match-list button.on { border-color: var(--accent, #7c5cff); }
 .match-list img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 5px; background: #000; }
 .match-photo { width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; font-size: 22px; border-radius: 5px; background: rgba(0,0,0,0.35); }
+
+/* scene detection, compound clips */
+.scene-cuts { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
+.join-list { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.join-list button { flex: 0 0 auto; width: 72px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px; border-radius: 8px; border: 2px solid transparent; background: rgba(255,255,255,0.06); color: inherit; font-size: 12px; }
+.join-list button.on { border-color: var(--accent, #7c5cff); }
+.join-list button:disabled.on { opacity: 1; }
+.join-list img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 5px; background: #000; }
