@@ -64,6 +64,8 @@ import { MotionPanel, TrackPanel } from '../panels/MotionPanel'
 import { isTracked } from '../engine/tracker'
 import { loadCutout } from '../engine/cutout'
 import { BACK, useBack } from '../lib/back'
+import { FullScreenBar } from './FullScreen'
+import { enterNativeFullScreen, leaveNativeFullScreen, useIdle } from '../lib/fullscreen'
 import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
 import { HabitBar, HabitsSheet } from './HabitsSheet'
 import { PremiumSheet } from './PremiumSheet'
@@ -355,6 +357,36 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     setRate(r)
     player?.setRate(r)
   }
+
+  // Full screen: the video fills the screen; the edit panel (timeline + tools) slides in beside it on demand,
+  // and before / after shows the original next to the edit.
+  const [fs, setFs] = useState(false)
+  const [fsEdit, setFsEdit] = useState(false)
+  const [compare, setCompare] = useState<number | null>(null)
+  const fsIdle = useIdle(fs)
+  const nativeFs = useRef(false)
+  const enterFs = () => {
+    if (empty) return
+    setFs(true)
+    const r = player?.renderer
+    void enterNativeFullScreen(!r || r.W >= r.H).then((ok) => { nativeFs.current = ok })
+  }
+  const exitFs = useCallback(() => {
+    setFs(false); setFsEdit(false); setCompare(null)
+    nativeFs.current = false
+    leaveNativeFullScreen()
+  }, [])
+  const toggleCompare = () => setCompare((c) => (c === null ? 0.5 : null))
+  // leaving the browser's / window's full screen (Esc, F11, the phone's gesture) leaves ours too
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement && nativeFs.current) exitFs() }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [exitFs])
+  useEffect(() => () => leaveNativeFullScreen(), [])
+  // Back / Esc: a tool panel first, then the edit panel, then the selection, then full screen itself
+  useBack(fs, exitFs, BACK.selection - 0.5)
+  useBack(fs && fsEdit, () => setFsEdit(false), BACK.selection + 0.5)
 
   /** Jumps to what was just added and says where it went, so nothing lands out of sight. */
   const announce = (placed: Placed | null, what: string) => {
@@ -729,6 +761,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       } else if (!mod && (e.key === '+' || e.key === '=')) setPps((z) => Math.min(400, z * 1.5))
       else if (!mod && (e.key === '-' || e.key === '_')) setPps((z) => Math.max(4, z / 1.5))
       else if (e.key === 'Enter' && sel) { e.preventDefault(); openItem(sel) }
+      else if (!mod && !e.altKey && key === 'f') { if (fs) exitFs(); else enterFs() }
+      else if (!mod && !e.altKey && key === 'b' && !empty) toggleCompare()
+      else if (!mod && !e.altKey && key === 'e' && fs) setFsEdit((v) => !v)
       else if (e.key === ' ') { e.preventDefault(); togglePlay() }
       else if (e.key === 's' && !mod) ed.split(time)
       else if (e.key === 'Delete' || e.key === 'Backspace') removeSel()
@@ -1143,7 +1178,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   )
 
   return (
-    <div className="app editor">
+    <div className={`app editor${fs ? ' fs' : ''}${fs && fsEdit ? ' fs-edit' : ''}${fs && fsIdle && playing && !fsEdit ? ' fs-idle' : ''}`}>
       <header className="top">
         <button className="icon-btn" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
         <button className="title" onClick={rename}>{name}</button>
@@ -1174,7 +1209,18 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       )}
       <div className="stage-wrap">
         <Preview ed={ed} player={player} canvasRef={canvasRef} t={time} onTogglePlay={togglePlay}
-          onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} />
+          onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} compare={compare} onCompare={setCompare} />
+        {!empty && !fs && (
+          <div className="stage-corner">
+            <button className={compare !== null ? 'on' : ''} onClick={toggleCompare} aria-label="Before / after" aria-pressed={compare !== null} title={t('Before / after (B)')} data-testid="compare-btn"><Icon name="compare" size={18} /></button>
+            <button onClick={enterFs} aria-label="Full screen" title={t('Full screen (F)')} data-testid="fs-btn"><Icon name="fullscreen" size={18} /></button>
+          </div>
+        )}
+        {fs && (
+          <FullScreenBar player={player} playing={playing} time={time} total={ed.layout.total} showTime={showTime} rate={rate} onRate={nextRate}
+            onTogglePlay={togglePlay} onSkip={skip} editing={fsEdit} onEdit={() => setFsEdit((v) => !v)}
+            comparing={compare !== null} onCompare={toggleCompare} onExit={exitFs} idle={fsIdle} />
+        )}
         {scopes && !empty && <Scopes source={getCanvas} onClose={toggleScopes} />}
         {empty && (
           <div className="empty">
@@ -1226,6 +1272,14 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         </span>
       </div>
 
+      <div className="edit-dock" data-testid="edit-dock">
+      {fs && (
+        <div className="dock-head">
+          <b>{t('Edit panel')}</b>
+          <span className="muted">{t('Changes show on the video right away')}</span>
+          <button className="icon-btn" onClick={() => setFsEdit(false)} aria-label={t('Close')} title={t('Hide the edit panel (E)')}><Icon name="close" /></button>
+        </div>
+      )}
       {!empty && (
         <Timeline
           ed={ed} t={time} pps={pps} setPps={setPps}
@@ -1278,6 +1332,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {panel === 'layer-crop' && selLayer?.type === 'media' && ed.sources[selLayer.sourceId] && (
         <CropEditor key={selLayer.id} ed={ed} layer={selLayer} source={ed.sources[selLayer.sourceId]} time={selLayer.in + 0.1} onClose={closePanel} />
       )}
+      </div>
 
       <input ref={mainInput} type="file" accept="video/*,image/*,audio/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'main'); e.target.value = '' }} />
       <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) importFiles(e.target.files, 'slides'); e.target.value = '' }} />

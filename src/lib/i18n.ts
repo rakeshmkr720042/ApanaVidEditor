@@ -536,6 +536,7 @@ const hi: Record<string, string> = {
   'This font has no Hindi letters, so the Hindi words show in Noto Sans Devanagari. Pick a font marked अ for a Hindi look.': 'इस फ़ॉन्ट में हिंदी अक्षर नहीं हैं, इसलिए हिंदी शब्द Noto Sans Devanagari में दिखते हैं। हिंदी लुक के लिए अ वाला फ़ॉन्ट चुनें।',
   'Has Hindi letters': 'इसमें हिंदी अक्षर हैं', 'All fonts are free to use in your videos (Open Font License) and work without internet.': 'सभी फ़ॉन्ट आपकी वीडियो में मुफ़्त इस्तेमाल हो सकते हैं (Open Font License) और बिना इंटरनेट चलते हैं।',
   'Use a Hindi font': 'हिंदी फ़ॉन्ट लगाएं', 'Hindi font for captions': 'कैप्शन का हिंदी फ़ॉन्ट', 'New Hindi captions use the font you pick here.': 'नए हिंदी कैप्शन यहां चुना फ़ॉन्ट लेंगे।',
+  "Before": "पहले", "After": "बाद में", "Before / after": "पहले / बाद", "Before / after (B)": "पहले / बाद (B)", "Full screen (F)": "पूरी स्क्रीन (F)", "Seek": "समय पर जाएँ", "Edit panel": "एडिट पैनल", "Edit panel (E)": "एडिट पैनल (E)", "Exit": "बाहर", "Exit full screen (F or Esc)": "पूरी स्क्रीन से बाहर (F या Esc)", "Changes show on the video right away": "बदलाव वीडियो पर तुरंत दिखते हैं", "Hide the edit panel (E)": "एडिट पैनल छिपाएँ (E)", "Full screen: play the edited video": "पूरी स्क्रीन: एडिट किया वीडियो चलाएँ", "Full screen (in full screen: E = edit panel)": "पूरी स्क्रीन (पूरी स्क्रीन में: E = एडिट पैनल)", "Before / after: the original next to your edit": "पहले / बाद: ओरिजिनल और आपकी एडिटिंग साथ-साथ",
 }
 
 let lang: 'en' | 'hi' = (() => { try { return localStorage.getItem('lang') === 'hi' ? 'hi' : 'en' } catch { return 'en' } })()
