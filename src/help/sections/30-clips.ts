@@ -320,6 +320,91 @@ const section: HelpSection = {
         ],
       },
     },
+    {
+      id: 'find-shots',
+      isNew: true,
+      find: { tool: 'Find shots', needs: 'clip' },
+      keywords: ['scene detection', 'find shots', 'camera cuts', 'split shots', 'scene'],
+      en: {
+        title: 'Find shots (scene detection)',
+        what: 'Finds the camera cuts inside one long video (a film, a highlights reel, a recording of many shots), so you can split it into its shots in one go.',
+        where: 'Select a video clip → Find shots',
+        steps: [
+          'Select the clip and tap Find shots.',
+          'Choose how sensitive: Only clear cuts, Normal, or Soft cuts too (for fades and gentle changes).',
+          'Tap Find shots and wait; the shots found are listed.',
+          'Tap Split into shots to cut the clip at every shot, or Add markers to only mark them. Undo takes it back.',
+        ],
+        tips: ['No cuts found? Try "Soft cuts too".'],
+      },
+      hi: {
+        title: 'शॉट ढूँढें (सीन पहचानना)',
+        what: 'एक लंबी वीडियो (फ़िल्म, हाइलाइट्स, कई शॉट वाली रिकॉर्डिंग) के अंदर कैमरे के कट ढूँढता है, ताकि एक बार में उसे शॉट-शॉट में काट सकें।',
+        where: 'वीडियो क्लिप चुनें → शॉट ढूँढें',
+        steps: [
+          'क्लिप चुनकर "शॉट ढूँढें" दबाएँ।',
+          'कितना बारीक ढूँढे, चुनें: सिर्फ़ साफ़ कट, Normal, या हल्के कट भी (फ़ेड और धीमे बदलाव के लिए)।',
+          '"शॉट ढूँढें" दबाकर रुकें; मिले हुए शॉट की सूची दिखेगी।',
+          'हर शॉट पर क्लिप काटने के लिए "शॉट में काटें" दबाएँ, या सिर्फ़ निशान लगाने के लिए "मार्कर लगाएँ"। "वापस" से पहले जैसा।',
+        ],
+        tips: ['कोई कट नहीं मिला? "हल्के कट भी" आज़माएँ।'],
+      },
+    },
+    {
+      id: 'join-clips',
+      isNew: true,
+      find: { tool: 'Join clips', needs: 'clip' },
+      keywords: ['join', 'compound', 'nested', 'merge clips', 'group clips', 'break apart', 'jodna'],
+      en: {
+        title: 'Join clips into one (and break apart)',
+        what: 'Makes several clips one clip (like a nested sequence): it then moves, trims and takes effects, speed and colour as one. The original clips are kept inside.',
+        where: 'Select a clip → Join clips',
+        steps: [
+          'Select the first clip and tap Join clips.',
+          'Choose up to which clip to join, and tap Join clips.',
+          'The joined clip now works like any single clip: add a filter, speed or colour once for all of them.',
+          'To undo the join later, select it and tap Break apart. The original clips come back as they were; changes made to the joined clip itself go away.',
+        ],
+      },
+      hi: {
+        title: 'कई क्लिप जोड़कर एक बनाएँ (और फिर अलग करें)',
+        what: 'कई क्लिप को एक क्लिप बनाता है: फिर वो एक साथ हिलती, ट्रिम होती और इफ़ेक्ट, स्पीड व रंग लेती है। अंदर ओरिजिनल क्लिप सुरक्षित रहती हैं।',
+        where: 'क्लिप चुनें → क्लिप जोड़ें',
+        steps: [
+          'पहली क्लिप चुनकर "क्लिप जोड़ें" दबाएँ।',
+          'किस क्लिप तक जोड़ना है चुनें, और "क्लिप जोड़ें" दबाएँ।',
+          'जुड़ी हुई क्लिप अब एक क्लिप की तरह चलती है: फ़िल्टर, स्पीड या रंग एक बार में सब पर लगाएँ।',
+          'बाद में अलग करने के लिए उसे चुनकर "अलग करें" दबाएँ। ओरिजिनल क्लिप पहले जैसी लौट आएँगी; जुड़ी क्लिप पर किए बदलाव हट जाएँगे।',
+        ],
+      },
+    },
+    {
+      id: 'preview-copies',
+      isNew: true,
+      find: { tool: 'Preview copies', needs: 'nothing' },
+      keywords: ['proxy', 'preview copies', '4k slow', 'lag', 'light copy'],
+      related: ['fix-playback'],
+      en: {
+        title: 'Preview copies (smooth editing of big videos)',
+        what: 'Big videos (4K, long phone recordings) can make the preview slow. A preview copy is a light 540p copy that plays while you edit. The export always uses the original files in full quality.',
+        where: 'Toolbar (nothing selected) → Preview copies',
+        steps: [
+          'Tap Preview copies. Tap Make copies for big videos, or Make copy next to one video.',
+          'Wait while the copies are made. The preview now plays them.',
+          'Delete copy removes a copy to free space.',
+        ],
+      },
+      hi: {
+        title: 'प्रीव्यू कॉपी (बड़ी वीडियो की आसान एडिटिंग)',
+        what: 'बड़ी वीडियो (4K, फ़ोन की लंबी रिकॉर्डिंग) से प्रीव्यू धीमा हो सकता है। प्रीव्यू कॉपी हल्की 540p कॉपी है जो एडिटिंग के समय चलती है। एक्सपोर्ट हमेशा ओरिजिनल फ़ाइलों से, पूरी क्वालिटी में होता है।',
+        where: 'टूलबार (कुछ चुना न हो) → प्रीव्यू कॉपी',
+        steps: [
+          '"प्रीव्यू कॉपी" दबाएँ। "बड़ी वीडियो की कॉपी बनाएँ" दबाएँ, या किसी एक वीडियो के आगे "कॉपी बनाएँ"।',
+          'कॉपी बनने तक रुकें। अब प्रीव्यू इन्हें चलाएगा।',
+          'जगह खाली करने के लिए "कॉपी हटाएँ"।',
+        ],
+      },
+    },
   ],
 }
 

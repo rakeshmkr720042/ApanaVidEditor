@@ -98,6 +98,7 @@ const section: HelpSection = {
           'Turn off heavy effects (stabilize, remove background, smooth slow motion) while editing, then turn them back on before export.',
           'Hide tracks you are not working on (H).',
           'Close other apps and browser tabs.',
+          'For 4K or long videos, make Preview copies: light copies that play smoothly while you edit.',
         ],
       },
       hi: {
@@ -108,6 +109,7 @@ const section: HelpSection = {
           'एडिटिंग के समय भारी इफ़ेक्ट (स्थिर करें, बैकग्राउंड हटाएं, स्मूद स्लो मोशन) बंद रखें, एक्सपोर्ट से पहले चालू करें।',
           'जिन ट्रैक पर काम नहीं कर रहे उन्हें छिपाएँ (H)।',
           'दूसरे ऐप और ब्राउज़र टैब बंद करें।',
+          '4K या लंबी वीडियो के लिए "प्रीव्यू कॉपी" बनाएँ: हल्की कॉपी जो एडिटिंग में आराम से चलती हैं।',
         ],
       },
     },
