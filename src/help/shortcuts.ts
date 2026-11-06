@@ -30,6 +30,8 @@ export const KEYS: [string, string][] = [
   ['J / L', '5 s back / forward'],
   ['Home / End', 'Go to start / end'],
   ['+ / −', 'Zoom the timeline in / out'],
+  ['F', 'Full screen (in full screen: E = edit panel)'],
+  ['B', 'Before / after: the original next to your edit'],
   ['Esc', 'Close / go back'],
   ['?', 'This list'],
   ['F1', 'User guide'],
