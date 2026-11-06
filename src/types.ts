@@ -13,6 +13,7 @@ export interface MediaSource {
   hasAudio: boolean
   thumbs: string[]
   wave?: string // video sources: waveform image of the sound over the whole file ('' = no sound / not decodable)
+  proxy?: { file: Blob; url: string } | null // light preview copy (src/engine/proxy.ts); never saved in the media record
 }
 
 /** Colour settings, also produced by filter presets. All 0 = unchanged. */
@@ -131,6 +132,7 @@ export interface Clip {
   keys?: ClipKey[] // zoom & move keyframes, t in SOURCE seconds (they stay on the video through trims and splits)
   volKeys?: VolKey[] // volume keyframes (source seconds); when set they decide the volume
   shapeMask?: ShapeMask | null // pro mask, missing = none
+  compound?: { clips: Clip[] } | null // joined clip: the clips it was made from, so it can be broken apart again
   volume: number // 0..2
   fadeIn: number
   fadeOut: number

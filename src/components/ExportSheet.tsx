@@ -17,6 +17,8 @@ import { ProAd } from './ProAd'
 import { afterExportAd } from '../lib/ads'
 import { Icon } from './Icon'
 import { canExportHeight, isAllowed, usePremium, type Feature } from '../lib/premium'
+import { checkExport, crashedExport, isPhone, markExportRunning, saferJob, type ExportCheck } from '../lib/exportCheck'
+import { error as logError, info as logInfo, openBlackbox, warn as logWarn, watchMemory } from '../lib/blackbox'
 
 interface Props {
   project: Project
@@ -55,11 +57,18 @@ const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3
 export function ExportSheet({ project, sources, name, snapshot, onClose }: Props) {
   const total = layoutClips(project.clips).total
   const simple = isSimpleProject(project, sources)
+  // the app closed during the last export: start from lighter settings than the ones that failed
+  const [crashed] = useState(() => {
+    const j = crashedExport()
+    if (j) logWarn('The last export did not finish (the app closed during it)', describe(j))
+    return j ? { job: j, safer: saferJob(j) ?? j } : null
+  })
   const [format, setFormat] = useState<Format>('mp4')
-  const [res, setRes] = useState<Resolution>('1080')
-  const [fps, setFps] = useState(30)
+  const [res, setRes] = useState<Resolution>(crashed?.safer.resolution ?? '1080')
+  const [fps, setFps] = useState(crashed?.safer.fps ?? 30)
   const [preset, setPreset] = useState('')
   const [size, setSizeState] = useState<SizeMode>(() => {
+    if (crashed?.safer.size) return crashed.safer.size
     try { const v = localStorage.getItem(SIZE_KEY); if (v === 'small' || v === 'balanced' || v === 'high') return v } catch { /* private mode */ }
     return 'balanced'
   })
@@ -98,6 +107,18 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const presetAspect = PRESETS.find((p) => p.id === preset)?.aspect
   const job = (): ExportJob => ({ format, resolution: format === 'gif' ? '480' : resolution, fps, watermark: mark ? 'Apna Editor' : null, cover: useCover ? coverT : null, aspect: presetAspect, size })
   const estimate = estimateSize(project, sources, job())
+  // memory / free space check, again whenever the settings change
+  const [check, setCheck] = useState<ExportCheck | null>(null)
+  const jobKey = JSON.stringify(job())
+  useEffect(() => {
+    let live = true
+    checkExport(job(), estimate, total).then((c) => live && setCheck(c), () => {})
+    return () => { live = false }
+  }, [jobKey, estimate, total]) // eslint-disable-line react-hooks/exhaustive-deps
+  const applySafer = (j: ExportJob) => {
+    logInfo('Picked safer export settings', describe(j))
+    setRes(j.resolution); setFps(j.fps); if (j.size) setSize(j.size); setPreset('')
+  }
   const pickPreset = (id: string) => {
     setPreset(id)
     const p = PRESETS.find((x) => x.id === id)
@@ -107,34 +128,73 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
     setFps(p.fps)
   }
 
+  /** One export, with one automatic retry on lighter settings if it fails. */
+  const runOne = async (j: ExportJob, onP: (p: number, label: string) => void, signal: AbortSignal) => {
+    let lastStage = ''
+    const tracked = (p: number, label: string) => {
+      // the blackbox gets each stage once, and the render at every quarter
+      const stage = label.replace(/\d+%/, '').trim()
+      const quarter = Math.floor(p * 4)
+      const key = `${stage}|${stage.startsWith('Rendering') ? quarter : ''}`
+      if (key !== lastStage) { lastStage = key; logInfo(`Export: ${label}`, undefined, true) }
+      onP(p, label)
+    }
+    try {
+      return { out: await exportProject(project, sources, j, tracked, signal), job: j, safer: false }
+    } catch (e) {
+      if (e instanceof Cancelled) throw e
+      logError(`Export failed (${describe(j)})`, e)
+      const next = saferJob(j)
+      if (!next || signal.aborted) throw e
+      logWarn('Trying the export again with safer settings', describe(next))
+      onP(0, 'Trying again with safer settings…')
+      await resetFFmpeg() // a fresh ffmpeg gives back all the memory the failed run took
+      markExportRunning(next)
+      return { out: await exportProject(project, sources, next, tracked, signal), job: next, safer: true }
+    }
+  }
+
   const run = async (jobs: ExportJob[]) => {
     setError(null)
     abort.current = new AbortController()
     const base = name.replace(/[^\w\- ]+/g, '').trim() || 'clipcut'
+    const stopWatch = watchMemory('Export')
     try {
       for (const [i, j] of jobs.entries()) {
         setRunning({ i, n: jobs.length, p: 0, label: 'Starting…' })
         const onP = (p: number, label: string) => setRunning({ i, n: jobs.length, p, label })
         const started = performance.now()
         if (fast && simple && jobs.length === 1) {
+          logInfo('Export started: original quality cut', `${total.toFixed(1)}s`)
           const out = await exportFast(project, sources, onP)
           const file = `${base}.${out.ext}`
+          logInfo('Export finished', `${(out.blob.size / 1048576).toFixed(1)} MB`)
           setResults((r) => [...r, { id: crypto.randomUUID(), label: 'Original quality', blob: out.blob, url: URL.createObjectURL(out.blob), file, cover: null, info: `${(out.blob.size / 1048576).toFixed(1)} MB` }])
           continue
         }
-        const out = await exportProject(project, sources, j, onP, abort.current.signal)
+        logInfo(`Export started: ${describe(j)}`, `${total.toFixed(1)}s of video, ${project.clips.length} clips, ${project.layers.length} layers, estimate ${estimate != null ? mb(estimate) : '?'}`, true)
+        markExportRunning(j)
+        const { out, job: done, safer } = await runOne(j, onP, abort.current.signal)
         const secs = (performance.now() - started) / 1000
-        const file = `${base}${jobs.length > 1 ? `-${j.resolution}p` : ''}.${out.ext}`
+        logInfo('Export finished', `${describe(done)} · ${(out.blob.size / 1048576).toFixed(1)} MB · ${out.width}x${out.height} · ${out.encoder} · ${secs.toFixed(0)}s`, true)
+        const file = `${base}${jobs.length > 1 ? `-${done.resolution}p` : ''}.${out.ext}`
         setResults((r) => [...r, {
-          id: crypto.randomUUID(), label: describe(j), blob: out.blob, url: URL.createObjectURL(out.blob), file, cover: out.cover,
+          id: crypto.randomUUID(), label: `${describe(done)}${safer ? ` · ${t('safer settings')}` : ''}`, blob: out.blob, url: URL.createObjectURL(out.blob), file, cover: out.cover,
           info: `${(out.blob.size / 1048576).toFixed(1)} MB${out.width ? ` · ${out.width}×${out.height}` : ''} · ${secs.toFixed(0)}s`,
         }])
+        if (safer) setToast(t('The first try failed, so the video was made with safer settings (lower resolution, smaller file).'))
+        // phones: start the next job (and the editor) with ffmpeg's memory given back
+        if (isPhone) await resetFFmpeg()
       }
       setBatch([])
       afterExportAd()
     } catch (e) {
-      if (!(e instanceof Cancelled)) setError(e instanceof Error ? t(e.message) : String(e))
+      if (e instanceof Cancelled) logInfo('Export cancelled')
+      else setError(e instanceof Error ? t(e.message) : String(e))
+      if (isPhone) await resetFFmpeg()
     } finally {
+      markExportRunning(null)
+      stopWatch()
       setRunning(null)
     }
   }
@@ -238,7 +298,21 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
                 ))}
               </div>
             )}
-            {error && <p className="error-text">{error}</p>}
+            {crashed && (
+              <div className="export-check danger" data-testid="export-crashed">
+                {t('Last time the app closed during an export with')} <b>{describe(crashed.job)}</b>. {t('Safer settings are picked now. Close other apps before you start.')}
+              </div>
+            )}
+            {check && check.level !== 'ok' && !(fast && simple) && (
+              <div className={`export-check ${check.level}`} data-testid="export-check">
+                <b>{t(check.level === 'danger' ? 'This export may make the app close' : 'This export is heavy for this device')}</b>
+                <ul>{check.reasons.map((r) => <li key={r}>{t(r)}</li>)}</ul>
+                {check.safer && <button className="btn small" onClick={() => applySafer(check.safer!)} data-testid="use-safer">{t('Use safer settings')} ({describe(check.safer)})</button>}
+              </div>
+            )}
+            {error && (
+              <p className="error-text">{error} <button className="link-btn" onClick={openBlackbox}>{t('See blackbox log')}</button></p>
+            )}
             <div className="row">
               {!(fast && simple) && <button className="btn" onClick={() => (canBatch ? setBatch([...batch, job()]) : setPaywall('batch'))}>+ {t('Batch')}{!canBatch && <> <Icon name="crown" size={14} /></>}</button>}
               <button className="btn primary grow" disabled={total <= 0} onClick={() => run(batch.length ? batch : [job()])}>

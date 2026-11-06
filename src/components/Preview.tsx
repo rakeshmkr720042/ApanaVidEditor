@@ -34,6 +34,9 @@ interface Props {
   wmEdit?: boolean
   /** Main frame panel is open: the main video's frame can be moved and resized. */
   frameEdit?: boolean
+  /** Before / after: where the line between the original (left) and the edit (right) is, 0..1; null = off. */
+  compare?: number | null
+  onCompare?: (x: number) => void
 }
 
 type Gesture =
@@ -47,7 +50,7 @@ type Gesture =
   | { kind: 'frame-pinch'; d0: number; f0: MainFrame }
 
 /** The video canvas plus handles to move, scale and rotate text, stickers, overlays and blur areas. */
-export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit, frameEdit }: Props) {
+export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit, frameEdit, compare = null, onCompare }: Props) {
   const wrap = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ w: 0, h: 0, left: 0, top: 0 })
   const gesture = useRef<Gesture | null>(null)
@@ -56,6 +59,26 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   const pts = useRef(new Map<number, { x: number; y: number }>())
   const wheelEnd = useRef(0)
   const W = player?.renderer.W ?? 16, H = player?.renderer.H ?? 9
+  const beforeRef = useRef<HTMLCanvasElement>(null)
+  const comparing = compare !== null
+
+  // before / after: the player also draws the unedited picture into the second canvas
+  useEffect(() => {
+    if (!player || !comparing) return
+    player.setCompare(beforeRef.current)
+    return () => player.setCompare(null)
+  }, [player, comparing])
+
+  /** Dragging the before / after line. */
+  const onSplitDown = (e: React.PointerEvent) => {
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onSplitMove = (e: React.PointerEvent) => {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId) || !box.w) return
+    const r = wrap.current!.getBoundingClientRect()
+    onCompare?.(Math.max(0, Math.min(1, (e.clientX - r.left - box.left) / box.w)))
+  }
 
   // fit the canvas inside the stage keeping its aspect ratio
   useEffect(() => {
@@ -405,6 +428,16 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   return (
     <div className="stage" ref={wrap} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel}>
       <canvas ref={canvasRef} className="preview-canvas" style={{ width: box.w, height: box.h, left: box.left, top: box.top }} />
+      <canvas ref={beforeRef} className="preview-canvas before" hidden={!comparing} data-testid="before-canvas"
+        style={{ width: box.w, height: box.h, left: box.left, top: box.top, clipPath: `inset(0 ${(1 - (compare ?? 0)) * 100}% 0 0)` }} />
+      {comparing && (
+        <div className="split-line" style={{ left: box.left + box.w * compare!, top: box.top, height: box.h }}
+          onPointerDown={onSplitDown} onPointerMove={onSplitMove} data-testid="split-line">
+          <span className="split-tag l">{tr('Before')}</span>
+          <span className="split-grip">⇔</span>
+          <span className="split-tag r">{tr('After')}</span>
+        </div>
+      )}
       {wmRect && (
         <div className="sel-box wm" style={{ left: box.left + wmRect.cx * scale, top: box.top + wmRect.cy * scale, width: wmRect.w * scale, height: wmRect.h * scale, transform: 'translate(-50%, -50%)' }} />
       )}
