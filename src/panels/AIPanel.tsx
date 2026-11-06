@@ -12,8 +12,8 @@ import { deleteVoiceSample, getVoiceSample, saveMedia, saveVoiceSample } from '.
 import { getLocalAI, localAI, setLocalAI } from '../lib/localai'
 import { CLONE_LANGS, referenceWav, voiceCloneSpace } from '../engine/voiceclone'
 import {
-  ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, hasVoice, langName, modelChosen, sampleVoice, saveModel, savedModel, setEmail, transcribe, translateCues, listenError, LISTEN_SLOW,
-  translator, type Progress,
+  ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, hasVoice, langName, modelChosen, sampleVoice, saveModel, savedModel, setEmail, transcribe, translateCues, LISTEN_SLOW,
+  translator, type Progress, fellBack, leftText, listenFailure, timeLeft,
 } from '../engine/ai'
 import { modelStates, type ModelState } from '../engine/offline'
 import { fileBase, saveTextFiles } from '../lib/save'
@@ -28,6 +28,7 @@ const memo = { tab: 'captions', model: savedModel(), picked: modelChosen(), spok
 interface Made { code: string; cues?: Cue[]; error?: string; original?: boolean }
 
 const DEVANAGARI = ['hi', 'mr', 'ne']
+
 
 const download = (name: string, text: string) => saveTextFiles([{ name, text }]).catch(() => {})
 
@@ -160,8 +161,15 @@ export function AIPanel({ ed, name, onClose }: P) {
   const cues: Cue[] = subs.map((s) => ({ start: s.start, end: s.end, text: s.text }))
   const total = ed.layout.total
 
-  const progress = (label: string): Progress => (stage, p) =>
-    setBusy({ label: stage === 'download' ? `${t('Downloading AI model (first time only)')}` : label, p })
+  const progress = (label: string): Progress => {
+    let start = 0
+    return (stage, p) => {
+      if (stage === 'download') { setBusy({ label: t('Downloading AI model (first time only)'), p }); return }
+      if (stage === 'load') { start = 0; setBusy({ label: t('Opening the AI model…'), p: -1 }); return }
+      if (!start || p <= 0) start = Date.now()
+      setBusy({ label: `${label}${leftText(timeLeft(start, p))}`, p })
+    }
+  }
 
   const run = async (label: string, fn: () => Promise<string>) => {
     setError(null); setDone(null)
@@ -203,17 +211,18 @@ export function AIPanel({ ed, name, onClose }: P) {
   const listenOpts = { model: memo.model, language: memo.spoken, toEnglish: memo.toEnglish, voice }
   const heard = (lang: string | null) => (memo.toEnglish ? 'en' : memo.spoken !== 'auto' ? memo.spoken : lang ?? 'auto')
 
-  // speech to text, with its failures told in plain words
+  // speech to text, with its failures told in plain words (and the engine's own message, for a screenshot)
   const hear = (opts: Parameters<typeof transcribe>[2], label: string) =>
-    transcribe(ed.project, ed.sources, opts, progress(`${label} ${t(LISTEN_SLOW)}`)).catch((e) => { throw new Error(listenError(e)) })
+    transcribe(ed.project, ed.sources, opts, progress(`${label} ${t(LISTEN_SLOW)}`)).catch((e) => { throw new Error(listenFailure(e)) })
 
   const generate = () => run(t('Listening to the video…'), async () => {
     if (subs.length && !confirm(t('Replace the subtitles you already have?'))) return ''
-    const { cues: out, language } = await hear(listenOpts, t('Listening to the video…'))
+    const got = await hear(listenOpts, t('Listening to the video…'))
+    const { cues: out, language } = got
     if (!out.length) throw new Error(t('No speech was found in this video'))
     replaceSubs(out, heard(language))
     const found = memo.spoken === 'auto' && language ? ` ${t('Language heard')}: ${langName(language)}.` : ''
-    return `${out.length} ${t('captions added. Edit any line in Subtitles.')}${found}`
+    return `${out.length} ${t('captions added. Edit any line in Subtitles.')}${found}${fellBack(got)}`
   })
 
   // the caption picked on the timeline, to listen to that bit again
@@ -223,12 +232,13 @@ export function AIPanel({ ed, name, onClose }: P) {
     const i = subs.indexOf(picked)
     // a little either side, without reaching into the neighbouring captions
     const range: [number, number] = [Math.max(subs[i - 1]?.end ?? 0, picked.start - 1), Math.min(subs[i + 1]?.start ?? total, picked.end + 1)]
-    const { cues: out, language } = await hear({ ...listenOpts, range }, t('Listening again…'))
+    const got = await hear({ ...listenOpts, range }, t('Listening again…'))
+    const { cues: out, language } = got
     if (!out.length) throw new Error(t('No speech was found in this part'))
     const fresh = replaceSubs(out.map((c) => ({ ...c, start: Math.max(range[0], c.start), end: Math.min(range[1], c.end) })), heard(language), range)
     // keep the new caption picked, so it can be listened to again with another quality
     if (fresh[0]) ed.setSel({ type: 'layer', id: fresh[0].id })
-    return t('This caption was made again. Try a higher quality if it is still wrong.')
+    return `${t('This caption was made again. Try a higher quality if it is still wrong.')}${fellBack(got)}`
   })
 
   // YouTube reads the language from its own menu, so "<video>.<code>.srt" just keeps the files easy to tell apart
@@ -464,8 +474,8 @@ export function AIPanel({ ed, name, onClose }: P) {
 
       {busy && (
         <div className="ai-status">
-          <span className="small">{busy.label} {Math.round(busy.p * 100)}%</span>
-          <div className="progress"><div style={{ width: `${Math.round(busy.p * 100)}%` }} /></div>
+          <span className="small">{busy.label}{busy.p >= 0 && ` ${Math.round(busy.p * 100)}%`}</span>
+          <div className={`progress${busy.p < 0 ? ' waiting' : ''}`}><div style={{ width: busy.p < 0 ? undefined : `${Math.round(busy.p * 100)}%` }} /></div>
         </div>
       )}
       {error && <p className="small error-text">{error}</p>}
