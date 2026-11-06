@@ -21,6 +21,7 @@ const KEYS: [string, string][] = [
   ['Ctrl+Alt+V', 'Paste style on the selected item(s)'],
   ['Shift+M', 'Add a marker at the playhead'],
   ['Ctrl+Shift+M', 'All markers (rename, colour, YouTube chapters)'],
+  ['Ctrl+Shift+L', 'Blackbox log (what happened, errors, crash reasons)'],
   ['Ctrl+← / Ctrl+→', 'Jump to the previous / next marker'],
   ['K', 'Pause'],
   ['T', 'Time as minutes or timecode (HH:MM:SS:FF)'],

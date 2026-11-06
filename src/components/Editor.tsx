@@ -9,10 +9,12 @@ import type { SplitLayout } from '../model/split'
 import { gradeIsEmpty } from '../engine/grade'
 import { REVERSE_MAX, reverseClip as reverseVideo, stillFrame } from '../engine/reverse'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
-import { getMedia, getProject, saveMedia, saveProject } from '../lib/db'
+import { deleteProxy, getMedia, getProject, getProxy, saveMedia, saveProject, saveProxy } from '../lib/db'
 import { fmtTime, fmtTimecode, uid } from '../lib/format'
 import { projectToFile } from '../lib/projectFile'
 import { isNative, saveNative } from '../lib/save'
+import { markClosed, markOpen } from '../lib/recover'
+import { info as logInfo, openBlackbox } from '../lib/blackbox'
 import { t } from '../lib/i18n'
 import { onPendingFiles, takePendingFiles } from '../lib/desktop'
 import { Timeline } from './Timeline'
@@ -20,7 +22,7 @@ import { Preview } from './Preview'
 import { ExportSheet } from './ExportSheet'
 import { SceneBuilder } from './SceneBuilder'
 import { CropEditor } from './CropEditor'
-import { Icon, type IconName } from './Icon'
+import { Icon } from './Icon'
 import { AdjustPanel, FilterPanel, EffectsPanel, FormatPanel, LayerSpeedPanel, NoisePanel, SpeedPanel, TransitionPanel, VolumePanel } from '../panels/ClipPanels'
 import { hasSound } from '../engine/denoise'
 import { isNeutralFx } from '../engine/soundfx'
@@ -42,8 +44,12 @@ import { PasteTrackSheet } from './PasteTrackSheet'
 import { KeysSheet } from './KeysSheet'
 import { MarkerSheet } from './MarkerSheet'
 import { RelinkSheet } from './RelinkSheet'
+import { ProxySheet } from './ProxySheet'
+import { proxiesWanted, setProxiesWanted } from '../engine/proxy'
 import { Scopes } from './Scopes'
 import { mediaInfoOf, missingSources, unreadable, usedSources, type MediaInfo } from '../lib/relink'
+import { ScenePanel } from '../panels/ScenePanel'
+import { JoinPanel } from '../panels/JoinPanel'
 import { TrimPanel, LayerTrimPanel } from '../panels/TrimPanel'
 import { ZoomMovePanel } from '../panels/ClipKeysPanel'
 import { MaskPanel } from '../panels/MaskPanel'
@@ -68,6 +74,7 @@ import { FullScreenBar } from './FullScreen'
 import { enterNativeFullScreen, leaveNativeFullScreen, useIdle } from '../lib/fullscreen'
 import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
 import { HabitBar, HabitsSheet } from './HabitsSheet'
+import { ToolBar, useDock, type Tool } from './ToolBar'
 import { PremiumSheet } from './PremiumSheet'
 import { isAllowed, usePremium, type Feature } from '../lib/premium'
 
@@ -79,7 +86,6 @@ const PREMIUM_TOOLS: Record<string, Feature> = {
   'Quiz to video': 'scenes', 'Data to video': 'scenes', 'Article to video': 'scenes',
 }
 
-type Tool = { icon: IconName; label: string; on: () => void; disabled?: boolean; active?: boolean }
 
 /** Look tools of an adjustment layer (they change everything under it). */
 const ADJ_LOOKS = (setPanel: (p: PanelName) => void) => [
@@ -105,11 +111,18 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
       const mediaInfo: Record<string, MediaInfo> = { ...rec.mediaInfo }
       const ids = new Set([...rec.mediaIds, ...usedSources(rec.data).keys()])
       for (const id of ids) {
+        if (id.startsWith('proxy:')) continue
         const m = await getMedia(id)
         if (!m) continue
         if (m.meta?.name) mediaInfo[id] = { name: m.meta.name, kind: m.meta.kind, duration: m.meta.duration }
         // a stored file that can no longer be read counts as missing, so it can be found again
         if (!(await unreadable(m.blob))) sources[id] = restoreSource(m.meta, m.blob)
+      }
+      // preview copies of big videos
+      for (const s of Object.values(sources)) {
+        if (s.kind !== 'video') continue
+        const b = await getProxy(s.id).catch(() => null)
+        if (b && !(await unreadable(b))) sources[s.id] = { ...s, proxy: { file: b, url: URL.createObjectURL(b) } }
       }
       setLoaded({ id: rec.id, name: rec.name, project: rec.data, sources, mediaInfo })
     })().catch((e) => setError(String(e)))
@@ -121,7 +134,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'adjlayer' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'adjlayer' | 'scenes' | 'join' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -197,12 +210,19 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
   // what plays: hidden track rows left out, muted rows silent, top row in front
   const output = useMemo(() => playable(ed.project), [ed.project])
-  useEffect(() => { player?.setProject(output, ed.sources) }, [player, output, ed.sources])
+  // the preview plays the light copies of big videos (when there are any and they are switched on); export never does
+  const [useProxies, setUseProxies] = useState(proxiesWanted)
+  const previewSources = useMemo(() => {
+    if (!useProxies || !Object.values(ed.sources).some((s) => s.proxy)) return ed.sources
+    return Object.fromEntries(Object.entries(ed.sources).map(([id, s]) => [id, s.proxy ? { ...s, url: s.proxy.url } : s]))
+  }, [ed.sources, useProxies])
+  useEffect(() => { player?.setProject(output, previewSources) }, [player, output, previewSources])
 
   // files the project uses that are not here any more (storage cleared): found again in the Missing files sheet
   const mediaInfo = useRef(initial.mediaInfo)
   const missing = useMemo(() => missingSources(ed.project, ed.sources, initial.mediaInfo), [ed.project, ed.sources, initial.mediaInfo])
   const [relinkSheet, setRelinkSheet] = useState(false)
+  const [proxySheet, setProxySheet] = useState(false)
 
   const saveNow = useCallback(() => {
     const first = ed.project.clips.find((c) => !c.fromTemplate) ?? ed.project.clips[0]
@@ -210,7 +230,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     return saveProject({
       id: initial.id, name, updatedAt: Date.now(), data: ed.project,
       // missing files stay listed, so they are still cleaned up with the project and can be found again
-      mediaIds: [...new Set([...Object.keys(ed.sources), ...missing.map((m) => m.id)])],
+      mediaIds: [...new Set([...Object.keys(ed.sources), ...missing.map((m) => m.id), ...Object.values(ed.sources).filter((x) => x.proxy).map((x) => `proxy:${x.id}`)])],
       thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: ed.layout.total, mediaInfo: mediaInfo.current,
     }).then(() => true, () => { setToast(t('Could not save the project (storage full?)')); return false })
   }, [ed.project, ed.sources, name, initial.id, ed.layout.total, missing])
@@ -233,6 +253,23 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const id = setTimeout(saveNow, 600)
     return () => clearTimeout(id)
   }, [saveNow])
+  // crash-safe: save at once when the app goes to the background (Android may close it there), and
+  // remember the open project so Home can offer it again if the app dies
+  const saveRef = useRef(saveNow)
+  useEffect(() => { saveRef.current = saveNow }, [saveNow])
+  useEffect(() => { markOpen(initial.id, name) }, [initial.id, name])
+  useEffect(() => {
+    logInfo('Editor opened', `${initial.project.clips.length} clips, ${initial.project.layers.length} layers, ${Object.keys(initial.sources).length} files`)
+    const now = () => { if (document.hidden) void saveRef.current() }
+    const leave = () => { void saveRef.current() }
+    document.addEventListener('visibilitychange', now)
+    window.addEventListener('pagehide', leave)
+    return () => {
+      document.removeEventListener('visibilitychange', now)
+      window.removeEventListener('pagehide', leave)
+      markClosed(initial.id)
+    }
+  }, [initial.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Smart shortcuts learn from how the items end up (on this device only)
   useEffect(() => {
@@ -795,10 +832,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   }
 
   const empty = ed.project.clips.length === 0
-  // a mouse wheel scrolls the tool row sideways (desktop has no swipe)
-  const toolsWheel = (e: React.WheelEvent<HTMLElement>) => {
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY
-  }
+  // where the tool row sits: under the video, or beside it (Toolbar settings)
+  // (full screen keeps the tools in its slide-in edit panel, so they sit at the bottom there)
+  const sideDock = useDock()
+  const dock = fs ? 'bottom' : sideDock
 
   // ---- toolbar for the current selection
   let tools: Tool[]
@@ -816,7 +853,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') },
       { icon: 'color', label: 'Color', on: () => setPanel('color') },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') } },
-      { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateAllClips(() => ({ fit: selClip.fit === 'fit' ? 'fill' : 'fit' })) },
+      { key: 'fit', icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateAllClips(() => ({ fit: selClip.fit === 'fit' ? 'fill' : 'fit' })) },
       ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
       { icon: 'trash', label: 'Delete', on: removeSel },
     ]
@@ -836,11 +873,13 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!selClip.chroma?.enabled },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'trim', label: 'Trim', on: () => setPanel('trim') },
+      ...(!photo ? [{ icon: 'film', label: 'Find shots', on: () => setPanel('scenes') } as Tool] : []),
+      { icon: 'layers', label: selClip.compound ? 'Break apart' : 'Join clips', on: () => setPanel('join'), active: !!selClip.compound },
       { icon: 'keyframe', label: 'Zoom & move', on: () => setPanel('zoommove'), active: !!(selClip.keys?.length || selClip.pos) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
-      { icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
+      { key: 'motion', icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
       { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !!selClip.ramp },
-      ...(!photo ? [{ icon: 'reverse', label: reversing !== null ? `${Math.round(reversing * 100)}%` : 'Reverse', on: reverse, disabled: reversing !== null } as Tool] : []),
+      ...(!photo ? [{ key: 'reverse', icon: 'reverse', label: reversing !== null ? `${Math.round(reversing * 100)}%` : 'Reverse', on: reverse, disabled: reversing !== null } as Tool] : []),
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
       // the clip's sound as its own item on an audio row (the clip goes silent)
       ...(hasSound(ed.sources[selClip.sourceId]) ? [{ icon: 'detach', label: 'Detach audio', on: () => detach([selClip.id]) } as Tool] : []),
@@ -855,7 +894,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'crop', label: 'Crop', on: () => setPanel('crop') },
       { icon: 'mask', label: 'Mask', on: () => setPanel('mask'), active: !!selClip.shapeMask },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') }, disabled: ed.project.clips.at(-1)?.id === selClip.id },
-      { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
+      { key: 'fit', icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
       { icon: 'brush', label: 'Copy style', on: () => copyStyleOf(selClip.id) },
       ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
@@ -918,7 +957,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     ]
     const capsAll = selLayer.type === 'text' && selLayer.subtitle
       ? [
-          { icon: 'subtitles', label: sel?.type === 'layer' && sel.all ? 'One caption' : 'All captions', on: () => ed.setSel({ type: 'layer', id: selLayer.id, all: !(sel?.type === 'layer' && sel.all) }) } as Tool,
+          { key: 'captions', icon: 'subtitles', label: sel?.type === 'layer' && sel.all ? 'One caption' : 'All captions', on: () => ed.setSel({ type: 'layer', id: selLayer.id, all: !(sel?.type === 'layer' && sel.all) }) } as Tool,
           { icon: 'ai', label: 'Listen again', on: () => { player?.pause(); ed.setSel({ type: 'layer', id: selLayer.id }); setPanel('ai') } } as Tool,
         ]
       : []
@@ -988,7 +1027,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'title', label: 'Titles', on: () => { ed.addText(time); setPanel('text-titles') }, disabled: empty },
       { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); openClipPanel('order') }, disabled: !targetClip || ed.project.clips.length < 2 },
       { icon: 'selectAll', label: 'Select all', on: selectAllClips, disabled: empty || !!ed.project.main?.locked },
-      { icon: 'marker', label: markers.length ? `${t('Markers')} (${markers.length})` : 'Add marker', on: () => (markers.length ? setMarkerSheet({ focus: null }) : addMarkerHere(true)), disabled: empty },
+      { key: 'marker', icon: 'marker', label: markers.length ? `${t('Markers')} (${markers.length})` : 'Add marker', on: () => (markers.length ? setMarkerSheet({ focus: null }) : addMarkerHere(true)), disabled: empty },
       { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
       { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
       { icon: 'smartcut', label: 'Smart cut', on: () => setPanel('smartcut'), disabled: empty },
@@ -1005,6 +1044,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'color', label: 'Color', on: () => openClipPanel('color'), disabled: !targetClip },
       { icon: 'layers', label: 'Adjustment layer', on: () => { ed.addAdjustment(time); setPanel('adjlayer') }, disabled: empty },
       { icon: 'chart', label: 'Scopes', on: toggleScopes, disabled: empty, active: scopes },
+      { icon: 'compress', label: 'Preview copies', on: () => { player?.pause(); setProxySheet(true) }, disabled: !Object.values(ed.sources).some((x) => x.kind === 'video'), active: useProxies && Object.values(ed.sources).some((x) => x.proxy) },
       { icon: 'blur', label: 'Blur', on: () => ed.addBlur(time), disabled: empty },
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
       { icon: 'watermark', label: 'Watermark', on: () => setPanel('watermark'), disabled: empty },
@@ -1141,7 +1181,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
   else if (panel === 'split') panelView = <SplitPanel onClose={closePanel} onPick={addSplit} />
   else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
-  else if (panel === 'adjlayer' && selLayer?.type === 'adjustment') panelView = <AdjustmentPanel ed={ed} layer={selLayer} onClose={closePanel} />
+  else if (panel === 'join' && selClip) panelView = <JoinPanel ed={ed} clip={selClip} onClose={closePanel} onToast={setToast} />
+    else if (panel === 'scenes' && selClip) panelView = <ScenePanel ed={ed} clip={selClip} onSeek={seek} onClose={closePanel} onToast={setToast} />
+    else if (panel === 'adjlayer' && selLayer?.type === 'adjustment') panelView = <AdjustmentPanel ed={ed} layer={selLayer} onClose={closePanel} />
     else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
   else if (panel === 'chroma' && selStored?.type === 'media') panelView = <GreenScreenPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'smartcut') panelView = <SmartCutPanel ed={ed} onToast={setToast} onClose={closePanel} onShort={makeShort}
@@ -1177,8 +1219,14 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       onRecordPause={(paused) => { if (paused) player?.pause(); else player?.play() }} />
   )
 
+  const toolbar = (
+    <ToolBar tools={tools} dock={dock} run={runTool} still={fs}
+      onBack={selClip || selStored ? () => { ed.setSel(null); setPanel(null) } : undefined}
+      locked={(tl) => !!PREMIUM_TOOLS[tl.label] && !isAllowed(PREMIUM_TOOLS[tl.label])} />
+  )
+
   return (
-    <div className={`app editor${fs ? ' fs' : ''}${fs && fsEdit ? ' fs-edit' : ''}${fs && fsIdle && playing && !fsEdit ? ' fs-idle' : ''}`}>
+    <div className={`app editor dock-${dock}${fs ? ' fs' : ''}${fs && fsEdit ? ' fs-edit' : ''}${fs && fsIdle && playing && !fsEdit ? ' fs-idle' : ''}`}>
       <header className="top">
         <button className="icon-btn" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
         <button className="title" onClick={rename}>{name}</button>
@@ -1195,10 +1243,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <div className="menu">
                 <button onClick={saveToApp}><Icon name="save" size={18} /> {t('Save project')}</button>
                 <button onClick={saveToFile}><Icon name="download" size={18} /> {t('Save as .avp file')}</button>
+                <button onClick={() => { setSaveMenu(false); player?.pause(); openBlackbox() }} data-testid="editor-blackbox"><Icon name="blackbox" size={18} /> {t('Blackbox log')}</button>
               </div>
             )}
           </span>
-          <button className="btn primary small" disabled={empty || importing > 0} onClick={() => { player?.pause(); setExporting(true) }}>{t('Export')}</button>
+          <button className="btn primary small" data-help="export" disabled={empty || importing > 0} onClick={() => { player?.pause(); void saveNow(); setExporting(true) }}>{t('Export')}</button>
         </div>
       </header>
 
@@ -1207,6 +1256,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           ⚠ {missing.length === 1 ? t('1 file is missing') : `${missing.length} ${t('files are missing')}`} · <b>{t('Find files')}</b>
         </button>
       )}
+      <div className="stage-row">
+      {dock === 'left' && toolbar}
       <div className="stage-wrap">
         <Preview ed={ed} player={player} canvasRef={canvasRef} t={time} onTogglePlay={togglePlay}
           onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} compare={compare} onCompare={setCompare} />
@@ -1246,6 +1297,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         )}
         {importing > 0 && <div className="toast">{t('Opening')}… ({importing})</div>}
         {toast && <div className="toast error" onClick={() => setToast(null)}>{toast}</div>}
+      </div>
+      {dock === 'right' && toolbar}
       </div>
 
       <div className="transport">
@@ -1314,16 +1367,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       )}
 
       {habitBar && <HabitBar key={habitBar.key} text={habitBar.text} action={habitBar.action} onApply={habitBar.apply} onNotNow={habitBar.notNow} onSettings={() => setHabitsSheet(true)} />}
-      <nav className="tools" onWheel={toolsWheel}>
-        {(selClip || selStored) && <button className="tool back" onClick={() => { ed.setSel(null); setPanel(null) }}><Icon name="back" /><span>{t('Back')}</span></button>}
-        {tools.map((tl) => (
-          <button key={tl.label} className={`tool${tl.active ? ' on' : ''}${tl.icon === 'habit' ? ' habit' : ''}`} disabled={tl.disabled} onClick={() => runTool(tl)}>
-            <Icon name={tl.icon} />
-            {PREMIUM_TOOLS[tl.label] && !isAllowed(PREMIUM_TOOLS[tl.label]) && <i className="crown-badge" aria-label={t('Premium')}><Icon name="crown" size={11} /></i>}
-            <span>{t(tl.label)}</span>
-          </button>
-        ))}
-      </nav>
+      {dock === 'bottom' && toolbar}
 
       {panelView && <div className="panel-wrap">{panelView}</div>}
       {panel === 'crop' && targetClip && ed.sources[targetClip.sourceId] && (
@@ -1345,6 +1389,12 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {markerSheet && (
         <MarkerSheet markers={markers} focus={markerSheet.focus} time={time} onAdd={() => { const m = ed.addMarker(time); setMarkerSheet({ focus: m.id }) }}
           onUpdate={ed.updateMarker} onRemove={ed.removeMarker} onSeek={seek} onClose={() => setMarkerSheet(null)} onToast={setToast} />
+      )}
+      {proxySheet && (
+        <ProxySheet videos={[...usedSources(ed.project).keys()].map((id) => ed.sources[id]).filter((x) => x?.kind === 'video')}
+          use={useProxies} onUse={(v) => { setUseProxies(v); setProxiesWanted(v) }} onClose={() => setProxySheet(false)} onToast={setToast}
+          onMade={async (id, blob) => { await saveProxy(id, blob); const x = ed.sources[id]; if (x) ed.addSource({ ...x, proxy: { file: blob, url: URL.createObjectURL(blob) } }) }}
+          onDelete={async (id) => { await deleteProxy(id); const x = ed.sources[id]; if (x?.proxy) { URL.revokeObjectURL(x.proxy.url); ed.addSource({ ...x, proxy: null }) } }} />
       )}
       {relinkSheet && <RelinkSheet missing={missing} onClose={() => setRelinkSheet(false)} onToast={setToast}
         onLinked={async (src) => { ed.addSource(src); await saveMedia(src) }} />}

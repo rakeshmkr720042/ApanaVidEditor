@@ -993,6 +993,37 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .relink-text { display: flex; flex-direction: column; min-width: 0; }
 .relink-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---- Blackbox log */
+.link-btn { background: none; border: 0; padding: 0; color: var(--accent, #7c9cff); text-decoration: underline; font: inherit; cursor: pointer; }
+.sheet.blackbox .row .btn { flex: 1 1 auto; }
+.bb-filter { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; font-size: 14px; }
+.bb-help { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; line-height: 1.45; max-height: 40vh; overflow-y: auto; }
+.bb-help p { margin: 4px 0; }
+.bb-help ol { margin: 4px 0; padding-left: 20px; }
+.bb-help p.bb-bullet { padding-left: 10px; }
+.bb-help > div + div { margin-top: 10px; }
+.bb-list { max-height: 48vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; }
+.bb-row { display: grid; grid-template-columns: auto auto 1fr; gap: 0 8px; padding: 5px 8px; border-bottom: 1px solid var(--line); align-items: baseline; }
+.bb-row:last-child { border-bottom: 0; }
+.bb-time { font-variant-numeric: tabular-nums; opacity: 0.7; white-space: nowrap; }
+.bb-lvl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.75; }
+.bb-msg { word-break: break-word; min-width: 0; }
+.bb-row.error .bb-lvl, .bb-row.crash .bb-lvl { color: #ff6b6b; opacity: 1; font-weight: 700; }
+.bb-row.crash { background: rgba(255, 80, 80, 0.08); }
+.bb-row.warn .bb-lvl { color: #ffb84d; opacity: 1; }
+.bb-row.action .bb-lvl { color: #8fb3ff; }
+.bb-data { grid-column: 1 / -1; margin: 4px 0 0; white-space: pre-wrap; word-break: break-all; font-size: 11px; background: rgba(0, 0, 0, 0.3); padding: 6px; border-radius: 8px; max-height: 30vh; overflow: auto; }
+.bb-pill { position: fixed; left: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 60; display: flex; align-items: center; gap: 6px; background: #4a1f24; color: #ffd6d6; border: 1px solid #a8434d; border-radius: 999px; padding: 7px 12px; font-size: 13px; box-shadow: 0 6px 18px #0008; cursor: pointer; }
+.crash-guard { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 8px; padding: 24px 16px; min-height: 100vh; }
+
+/* ---- Export safety check and project recovery */
+.export-check { border-radius: 12px; padding: 8px 12px; margin-top: 10px; font-size: 13px; line-height: 1.4; }
+.export-check.warn { background: rgba(255, 170, 60, 0.12); border: 1px solid rgba(255, 170, 60, 0.45); }
+.export-check.danger { background: rgba(255, 80, 80, 0.12); border: 1px solid rgba(255, 80, 80, 0.5); }
+.export-check ul { margin: 4px 0 6px; padding-left: 18px; }
+.export-check .btn { margin-top: 2px; }
+.recover-card { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: rgba(124, 156, 255, 0.1); border: 1px solid rgba(124, 156, 255, 0.45); border-radius: 12px; padding: 10px 12px; }
+.recover-card span { flex: 1 1 180px; }
 /* video scopes over the preview */
 .scopes { position: absolute; left: 8px; top: 8px; z-index: 6; width: min(272px, 46vw); padding: 6px; border-radius: 10px; background: rgba(10,12,18,0.88); border: 1px solid rgba(255,255,255,0.12); display: flex; flex-direction: column; gap: 4px; }
 .scopes canvas { width: 100%; height: auto; aspect-ratio: 2 / 1; border-radius: 6px; background: #000; display: block; }
@@ -1028,6 +1059,13 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .font-strip button { flex: 0 0 auto; display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; font-size: 18px; line-height: 1.5; }
 .font-strip button small { font-family: system-ui; font-size: 10px; color: var(--muted); }
 .font-strip .on { border-color: var(--accent); }
+/* scene detection, compound clips */
+.scene-cuts { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
+.join-list { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.join-list button { flex: 0 0 auto; width: 72px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px; border-radius: 8px; border: 2px solid transparent; background: rgba(255,255,255,0.06); color: inherit; font-size: 12px; }
+.join-list button.on { border-color: var(--accent, #7c5cff); }
+.join-list button:disabled.on { opacity: 1; }
+.join-list img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 5px; background: #000; }
 /* ---------- full screen preview (with the edit panel sliding in) and before / after */
 .stage-corner { position: absolute; right: 8px; bottom: 8px; z-index: 4; display: flex; gap: 6px; }
 .stage-corner button {
@@ -1101,3 +1139,86 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 /* with the edit panel open the video is narrower: icons only */
 .app.editor.fs-edit .fs-btn span, .app.editor.fs-edit .fs-row .skip, .app.editor.fs-edit .fs-row .rate-btn { display: none; }
 .app.editor.fs-edit .fs-btn { padding: 0 9px; }
+/* ---------- toolbar: groups, side docks, hover magnify (components/ToolBar.tsx) */
+.stage-row { flex: 1; min-height: 0; display: flex; }
+.stage-row > .stage-wrap { flex: 1; min-width: 0; }
+.toolbar { display: flex; flex-direction: column; min-width: 0; flex-shrink: 0; }
+.tools { position: relative; }
+.tool-groups { display: flex; gap: 4px; padding: 6px 6px 0; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.tool-groups::-webkit-scrollbar { display: none; }
+.tg-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line);
+  background: var(--panel-2); font-size: 12px; white-space: nowrap; flex: 0 0 auto; color: var(--muted);
+}
+.tg-chip.on { border-color: var(--accent); background: rgba(79, 140, 255, 0.18); color: #fff; }
+.tg-chip.on svg { color: var(--accent); }
+.tg-chip[data-group="fav"] svg { color: #ffcc00; }
+.tg-settings { padding: 4px 8px; margin-left: auto; }
+.pin-badge { position: absolute; top: 3px; left: 8px; color: #ffcc00; display: grid; }
+.tool-menu-list { display: grid; gap: 8px; margin-top: 6px; }
+.tool-menu-list .btn { justify-content: flex-start; }
+.tool-menu h2 svg { align-self: center; }
+.flip { display: inline-grid; transform: rotate(180deg); }
+.tool.dragging { opacity: .35; }
+.tool.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
+.tool.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
+.preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 6px; }
+.preset-card { display: grid; justify-items: start; gap: 2px; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); text-align: left; color: var(--text); }
+.preset-card small { font-size: 11px; color: var(--muted); line-height: 1.25; }
+.preset-card.on { border-color: var(--accent); background: rgba(79, 140, 255, 0.14); }
+.dock-pic { color: var(--muted); margin-bottom: 4px; }
+
+/* side docks: a column of tools in the empty space beside the video */
+.toolbar.dock-left, .toolbar.dock-right { width: 92px; background: var(--bg, #0d0d12); }
+.toolbar.dock-left { border-right: 1px solid var(--line); }
+.toolbar.dock-right { border-left: 1px solid var(--line); }
+.dock-left .tool-groups, .dock-right .tool-groups { flex-wrap: wrap; justify-content: center; padding: 6px 4px; border-bottom: 1px solid var(--line); overflow: visible; }
+.dock-left .tg-chip, .dock-right .tg-chip { padding: 5px 7px; }
+.dock-left .tg-chip span, .dock-right .tg-chip span { display: none; }
+.dock-left .tg-settings, .dock-right .tg-settings { margin-left: 0; }
+.dock-left .tools, .dock-right .tools { flex-direction: column; overflow-x: hidden; overflow-y: auto; flex: 1; min-height: 0; padding: 6px 4px; align-items: stretch; }
+.dock-left .tool, .dock-right .tool { min-width: 0; width: 100%; padding: 7px 2px; }
+.dock-left .tool span, .dock-right .tool span { text-align: center; line-height: 1.15; }
+.dock-left .tool.back, .dock-right .tool.back { border-right: 0; border-bottom: 1px solid var(--line); margin: 0 0 4px; }
+@media (min-width: 1200px) {
+  .toolbar.dock-left, .toolbar.dock-right { width: 168px; }
+  .dock-left .tools, .dock-right .tools { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+  .dock-left .tool-groups .tg-chip span, .dock-right .tool-groups .tg-chip span { display: inline; }
+}
+
+/* hover magnify (mouse only): the button under the cursor grows most, its neighbours less; JS sets --mag and the transform */
+@media (hover: hover) and (pointer: fine) {
+  .toolbar.mag .tool { transition: transform .09s ease-out, background-color .09s; transform-origin: 50% 100%; will-change: transform; }
+  .toolbar.mag .tool:not(:disabled) { background-color: rgba(79, 140, 255, calc(var(--mag, 0) * .26)); }
+  .toolbar.mag .tool:not(:disabled) svg { color: color-mix(in srgb, var(--accent) calc(var(--mag, 0) * 100%), currentColor); }
+  .toolbar.mag.dock-bottom .tools { padding-top: 18px; }
+  .toolbar.mag.dock-left .tool { transform-origin: 0 50%; }
+  .toolbar.mag.dock-right .tool { transform-origin: 100% 50%; }
+  .toolbar.mag.dock-left .tools { padding-right: 26px; }
+  .toolbar.mag.dock-right .tools { padding-left: 26px; }
+  .toolbar.mag.dock-left, .toolbar.mag.dock-right { width: 112px; }
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 1200px) {
+  .toolbar.mag.dock-left, .toolbar.mag.dock-right { width: 190px; }
+  .toolbar.mag.dock-left .tool, .toolbar.mag.dock-right .tool { transform-origin: 50% 50%; }
+  .toolbar.mag.dock-left .tools, .toolbar.mag.dock-right .tools { padding: 10px 12px; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .tool-groups { padding-top: 2px; }
+  .tg-chip { padding: 2px 8px; font-size: 11px; }
+  .dock-bottom .tg-chip span { display: none; }
+}
+.preset-card, .preset-card small { white-space: normal; overflow-wrap: anywhere; }
+/* phone turned sideways: groups as a thin strip of icons beside the tool column, so the tools keep the height */
+@media (orientation: landscape) and (max-height: 500px) {
+  .toolbar.dock-left, .toolbar.dock-right { flex-direction: row; width: 124px; }
+  .toolbar.dock-right { flex-direction: row-reverse; }
+  .dock-left .tool-groups, .dock-right .tool-groups {
+    flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; width: 40px; padding: 4px 3px; gap: 3px;
+    border-bottom: 0; overflow-y: auto; overflow-x: hidden;
+  }
+  .dock-left .tool-groups { border-right: 1px solid var(--line); }
+  .dock-right .tool-groups { border-left: 1px solid var(--line); }
+  .dock-left .tg-chip, .dock-right .tg-chip { padding: 5px 0; justify-content: center; }
+  .dock-left .tools, .dock-right .tools { padding: 4px 2px; }
+}

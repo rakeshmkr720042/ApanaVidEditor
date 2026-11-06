@@ -1,29 +1,52 @@
 import { Capacitor } from '@capacitor/core'
+import { error, info } from './blackbox'
 
 export const isNative = Capacitor.isNativePlatform()
 
 function toBase64(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const r = new FileReader()
-    r.onload = () => resolve(String(r.result).split(',')[1])
+    r.onload = () => resolve(String(r.result).split(',')[1] ?? '')
     r.onerror = () => reject(r.error)
     r.readAsDataURL(blob)
   })
 }
 
-/** On Android, writes the video to Documents/Apna Editor and opens the share sheet. */
+/** Bytes per write. Each piece crosses to Android as base64 text, so it must stay small. */
+const PIECE = 3 << 20
+
+/**
+ * On Android, writes the video to Documents/Apna Editor and opens the share sheet.
+ * Big files go over in 3 MB pieces: sending a whole 300 MB video as one base64 string needed
+ * about 1 GB of memory at once (text in the page, then again in Java), which closed the app.
+ */
 export async function saveNative(blob: Blob, name: string, share: boolean) {
   const { Filesystem, Directory } = await import('@capacitor/filesystem')
-  const { uri } = await Filesystem.writeFile({
-    path: `Apna Editor/${name}`,
-    data: await toBase64(blob),
-    directory: Directory.Documents,
-    recursive: true,
-  })
+  const path = `Apna Editor/${name}`
+  const pieces = Math.max(1, Math.ceil(blob.size / PIECE))
+  info(`Saving file ${name}`, `${(blob.size / 1048576).toFixed(1)} MB in ${pieces} piece(s)`)
+  let uri = ''
+  try {
+    for (let i = 0; i < pieces; i++) {
+      const data = await toBase64(blob.slice(i * PIECE, (i + 1) * PIECE))
+      if (i === 0) uri = (await Filesystem.writeFile({ path, data, directory: Directory.Documents, recursive: true })).uri
+      else await Filesystem.appendFile({ path, data, directory: Directory.Documents })
+    }
+  } catch (e) {
+    error(`Could not save ${name}`, e)
+    throw e
+  }
   if (share) {
     const { Share } = await import('@capacitor/share')
     await Share.share({ title: name, files: [uri] })
   }
+  return uri
+}
+
+/** On Android, writes a text file to Documents/Apna Editor (no share sheet). */
+export async function saveTextNative(name: string, text: string) {
+  const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
+  const { uri } = await Filesystem.writeFile({ path: `Apna Editor/${name}`, data: text, encoding: Encoding.UTF8, directory: Directory.Documents, recursive: true })
   return uri
 }
 
