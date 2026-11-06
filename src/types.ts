@@ -483,7 +483,26 @@ export interface Track {
 }
 
 /** Switches for the main video row. */
-export interface MainTrack { muted?: boolean; locked?: boolean }
+export interface MainTrack {
+  muted?: boolean
+  locked?: boolean
+  frame?: MainFrame | null // where the whole main video sits on the screen, missing = full screen
+}
+
+/**
+ * The main video's frame: a box on the screen (fractions of it) that the whole main video is drawn into, with
+ * the project background around it. Text, stickers and overlays stay where they are.
+ */
+export interface MainFrame {
+  x: number; y: number // top left, 0..1
+  w: number; h: number // size, 0..1
+  fit: 'fill' | 'fit' // fill: covers the box (edges cut off); fit: the whole picture shows
+  round: number // 0..1 rounded corners
+  border?: number // 0..1 border thickness, 0 = none
+  borderColor?: string
+  shadow?: boolean
+  preset?: 'full' | '9:16' | '16:9' | '1:1' | '4:5' | 'free' // the shape picked (resizing a corner keeps it)
+}
 
 export interface Project {
   clips: Clip[]

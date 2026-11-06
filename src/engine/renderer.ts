@@ -1,10 +1,11 @@
-import type { AdjustmentLayer, Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
+import type { AdjustmentLayer, Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MainFrame, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
 import { activeAt, sourceAt, type LaidClip } from '../model/timeline'
 import { stabAt } from './motion'
 import { drawPhoto3d, photo3dKey } from './photo3d'
 import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
 import { posAt } from '../model/clipKeys'
+import { contentRect, mainFrameOn } from '../model/mainFrame'
 import { applyMask } from './shapeMask'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
@@ -152,6 +153,7 @@ export class Renderer {
     }
 
     if (a && inp.project.beatFx) this.applyBeat(inp)
+    if (mainFrameOn(inp.project.main?.frame)) this.applyMainFrame(inp, inp.project.main!.frame!)
 
     // a full-screen presenter card goes under captions and text; the strip and the corner card go on top
     const pr = inp.project.presenter
@@ -198,6 +200,76 @@ export class Renderer {
     }
 
     if (inp.watermark) this.drawWatermark(inp.watermark)
+  }
+
+  private frameBg = makeCanvas(48, 48)
+
+  /**
+   * Main frame: the main video (as drawn so far) goes into its box, with the project background (a colour, or
+   * the video itself blurred) around it, and optional round corners, border and shadow.
+   */
+  private applyMainFrame(inp: RenderInput, f: MainFrame) {
+    const { ctx, W, H } = this
+    const bc = ctx2d(this.base)
+    bc.globalCompositeOperation = 'copy'
+    bc.drawImage(this.canvas, 0, 0)
+    bc.globalCompositeOperation = 'source-over'
+    const bg = inp.project.settings.background
+    ctx.save()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalAlpha = 1
+    if (bg === 'blur') {
+      const s = this.frameBg
+      s.width = 48; s.height = Math.max(8, Math.round((48 * H) / W))
+      const sc = ctx2d(s)
+      sc.drawImage(this.base, 0, 0, s.width, s.height)
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.filter = 'brightness(0.6)'
+      ctx.drawImage(s, 0, 0, W, H)
+      ctx.filter = 'none'
+    } else {
+      ctx.fillStyle = bg === 'white' ? '#fff' : bg === 'black' ? '#000' : bg
+      ctx.fillRect(0, 0, W, H)
+    }
+    const r = contentRect(f, W, H)
+    const rad = Math.max(0, Math.min(1, f.round)) * Math.min(r.bw, r.bh) / 2
+    const path = () => {
+      ctx.beginPath()
+      const { bx: x, by: y, bw: w, bh: h } = r
+      ctx.moveTo(x + rad, y)
+      ctx.arcTo(x + w, y, x + w, y + h, rad)
+      ctx.arcTo(x + w, y + h, x, y + h, rad)
+      ctx.arcTo(x, y + h, x, y, rad)
+      ctx.arcTo(x, y, x + w, y, rad)
+      ctx.closePath()
+    }
+    if (f.shadow) {
+      ctx.save()
+      ctx.shadowColor = 'rgba(0,0,0,0.55)'
+      ctx.shadowBlur = Math.min(W, H) * 0.04
+      ctx.shadowOffsetY = Math.min(W, H) * 0.01
+      ctx.fillStyle = '#000'
+      path()
+      ctx.fill()
+      ctx.restore()
+    }
+    ctx.save()
+    path()
+    ctx.clip()
+    if (f.fit === 'fit') { ctx.fillStyle = '#000'; ctx.fillRect(r.bx, r.by, r.bw, r.bh) }
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(this.base, r.dx, r.dy, r.dw, r.dh)
+    ctx.restore()
+    const bw = (f.border ?? 0) * Math.min(W, H) * 0.03
+    if (bw > 0.3) {
+      ctx.lineWidth = bw
+      ctx.strokeStyle = f.borderColor ?? '#fff'
+      path()
+      ctx.stroke()
+    }
+    ctx.restore()
   }
 
   private beatMemo: { key: string; times: number[] } = { key: '', times: [] }

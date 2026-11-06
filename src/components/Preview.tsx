@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Player } from '../engine/player'
 import type { Editor } from '../model/useEditor'
-import type { Layer, MediaLayer, TextLayer, VisualLayer } from '../types'
+import type { Layer, MainFrame, MediaLayer, TextLayer, VisualLayer } from '../types'
+import { FULL_FRAME, keepOn, scaleFrame, snapEdge, snapMove } from '../model/mainFrame'
 import { defaultFrame } from '../engine/text'
 import { isLocked, playable } from '../model/tracks'
 import { atTime } from '../model/keyframes'
@@ -31,6 +32,8 @@ interface Props {
   onTogglePlay: () => void
   /** Watermark panel is open: the watermark can be dragged. */
   wmEdit?: boolean
+  /** Main frame panel is open: the main video's frame can be moved and resized. */
+  frameEdit?: boolean
 }
 
 type Gesture =
@@ -39,9 +42,12 @@ type Gesture =
   | { kind: 'scale'; id: string; cx: number; cy: number; d0: number; a0: number; s0: number; r0: number }
   | { kind: 'edge'; id: string; edge: Edge; x0: number; y0: number; rect0: Rect }
   | { kind: 'pinch'; id: string; d0: number; a0: number; s0: number; r0: number }
+  | { kind: 'frame-move'; x0: number; y0: number; f0: MainFrame }
+  | { kind: 'frame-edge'; edge: Edge; x0: number; y0: number; f0: MainFrame }
+  | { kind: 'frame-pinch'; d0: number; f0: MainFrame }
 
 /** The video canvas plus handles to move, scale and rotate text, stickers, overlays and blur areas. */
-export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit }: Props) {
+export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit, frameEdit }: Props) {
   const wrap = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ w: 0, h: 0, left: 0, top: 0 })
   const gesture = useRef<Gesture | null>(null)
@@ -74,6 +80,10 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   const selected = ed.sel?.type === 'layer' ? layers.find((l) => l.id === ed.sel!.id) : undefined
   const rect = selected && player && !(selected.type === 'sticker' && selected.shower) ? player.renderer.layerRect(selected, ed.sources) : null
   const wmRect = wmEdit && player ? player.renderer.watermarkRect(ed.project, ed.sources, t) : null
+  // the main video's frame, while its panel is open; guides show the lines it snapped to
+  const frame = frameEdit ? ed.project.main?.frame ?? FULL_FRAME : null
+  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] })
+  const setFrame = (f: MainFrame) => ed.setMain({ frame: f })
 
   const toCanvas = (e: React.PointerEvent) => {
     const r = wrap.current!.getBoundingClientRect()
@@ -119,6 +129,22 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
       if (!gesture.current) ed.begin()
       const sp = spread()
       gesture.current = { kind: 'pinch', id: selected.id, d0: sp.d, a0: sp.a, s0: selected.box.scale, r0: selected.box.rotation }
+      return
+    }
+    if (frame) {
+      e.currentTarget.setPointerCapture(e.pointerId)
+      // two fingers resize the frame; one finger inside it moves it
+      if (pts.current.size === 2) {
+        if (!gesture.current) ed.begin()
+        gesture.current = { kind: 'frame-pinch', d0: spread().d, f0: frame }
+        return
+      }
+      if (pts.current.size > 1) return
+      const inside = p.x >= frame.x * W && p.x <= (frame.x + frame.w) * W && p.y >= frame.y * H && p.y <= (frame.y + frame.h) * H
+      if (inside) {
+        ed.begin()
+        gesture.current = { kind: 'frame-move', x0: p.x, y0: p.y, f0: frame }
+      }
       return
     }
     if (pts.current.size > 1) return
@@ -212,11 +238,66 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
     ed.end()
   }
 
+  const onFrameEdgeDown = (edge: Edge) => (e: React.PointerEvent) => {
+    if (!frame) return
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const p = toCanvas(e)
+    ed.begin()
+    gesture.current = { kind: 'frame-edge', edge, x0: p.x, y0: p.y, f0: frame }
+  }
+
+  /** Drags the frame's side or corner. A corner keeps the picked shape (9:16, 1:1…) unless Free; a side makes it Free. */
+  const frameEdge = (g: Extract<Gesture, { kind: 'frame-edge' }>, p: { x: number; y: number }, shift: boolean) => {
+    const f0 = g.f0, e = g.edge, min = 0.1
+    const dx = (p.x - g.x0) / W, dy = (p.y - g.y0) / H
+    const corner = (e.l || e.r) && (e.t || e.b)
+    const lock = corner && (f0.preset !== 'free') !== shift
+    const v: number[] = [], hz: number[] = []
+    let x0 = f0.x, x1 = f0.x + f0.w, y0 = f0.y, y1 = f0.y + f0.h
+    const sn = (val: number, out: number[]) => { const s = snapEdge(val); if (s.line !== null) out.push(s.line); return s.v }
+    if (e.l) x0 = Math.min(x1 - min, sn(Math.max(0, f0.x + dx), v))
+    if (e.r) x1 = Math.max(x0 + min, sn(Math.min(1, f0.x + f0.w + dx), v))
+    if (e.t) y0 = Math.min(y1 - min, sn(Math.max(0, f0.y + dy), hz))
+    if (e.b) y1 = Math.max(y0 + min, sn(Math.min(1, f0.y + f0.h + dy), hz))
+    let r = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+    if (lock) {
+      // keep the shape: follow whichever side moved more, the opposite corner stays put
+      const ratio = (f0.w * W) / (f0.h * H)
+      let w = r.w, h = r.h
+      if (Math.abs(w - f0.w) * W >= Math.abs(h - f0.h) * H) h = (w * W) / ratio / H
+      else w = (h * H * ratio) / W
+      // not past the screen's edges
+      const ax = e.l ? x1 : x0, ay = e.t ? y1 : y0
+      const maxW = e.l ? ax : 1 - ax, maxH = e.t ? ay : 1 - ay
+      const k = Math.min(1, maxW / w, maxH / h)
+      w *= k; h *= k
+      if (w < min || h < min) { const k2 = Math.max(min / w, min / h); w *= k2; h *= k2 }
+      r = { x: e.l ? ax - w : ax, y: e.t ? ay - h : ay, w, h }
+      v.length = 0; hz.length = 0
+    }
+    setGuides({ v, h: hz })
+    setFrame({ ...f0, ...keepOn(r), preset: lock ? f0.preset : 'free' })
+  }
+
   const onMove = (e: React.PointerEvent) => {
     if (pts.current.has(e.pointerId)) pts.current.set(e.pointerId, toCanvas(e))
     const g = gesture.current
     if (!g) return
     const p = toCanvas(e)
+    if (g.kind === 'frame-move') {
+      const moved = keepOn({ ...g.f0, x: g.f0.x + (p.x - g.x0) / W, y: g.f0.y + (p.y - g.y0) / H })
+      const sn = snapMove(moved, !e.altKey)
+      setGuides(sn.guides)
+      setFrame({ ...g.f0, ...keepOn(sn.r) })
+      return
+    }
+    if (g.kind === 'frame-edge') { frameEdge(g, p, e.shiftKey); return }
+    if (g.kind === 'frame-pinch') {
+      if (pts.current.size < 2) return
+      setFrame(scaleFrame(g.f0, spread().d / g.d0))
+      return
+    }
     if (g.kind === 'pinch') {
       if (pts.current.size < 2) return
       const l0 = ed.project.layers.find((x) => x.id === g.id)
@@ -277,12 +358,21 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   const onUp = (e: React.PointerEvent) => {
     pts.current.delete(e.pointerId)
     // lifting one finger of a pinch waits for the other
-    if (gesture.current?.kind === 'pinch' && pts.current.size) return
+    if ((gesture.current?.kind === 'pinch' || gesture.current?.kind === 'frame-pinch') && pts.current.size) return
     if (gesture.current) { gesture.current = null; ed.end() }
+    setGuides((gd) => (gd.v.length || gd.h.length ? { v: [], h: [] } : gd))
   }
 
   /** Mouse wheel over the selected layer resizes it (desktop has no pinch); one undo step per spin. */
   const onWheel = (e: React.WheelEvent) => {
+    if (frame && !gesture.current) {
+      // the wheel resizes the main frame around its centre
+      if (!wheelEnd.current) ed.begin()
+      clearTimeout(wheelEnd.current)
+      wheelEnd.current = window.setTimeout(() => { wheelEnd.current = 0; ed.end() }, 400)
+      setFrame(scaleFrame(frame, Math.exp(-e.deltaY * 0.0015)))
+      return
+    }
     if (!selected || selected.type === 'blur' || rectOf(selected) || gesture.current) return
     const r = wrap.current!.getBoundingClientRect()
     if (!hit((e.clientX - r.left - box.left) / scale, (e.clientY - r.top - box.top) / scale)) return
@@ -318,7 +408,18 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
       {wmRect && (
         <div className="sel-box wm" style={{ left: box.left + wmRect.cx * scale, top: box.top + wmRect.cy * scale, width: wmRect.w * scale, height: wmRect.h * scale, transform: 'translate(-50%, -50%)' }} />
       )}
-      {selected && rect && (
+      {frame && (
+        <div className="sel-box main-frame" data-testid="main-frame-box"
+          style={{ left: box.left + frame.x * box.w, top: box.top + frame.y * box.h, width: frame.w * box.w, height: frame.h * box.h }}>
+          {EDGES.map(([k, edge]) => (
+            <div key={k} className={`sel-edge e-${k}`} onPointerDown={onFrameEdgeDown(edge)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
+          ))}
+          <span className="main-frame-size">{Math.round(frame.w * W)} × {Math.round(frame.h * H)}</span>
+        </div>
+      )}
+      {frame && guides.v.map((x) => <div key={`v${x}`} className="snap-guide v" style={{ left: box.left + x * box.w, top: box.top, height: box.h }} />)}
+      {frame && guides.h.map((y) => <div key={`h${y}`} className="snap-guide h" style={{ top: box.top + y * box.h, left: box.left, width: box.w }} />)}
+      {!frame && selected && rect && (
         <div
           className="sel-box"
           style={{
@@ -335,7 +436,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
           {!rectOf(selected) && <div className="sel-handle" onPointerDown={onHandleDown} onPointerMove={onMove} onPointerUp={onUp} />}
         </div>
       )}
-      {selected?.type === 'media' && (
+      {!frame && selected?.type === 'media' && (
         <div className="frame-quick" onPointerDown={(e) => e.stopPropagation()}>
           <button onClick={() => place('fill')}>⛶ {tr('Full screen')}</button>
           <button onClick={() => place('fit')}>▭ {tr('Fit')}</button>
@@ -345,7 +446,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
           <button onClick={() => place('br')} aria-label={tr('Bottom right')} title={tr('Bottom right')}>◲</button>
         </div>
       )}
-      {selected?.type === 'text' && (
+      {!frame && selected?.type === 'text' && (
         <div className="frame-quick" onPointerDown={(e) => e.stopPropagation()}>
           <button onClick={() => quick('left')}>◧ {tr('Left half')}</button>
           <button onClick={() => quick('full')}>▭ {tr('Full width')}</button>

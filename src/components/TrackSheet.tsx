@@ -6,12 +6,14 @@ import { Icon } from './Icon'
 import { useCopiedTrack } from '../model/trackCopy'
 
 /** Everything for one track row: name, show, sound, lock, volume, order and delete. */
-export function TrackSheet({ ed, id, onClose, onSelectAll, onSelectAllClips, onCopy, onPaste }: {
+export function TrackSheet({ ed, id, onClose, onSelectAll, onSelectAllClips, onCopy, onPaste, onMainFrame }: {
   ed: Editor; id: string; onClose: () => void; onSelectAll?: (firstId: string) => void; onSelectAllClips?: () => void
   /** Copies this track ('main' = the main video) with everything on it. */
   onCopy?: (id: string) => void
   /** Opens the paste choices for the copied track. */
   onPaste?: () => void
+  /** Opens the Main frame tool (main video smaller / anywhere on the screen). */
+  onMainFrame?: () => void
 }) {
   const copied = useCopiedTrack()
   const copyRow = (n: number) => onCopy && (
@@ -36,6 +38,11 @@ export function TrackSheet({ ed, id, onClose, onSelectAll, onSelectAllClips, onC
           {onSelectAllClips && (
             <button className="btn wide" disabled={!n || !!ed.project.main?.locked} onClick={() => { onClose(); onSelectAllClips() }}>
               <Icon name="selectAll" size={18} /> {t('Select all clips')} ({n})
+            </button>
+          )}
+          {onMainFrame && (
+            <button className="btn wide" disabled={!n} onClick={() => { onClose(); onMainFrame() }} data-testid="main-frame-open">
+              <Icon name="fit" size={18} /> {t('Main frame: size & position')}
             </button>
           )}
           {copyRow(n)}
