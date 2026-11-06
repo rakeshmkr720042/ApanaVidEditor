@@ -25,8 +25,8 @@ function dataUrl(blob: Blob) {
 export async function projectToFile(name: string, project: Project, sources: Record<string, MediaSource>): Promise<Blob> {
   const media: AvpFile['media'] = []
   for (const s of Object.values(sources)) {
-    const { url: _url, file, ...meta } = s
-    void _url
+    const { url: _url, file, proxy: _proxy, ...meta } = s
+    void _url; void _proxy
     media.push({ meta, data: await dataUrl(file) })
   }
   const out: AvpFile = { app: 'ApanaVidEditor', version: 1, name, project, media }

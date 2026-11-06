@@ -9,7 +9,7 @@ import type { SplitLayout } from '../model/split'
 import { gradeIsEmpty } from '../engine/grade'
 import { REVERSE_MAX, reverseClip as reverseVideo, stillFrame } from '../engine/reverse'
 import { loadSource, restoreSource, videoWave } from '../lib/media'
-import { getMedia, getProject, saveMedia, saveProject } from '../lib/db'
+import { deleteProxy, getMedia, getProject, getProxy, saveMedia, saveProject, saveProxy } from '../lib/db'
 import { fmtTime, fmtTimecode, uid } from '../lib/format'
 import { projectToFile } from '../lib/projectFile'
 import { isNative, saveNative } from '../lib/save'
@@ -42,8 +42,12 @@ import { PasteTrackSheet } from './PasteTrackSheet'
 import { KeysSheet } from './KeysSheet'
 import { MarkerSheet } from './MarkerSheet'
 import { RelinkSheet } from './RelinkSheet'
+import { ProxySheet } from './ProxySheet'
+import { proxiesWanted, setProxiesWanted } from '../engine/proxy'
 import { Scopes } from './Scopes'
 import { mediaInfoOf, missingSources, unreadable, usedSources, type MediaInfo } from '../lib/relink'
+import { ScenePanel } from '../panels/ScenePanel'
+import { JoinPanel } from '../panels/JoinPanel'
 import { TrimPanel, LayerTrimPanel } from '../panels/TrimPanel'
 import { ZoomMovePanel } from '../panels/ClipKeysPanel'
 import { MaskPanel } from '../panels/MaskPanel'
@@ -106,11 +110,18 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
       const mediaInfo: Record<string, MediaInfo> = { ...rec.mediaInfo }
       const ids = new Set([...rec.mediaIds, ...usedSources(rec.data).keys()])
       for (const id of ids) {
+        if (id.startsWith('proxy:')) continue
         const m = await getMedia(id)
         if (!m) continue
         if (m.meta?.name) mediaInfo[id] = { name: m.meta.name, kind: m.meta.kind, duration: m.meta.duration }
         // a stored file that can no longer be read counts as missing, so it can be found again
         if (!(await unreadable(m.blob))) sources[id] = restoreSource(m.meta, m.blob)
+      }
+      // preview copies of big videos
+      for (const s of Object.values(sources)) {
+        if (s.kind !== 'video') continue
+        const b = await getProxy(s.id).catch(() => null)
+        if (b && !(await unreadable(b))) sources[s.id] = { ...s, proxy: { file: b, url: URL.createObjectURL(b) } }
       }
       setLoaded({ id: rec.id, name: rec.name, project: rec.data, sources, mediaInfo })
     })().catch((e) => setError(String(e)))
@@ -122,7 +133,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'adjlayer' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'adjlayer' | 'scenes' | 'join' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -198,12 +209,19 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
   // what plays: hidden track rows left out, muted rows silent, top row in front
   const output = useMemo(() => playable(ed.project), [ed.project])
-  useEffect(() => { player?.setProject(output, ed.sources) }, [player, output, ed.sources])
+  // the preview plays the light copies of big videos (when there are any and they are switched on); export never does
+  const [useProxies, setUseProxies] = useState(proxiesWanted)
+  const previewSources = useMemo(() => {
+    if (!useProxies || !Object.values(ed.sources).some((s) => s.proxy)) return ed.sources
+    return Object.fromEntries(Object.entries(ed.sources).map(([id, s]) => [id, s.proxy ? { ...s, url: s.proxy.url } : s]))
+  }, [ed.sources, useProxies])
+  useEffect(() => { player?.setProject(output, previewSources) }, [player, output, previewSources])
 
   // files the project uses that are not here any more (storage cleared): found again in the Missing files sheet
   const mediaInfo = useRef(initial.mediaInfo)
   const missing = useMemo(() => missingSources(ed.project, ed.sources, initial.mediaInfo), [ed.project, ed.sources, initial.mediaInfo])
   const [relinkSheet, setRelinkSheet] = useState(false)
+  const [proxySheet, setProxySheet] = useState(false)
 
   const saveNow = useCallback(() => {
     const first = ed.project.clips.find((c) => !c.fromTemplate) ?? ed.project.clips[0]
@@ -211,7 +229,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     return saveProject({
       id: initial.id, name, updatedAt: Date.now(), data: ed.project,
       // missing files stay listed, so they are still cleaned up with the project and can be found again
-      mediaIds: [...new Set([...Object.keys(ed.sources), ...missing.map((m) => m.id)])],
+      mediaIds: [...new Set([...Object.keys(ed.sources), ...missing.map((m) => m.id), ...Object.values(ed.sources).filter((x) => x.proxy).map((x) => `proxy:${x.id}`)])],
       thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: ed.layout.total, mediaInfo: mediaInfo.current,
     }).then(() => true, () => { setToast(t('Could not save the project (storage full?)')); return false })
   }, [ed.project, ed.sources, name, initial.id, ed.layout.total, missing])
@@ -837,6 +855,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!selClip.chroma?.enabled },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'trim', label: 'Trim', on: () => setPanel('trim') },
+      ...(!photo ? [{ icon: 'film', label: 'Find shots', on: () => setPanel('scenes') } as Tool] : []),
+      { icon: 'layers', label: selClip.compound ? 'Break apart' : 'Join clips', on: () => setPanel('join'), active: !!selClip.compound },
       { icon: 'keyframe', label: 'Zoom & move', on: () => setPanel('zoommove'), active: !!(selClip.keys?.length || selClip.pos) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
@@ -1006,6 +1026,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'color', label: 'Color', on: () => openClipPanel('color'), disabled: !targetClip },
       { icon: 'layers', label: 'Adjustment layer', on: () => { ed.addAdjustment(time); setPanel('adjlayer') }, disabled: empty },
       { icon: 'chart', label: 'Scopes', on: toggleScopes, disabled: empty, active: scopes },
+      { icon: 'compress', label: 'Preview copies', on: () => { player?.pause(); setProxySheet(true) }, disabled: !Object.values(ed.sources).some((x) => x.kind === 'video'), active: useProxies && Object.values(ed.sources).some((x) => x.proxy) },
       { icon: 'blur', label: 'Blur', on: () => ed.addBlur(time), disabled: empty },
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
       { icon: 'watermark', label: 'Watermark', on: () => setPanel('watermark'), disabled: empty },
@@ -1142,7 +1163,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
   else if (panel === 'split') panelView = <SplitPanel onClose={closePanel} onPick={addSplit} />
   else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
-  else if (panel === 'adjlayer' && selLayer?.type === 'adjustment') panelView = <AdjustmentPanel ed={ed} layer={selLayer} onClose={closePanel} />
+  else if (panel === 'join' && selClip) panelView = <JoinPanel ed={ed} clip={selClip} onClose={closePanel} onToast={setToast} />
+    else if (panel === 'scenes' && selClip) panelView = <ScenePanel ed={ed} clip={selClip} onSeek={seek} onClose={closePanel} onToast={setToast} />
+    else if (panel === 'adjlayer' && selLayer?.type === 'adjustment') panelView = <AdjustmentPanel ed={ed} layer={selLayer} onClose={closePanel} />
     else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
   else if (panel === 'chroma' && selStored?.type === 'media') panelView = <GreenScreenPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'smartcut') panelView = <SmartCutPanel ed={ed} onToast={setToast} onClose={closePanel} onShort={makeShort}
@@ -1347,6 +1370,12 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {markerSheet && (
         <MarkerSheet markers={markers} focus={markerSheet.focus} time={time} onAdd={() => { const m = ed.addMarker(time); setMarkerSheet({ focus: m.id }) }}
           onUpdate={ed.updateMarker} onRemove={ed.removeMarker} onSeek={seek} onClose={() => setMarkerSheet(null)} onToast={setToast} />
+      )}
+      {proxySheet && (
+        <ProxySheet videos={[...usedSources(ed.project).keys()].map((id) => ed.sources[id]).filter((x) => x?.kind === 'video')}
+          use={useProxies} onUse={(v) => { setUseProxies(v); setProxiesWanted(v) }} onClose={() => setProxySheet(false)} onToast={setToast}
+          onMade={async (id, blob) => { await saveProxy(id, blob); const x = ed.sources[id]; if (x) ed.addSource({ ...x, proxy: { file: blob, url: URL.createObjectURL(blob) } }) }}
+          onDelete={async (id) => { await deleteProxy(id); const x = ed.sources[id]; if (x?.proxy) { URL.revokeObjectURL(x.proxy.url); ed.addSource({ ...x, proxy: null }) } }} />
       )}
       {relinkSheet && <RelinkSheet missing={missing} onClose={() => setRelinkSheet(false)} onToast={setToast}
         onLinked={async (src) => { ed.addSource(src); await saveMedia(src) }} />}
