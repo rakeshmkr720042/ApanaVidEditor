@@ -22,6 +22,7 @@ import { hideHomeBanner, showHomeBanner } from '../lib/ads'
 import { SignInOverlay } from './AuthScreen'
 import { useAccountState } from '../lib/account'
 import { usePremium } from '../lib/premium'
+import { openHelp } from '../help/open'
 
 
 /** Brand picture behind New project; the left side is dark for the text (relative path works on web, Android and Windows). */
@@ -81,31 +82,34 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
       <header className="top">
         <div className="brand"><img className="logo-img" src="brand/icon-96.png" alt="" width={30} height={30} /> Apna Editor</div>
         <div className="top-actions">
-          <button className="btn ghost small notes-btn" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
+          <button className="btn ghost small" onClick={() => openHelp()} aria-label={t('User guide')} title={`${t('User guide')} (F1)`} data-help="help" data-testid="home-help">
+            <Icon name="help" size={16} /><span className="wide-only"> {t('Help')}</span>
+          </button>
+          <button className="btn ghost small notes-btn" data-help="notes" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
             <Icon name="note" size={16} /><span className="wide-only"> {t('Notes')}</span>{openNotes > 0 && <span className="count">{openNotes}</span>}
           </button>
-          <button className="btn ghost small" onClick={() => setHabitsSheet(true)} aria-label={t('Smart shortcuts')} title={t('Smart shortcuts')}>
+          <button className="btn ghost small" data-help="habits" onClick={() => setHabitsSheet(true)} aria-label={t('Smart shortcuts')} title={t('Smart shortcuts')}>
             <Icon name="habit" size={16} /><span className="wide-only"> {t('Shortcuts')}</span>
           </button>
           <button className={`btn ghost small premium-btn${premium ? ' on' : ''}`} onClick={() => setPremiumSheet(true)} aria-label={t('Premium')} title={t('Premium')} data-testid="home-premium">
             <Icon name="crown" size={16} /><span className="wide-only"> {t('Premium')}</span>
           </button>
-          <button className="btn ghost small" onClick={() => setAiSheet(true)}>{aiOn ? '✓ ' : ''}{t('Local AI')}</button>
-          <button className="btn ghost small" onClick={() => { setLang(getLang() === 'hi' ? 'en' : 'hi'); onLang() }}>{getLang() === 'hi' ? 'English' : 'हिंदी'}</button>
+          <button className="btn ghost small" data-help="local-ai" onClick={() => setAiSheet(true)}>{aiOn ? '✓ ' : ''}{t('Local AI')}</button>
+          <button className="btn ghost small" data-help="language" onClick={() => { setLang(getLang() === 'hi' ? 'en' : 'hi'); onLang() }}>{getLang() === 'hi' ? 'English' : 'हिंदी'}</button>
           <button className="btn ghost small" onClick={() => setAccountSheet(true)} aria-label={t('My account')} title={t('My account')} data-testid="home-account">
             <Icon name="user" size={16} /><span className="wide-only"> {t(account.status === 'in' ? 'Account' : 'Sign in')}</span>
           </button>
         </div>
       </header>
       <main className="home-main">
-        <button className="new-project" onClick={create} style={{ backgroundImage: HERO }}>
+        <button className="new-project" data-help="new-project" onClick={create} style={{ backgroundImage: HERO }}>
           <span className="np-plus"><Icon name="plus" size={26} /></span>
           <span className="np-text">{t('New project')}<small>{t('Apni video, apna andaaz')}</small></span>
         </button>
-        <button className="btn wide" disabled={opening} onClick={() => fileInput.current?.click()}>
+        <button className="btn wide" data-help="open-avp" disabled={opening} onClick={() => fileInput.current?.click()}>
           <Icon name="folder" size={18} /> {opening ? t('Opening project…') : t('Open project file (.avp)')}
         </button>
-        <button className="btn wide" onClick={() => setCompress(true)} data-testid="home-compress">
+        <button className="btn wide" onClick={() => setCompress(true)} data-testid="home-compress" data-help="compress">
           <Icon name="compress" size={18} /> {t('Compress video')}
         </button>
         <input ref={fileInput} type="file" accept=".avp,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
@@ -117,7 +121,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           </p>
         )}
         <div className="offline-row">
-          <button className="btn small" onClick={() => setNetSheet(true)}>
+          <button className="btn small" data-help="offline" onClick={() => setNetSheet(true)}>
             {offline === 'ready' ? '✓ ' : <Icon name="download" size={16} />} {t('Offline & online')}
           </button>
           {offline === 'ready' && <span className="badge">✓ {t('Offline ready')}</span>}

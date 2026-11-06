@@ -67,6 +67,7 @@ import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, 
 import { HabitBar, HabitsSheet } from './HabitsSheet'
 import { PremiumSheet } from './PremiumSheet'
 import { isAllowed, usePremium, type Feature } from '../lib/premium'
+import { openHelp } from '../help/open'
 
 /** Premium tools: the panel they open and their toolbar labels (crown shown while the lock is on). */
 const PREMIUM_PANELS: Partial<Record<string, Feature>> = { ai: 'dub', noise: 'audio', audiofx: 'audio', chroma: 'greenscreen', presenter: 'presenter' }
@@ -1127,15 +1128,16 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     <div className="app editor">
       <header className="top">
         <button className="icon-btn" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
-        <button className="title" onClick={rename}>{name}</button>
+        <button className="title" data-help="rename" onClick={rename}>{name}</button>
         <div className="top-actions">
-          <button className={`icon-btn${ed.project.presenter?.enabled ? ' on' : ''}`} onClick={() => { player?.pause(); ed.setSel(null); setPanel(panel === 'presenter' ? null : 'presenter') }}
+          <button data-help="presenter" className={`icon-btn${ed.project.presenter?.enabled ? ' on' : ''}`} onClick={() => { player?.pause(); ed.setSel(null); setPanel(panel === 'presenter' ? null : 'presenter') }}
             aria-label={t('Presenter profile')} title={t('Presenter profile')}><Icon name="user" /></button>
-          <button className="icon-btn" onClick={() => { player?.pause(); setNotesSheet(true) }} aria-label={t('Testing notes')} title={t('Testing notes')}><Icon name="note" /></button>
-          <button className="icon-btn" disabled={!ed.canUndo} onClick={ed.undo} aria-label="Undo"><Icon name="undo" /></button>
+          <button className="icon-btn" onClick={() => { player?.pause(); openHelp() }} aria-label={t('User guide')} title={`${t('User guide')} (F1)`} data-help="help"><Icon name="help" /></button>
+          <button className="icon-btn" data-help="notes" onClick={() => { player?.pause(); setNotesSheet(true) }} aria-label={t('Testing notes')} title={t('Testing notes')}><Icon name="note" /></button>
+          <button className="icon-btn" data-help="undo" disabled={!ed.canUndo} onClick={ed.undo} aria-label="Undo"><Icon name="undo" /></button>
           <button className="icon-btn" disabled={!ed.canRedo} onClick={ed.redo} aria-label="Redo"><Icon name="redo" /></button>
           <span className="menu-anchor">
-            <button className="icon-btn" onClick={() => setSaveMenu((v) => !v)} aria-label="Save project"><Icon name="save" /></button>
+            <button className="icon-btn" data-help="save" onClick={() => setSaveMenu((v) => !v)} aria-label="Save project"><Icon name="save" /></button>
             {saveMenu && <div className="menu-backdrop" onClick={() => setSaveMenu(false)} />}
             {saveMenu && (
               <div className="menu">
@@ -1144,12 +1146,12 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               </div>
             )}
           </span>
-          <button className="btn primary small" disabled={empty || importing > 0} onClick={() => { player?.pause(); setExporting(true) }}>{t('Export')}</button>
+          <button className="btn primary small" data-help="export" disabled={empty || importing > 0} onClick={() => { player?.pause(); setExporting(true) }}>{t('Export')}</button>
         </div>
       </header>
 
       {missing.length > 0 && (
-        <button className="missing-bar" onClick={() => { player?.pause(); setRelinkSheet(true) }} data-testid="missing-bar">
+        <button data-help="missing" className="missing-bar" onClick={() => { player?.pause(); setRelinkSheet(true) }} data-testid="missing-bar">
           ⚠ {missing.length === 1 ? t('1 file is missing') : `${missing.length} ${t('files are missing')}`} · <b>{t('Find files')}</b>
         </button>
       )}
@@ -1158,7 +1160,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} />
         {empty && (
           <div className="empty">
-            <button className="import-big" onClick={() => mainInput.current?.click()}>
+            <button className="import-big" data-help="import" onClick={() => mainInput.current?.click()}>
               <Icon name="plus" size={44} />
               <span>{t('Import video')}</span>
             </button>
@@ -1184,25 +1186,25 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
 
       <div className="transport">
         <span className="time-wrap">
-          <span className={`time${timecode ? ' tc' : ''}`} onClick={toggleTimecode} title={t('Tap to switch between minutes and timecode (T)')} data-testid="time">{showTime(time)} <span className="muted">/ {showTime(ed.layout.total)}</span></span>
+          <span data-help="time" className={`time${timecode ? ' tc' : ''}`} onClick={toggleTimecode} title={t('Tap to switch between minutes and timecode (T)')} data-testid="time">{showTime(time)} <span className="muted">/ {showTime(ed.layout.total)}</span></span>
           {meter ? <span onClick={toggleMeter}><AudioMeter player={player} playing={playing} /></span>
-            : <button className="rate-btn meter-off" onClick={toggleMeter} title={t('Show the sound level meter')}>dB</button>}
+            : <button className="rate-btn meter-off" data-help="meter" onClick={toggleMeter} title={t('Show the sound level meter')}>dB</button>}
         </span>
         <span className="play-group">
           <button className="icon-btn" disabled={empty} onClick={() => player?.seek(0)} aria-label="Go to start" title={t('Go to start')}><Icon name="toStart" /></button>
           <button className="icon-btn" disabled={empty} onClick={() => skip(-SKIP)} aria-label="Back 5 seconds" title={t('Back 5 s (← or J)')}><Icon name="rewind" /></button>
-          <button className="icon-btn play" disabled={empty} onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
+          <button className="icon-btn play" data-help="play" disabled={empty} onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
             <Icon name={playing ? 'pause' : 'play'} />
           </button>
           <button className="icon-btn" disabled={empty} onClick={() => skip(SKIP)} aria-label="Forward 5 seconds" title={t('Forward 5 s (→ or L)')}><Icon name="forward" /></button>
           <button className="icon-btn" disabled={empty} onClick={() => seek(ed.layout.total)} aria-label="Go to end" title={t('Go to end')}><Icon name="toEnd" /></button>
         </span>
         <span className="zoom">
-          <button className={`rate-btn${rate !== 1 ? ' on' : ''}`} disabled={empty} onClick={nextRate} aria-label="Playback speed" title={t('Playback speed')}>{rate}x</button>
-          <button className="icon-btn keys-btn" onClick={() => setKeysSheet(true)} aria-label="Keyboard and mouse" title={t('Keyboard & mouse (?)')}><Icon name="keyboard" /></button>
-          <button className={`icon-btn snap${snap ? ' on' : ''}`} onClick={toggleSnap} aria-label="Snap" aria-pressed={snap} title={t('Magnetic snap')}><Icon name="magnet" /></button>
+          <button data-help="rate" className={`rate-btn${rate !== 1 ? ' on' : ''}`} disabled={empty} onClick={nextRate} aria-label="Playback speed" title={t('Playback speed')}>{rate}x</button>
+          <button className="icon-btn keys-btn" data-help="keys" onClick={() => setKeysSheet(true)} aria-label="Keyboard and mouse" title={t('Keyboard & mouse (?)')}><Icon name="keyboard" /></button>
+          <button data-help="snap" className={`icon-btn snap${snap ? ' on' : ''}`} onClick={toggleSnap} aria-label="Snap" aria-pressed={snap} title={t('Magnetic snap')}><Icon name="magnet" /></button>
           <button className="icon-btn" onClick={() => setPps((z) => Math.max(4, z / 1.5))} aria-label="Zoom out"><Icon name="minus" /></button>
-          <button className="icon-btn" onClick={() => setPps((z) => Math.min(400, z * 1.5))} aria-label="Zoom in"><Icon name="plus" /></button>
+          <button className="icon-btn" data-help="zoom" onClick={() => setPps((z) => Math.min(400, z * 1.5))} aria-label="Zoom in"><Icon name="plus" /></button>
         </span>
       </div>
 
@@ -1243,7 +1245,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       <nav className="tools" onWheel={toolsWheel}>
         {(selClip || selStored) && <button className="tool back" onClick={() => { ed.setSel(null); setPanel(null) }}><Icon name="back" /><span>{t('Back')}</span></button>}
         {tools.map((tl) => (
-          <button key={tl.label} className={`tool${tl.active ? ' on' : ''}${tl.icon === 'habit' ? ' habit' : ''}`} disabled={tl.disabled} onClick={() => runTool(tl)}>
+          <button key={tl.label} data-tool={tl.label} className={`tool${tl.active ? ' on' : ''}${tl.icon === 'habit' ? ' habit' : ''}`} disabled={tl.disabled} onClick={() => runTool(tl)}>
             <Icon name={tl.icon} />
             {PREMIUM_TOOLS[tl.label] && !isAllowed(PREMIUM_TOOLS[tl.label]) && <i className="crown-badge" aria-label={t('Premium')}><Icon name="crown" size={11} /></i>}
             <span>{t(tl.label)}</span>

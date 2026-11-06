@@ -22,4 +22,9 @@ contextBridge.exposeInMainWorld('desktop', {
   googleRefresh: (opts) => ipcRenderer.invoke('desktop:google-refresh', opts),
   googleFetch: (req) => ipcRenderer.invoke('desktop:google-fetch', req),
   keepAwake: (on) => ipcRenderer.send('desktop:keep-awake', !!on),
+  onHelp(cb) {
+    const listener = (_e, topic) => cb(topic ?? null)
+    ipcRenderer.on('desktop:help', listener)
+    return () => ipcRenderer.removeListener('desktop:help', listener)
+  },
 })

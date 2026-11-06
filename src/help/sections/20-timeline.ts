@@ -1,0 +1,277 @@
+import type { HelpSection } from '../types'
+
+const section: HelpSection = {
+  id: 'timeline',
+  order: 20,
+  icon: 'layers',
+  title: { en: 'Timeline and tracks', hi: 'टाइमलाइन और ट्रैक' },
+  intro: { en: 'Play, move around, zoom, and work with rows (tracks).', hi: 'चलाना, आगे-पीछे जाना, ज़ूम करना और लाइनों (ट्रैक) के साथ काम करना।' },
+  topics: [
+    {
+      id: 'timeline-basics',
+      find: { selector: '.tl-scroll', needs: 'project' },
+      keywords: ['timeline', 'playhead', 'scroll', 'zoom', 'seek'],
+      related: ['tracks', 'playback'],
+      en: {
+        title: 'The timeline: playhead, scroll and zoom',
+        what: 'The timeline under the preview shows everything in your video from left (start) to right (end). The white line is the playhead: the moment you see in the preview.',
+        where: 'Editor → under the preview',
+        steps: [
+          'Drag the timeline left or right with your finger (or the mouse wheel) to move the playhead.',
+          'Tap the ruler (the numbers on top) to jump straight to that time.',
+          'Zoom with the + and − buttons next to Play, by pinching on a phone, or Ctrl+wheel on a computer.',
+          'Tap an item to select it (yellow border). The toolbar at the bottom then shows the tools for that item.',
+          'Tap empty space on the timeline, or Back in the toolbar, to select nothing and see the main toolbar.',
+          'Double-tap an item to open its main tool.',
+        ],
+        tips: [
+          'On a computer: Shift+wheel scrolls the rows up and down; the middle mouse button drags the timeline in any direction.',
+          'Right-click (or long-press) an item for a menu with copy, paste, split, duplicate, lock and delete.',
+        ],
+      },
+      hi: {
+        title: 'टाइमलाइन: प्लेहेड, खिसकाना और ज़ूम',
+        what: 'प्रीव्यू के नीचे की टाइमलाइन पर आपकी वीडियो का सब कुछ बाएँ (शुरू) से दाएँ (अंत) तक दिखता है। सफ़ेद लाइन प्लेहेड है: वो पल जो प्रीव्यू में दिख रहा है।',
+        where: 'एडिटर → प्रीव्यू के नीचे',
+        steps: [
+          'प्लेहेड हिलाने के लिए टाइमलाइन को उँगली से (या माउस व्हील से) बाएँ-दाएँ खींचें।',
+          'ऊपर के रूलर (नंबर वाली पट्टी) पर दबाकर सीधे उस समय पर पहुँचें।',
+          'Play के पास + और − बटन से, फ़ोन पर दो उँगलियों से (पिंच), या कंप्यूटर पर Ctrl+व्हील से ज़ूम करें।',
+          'किसी आइटम को चुनने के लिए उस पर दबाएँ (पीला किनारा)। नीचे टूलबार में उसी आइटम के टूल दिखेंगे।',
+          'कुछ भी न चुनने के लिए टाइमलाइन की खाली जगह पर या टूलबार में "वापस" दबाएँ; मुख्य टूलबार दिखेगा।',
+          'किसी आइटम का मुख्य टूल खोलने के लिए उस पर दो बार दबाएँ।',
+        ],
+        tips: [
+          'कंप्यूटर पर: Shift+व्हील से लाइनें ऊपर-नीचे होती हैं; माउस के बीच वाले बटन से टाइमलाइन किसी भी दिशा में खिसकती है।',
+          'किसी आइटम पर राइट-क्लिक (या देर तक दबाएँ) करने से मेन्यू आता है: कॉपी, पेस्ट, काटें, डुप्लिकेट, लॉक, हटाएं।',
+        ],
+      },
+    },
+    {
+      id: 'playback',
+      find: { selector: '[data-help="play"]', needs: 'project' },
+      keywords: ['play', 'pause', 'speed', 'timecode', 'meter', 'db', 'skip'],
+      en: {
+        title: 'Play, skip, playback speed and time display',
+        what: 'The bar under the preview plays the video and shows the time.',
+        where: 'Editor → the bar between the preview and the timeline',
+        steps: [
+          'Play / pause with the big button or Space. K also pauses.',
+          'The buttons beside it go to the start, 5 seconds back, 5 seconds forward, and to the end (keys: Home, J, L, End).',
+          '← and → move one frame (with Shift: one second).',
+          'Tap 1x to play faster or slower while you check the edit. This does not change the exported video.',
+          'Tap the time to switch between minutes and timecode (HH:MM:SS:FF), or press T.',
+          'Tap dB to show the sound level meter while playing. Green is fine, red means too loud.',
+        ],
+      },
+      hi: {
+        title: 'चलाना, आगे-पीछे जाना, चलने की स्पीड और समय',
+        what: 'प्रीव्यू के नीचे की पट्टी वीडियो चलाती है और समय दिखाती है।',
+        where: 'एडिटर → प्रीव्यू और टाइमलाइन के बीच की पट्टी',
+        steps: [
+          'बड़े बटन या Space से चलाएँ / रोकें। K से भी रुकता है।',
+          'पास के बटन: शुरू पर जाएँ, 5 सेकंड पीछे, 5 सेकंड आगे, और अंत पर (कीबोर्ड: Home, J, L, End)।',
+          '← और → एक फ़्रेम आगे-पीछे करते हैं (Shift के साथ: एक सेकंड)।',
+          'एडिटिंग जाँचते समय तेज़ या धीमा चलाने के लिए 1x दबाएँ। इससे एक्सपोर्ट वाली वीडियो नहीं बदलती।',
+          'समय पर दबाकर मिनट और टाइमकोड (HH:MM:SS:FF) के बीच बदलें, या T दबाएँ।',
+          'चलाते समय आवाज़ का लेवल देखने के लिए dB दबाएँ। हरा ठीक है, लाल मतलब बहुत तेज़।',
+        ],
+      },
+    },
+    {
+      id: 'tracks',
+      find: { selector: '.tl-addtrack', needs: 'project' },
+      keywords: ['track', 'row', 'layer', 'mute', 'hide', 'lock', 'rename', 'main'],
+      related: ['track-copy', 'place-chooser'],
+      en: {
+        title: 'Tracks (rows): add, rename, mute, hide, lock, reorder',
+        what: 'Each row of the timeline is a track. The Main row holds your main video; rows above it hold overlays, text and stickers; audio rows hold music and voice. A higher row shows in front.',
+        where: 'Timeline → the track names on the left, and + Add track',
+        steps: [
+          'Tap + Add track under the track names to add a video track or an audio track.',
+          'Tap a track name to open Track settings: Rename, Move up / down, Select everything on this track, Copy, Paste and Delete track.',
+          'Double-click a track name to rename it quickly.',
+          'Use the small buttons beside the name to turn the track\'s sound off (M) or hide it from the video (H), and the lock (Shift+L) so it cannot be changed by mistake.',
+          'Drag a track name up or down to change which track is in front. Alt+↑ / Alt+↓ do the same for the picked track.',
+          '↑ and ↓ pick the track above or below.',
+        ],
+        tips: ['A locked Main track keeps your main video safe while you edit text and music.'],
+      },
+      hi: {
+        title: 'ट्रैक (लाइनें): जोड़ें, नाम बदलें, आवाज़ बंद, छिपाएँ, लॉक, क्रम बदलें',
+        what: 'टाइमलाइन की हर लाइन एक ट्रैक है। "मुख्य" लाइन में आपकी मुख्य वीडियो रहती है; उसके ऊपर की लाइनों में ओवरले, टेक्स्ट और स्टिकर; ऑडियो लाइनों में म्यूज़िक और आवाज़। ऊपर वाली लाइन सामने दिखती है।',
+        where: 'टाइमलाइन → बाईं ओर ट्रैक के नाम, और + ट्रैक जोड़ें',
+        steps: [
+          'ट्रैक के नामों के नीचे "+ ट्रैक जोड़ें" दबाकर वीडियो ट्रैक या ऑडियो ट्रैक जोड़ें।',
+          'ट्रैक के नाम पर दबाकर "ट्रैक सेटिंग" खोलें: नाम बदलें, ऊपर / नीचे करें, इस ट्रैक का सब कुछ चुनें, कॉपी, पेस्ट और ट्रैक हटाएं।',
+          'जल्दी नाम बदलने के लिए ट्रैक के नाम पर डबल-क्लिक करें।',
+          'नाम के पास के छोटे बटन से ट्रैक की आवाज़ बंद (M), ट्रैक छिपाएँ (H) या लॉक करें (Shift+L), ताकि गलती से न बदले।',
+          'कौन सा ट्रैक सामने हो, यह बदलने के लिए ट्रैक के नाम को ऊपर या नीचे खींचें। चुने हुए ट्रैक के लिए Alt+↑ / Alt+↓ भी यही करते हैं।',
+          '↑ और ↓ ऊपर या नीचे वाला ट्रैक चुनते हैं।',
+        ],
+        tips: ['टेक्स्ट और म्यूज़िक पर काम करते समय "मुख्य" ट्रैक लॉक कर दें, आपकी मुख्य वीडियो सुरक्षित रहेगी।'],
+      },
+    },
+    {
+      id: 'place-chooser',
+      keywords: ['where', 'place', 'insert', 'playhead', 'add', 'kahan'],
+      en: {
+        title: 'Where should it go? (adding media)',
+        what: 'When you add a video or photo while the project already has clips, the app asks where to put it.',
+        where: 'Appears after Add / Add overlay / a recording',
+        steps: [
+          'Track at the playhead: the new item goes on its own row above the main video, starting at the playhead (picture-in-picture).',
+          'Main video at the playhead: it is inserted into the main video at the playhead; the rest moves later.',
+          'Main video at the start or at the end: it goes before the first clip or after the last one.',
+          'Tap Cancel to add nothing.',
+        ],
+      },
+      hi: {
+        title: 'इसे कहाँ जोड़ें? (मीडिया जोड़ते समय)',
+        what: 'जब प्रोजेक्ट में पहले से क्लिप हों और आप नई वीडियो या फ़ोटो जोड़ें, तो ऐप पूछता है कि उसे कहाँ रखना है।',
+        where: '"जोड़ें" / "ओवरले जोड़ें" / रिकॉर्डिंग के बाद आता है',
+        steps: [
+          '"ट्रैक पर, प्लेहेड पर": नया आइटम मुख्य वीडियो के ऊपर अपनी अलग लाइन पर, प्लेहेड से शुरू होता है (वीडियो के ऊपर वीडियो)।',
+          '"मुख्य वीडियो में, प्लेहेड पर": यह मुख्य वीडियो में प्लेहेड वाली जगह डल जाता है; बाकी हिस्सा आगे खिसक जाता है।',
+          '"मुख्य वीडियो की शुरुआत में" या "अंत में": यह पहली क्लिप से पहले या आख़िरी क्लिप के बाद लगता है।',
+          'कुछ न जोड़ना हो तो "रद्द करें" दबाएँ।',
+        ],
+      },
+    },
+    {
+      id: 'select-all',
+      find: { tool: 'Select all', needs: 'nothing' },
+      keywords: ['select all', 'group', 'all clips', 'sab chune'],
+      en: {
+        title: 'Select many items at once',
+        what: 'Change all clips, or everything on one track, in one go: filters, speed, volume, delete and more.',
+        where: 'Toolbar → Select all (or Ctrl+A)',
+        steps: [
+          'With nothing selected, tap Select all to pick every clip of the main video.',
+          'With an item selected, Select all picks everything on its track.',
+          'A bar shows how many are selected. Now any tool you use changes all of them.',
+          'Tap One clip / One item on the bar to go back to only the one you tapped.',
+        ],
+      },
+      hi: {
+        title: 'एक साथ कई आइटम चुनें',
+        what: 'सारी क्लिप, या एक ट्रैक का सब कुछ, एक बार में बदलें: फ़िल्टर, स्पीड, आवाज़, हटाना और भी बहुत कुछ।',
+        where: 'टूलबार → सब चुनें (या Ctrl+A)',
+        steps: [
+          'जब कुछ चुना न हो, "सब चुनें" दबाने से मुख्य वीडियो की हर क्लिप चुन ली जाती है।',
+          'कोई आइटम चुना हो तो "सब चुनें" उसके ट्रैक का सब कुछ चुनता है।',
+          'एक पट्टी बताती है कि कितने चुने गए। अब जो भी टूल लगाएँगे, सब पर लगेगा।',
+          'सिर्फ़ उसी एक पर लौटने के लिए पट्टी पर "एक क्लिप" / "एक आइटम" दबाएँ।',
+        ],
+      },
+    },
+    {
+      id: 'track-copy',
+      find: { tool: 'Copy track', needs: 'clip' },
+      keywords: ['copy track', 'paste track', 'duplicate track', 'cut track'],
+      en: {
+        title: 'Copy, paste and duplicate a whole track',
+        what: 'Copy every item of a track and paste it at another time or onto a new track, even in another project.',
+        where: 'Toolbar → Copy track / Paste track, or Track settings',
+        steps: [
+          'Select an item on the track (or pick the track) and tap Copy track (Ctrl+C). Ctrl+X cuts it.',
+          'Move the playhead to where it should start and tap Paste track (Ctrl+V). Ctrl+Shift+V asks where to paste.',
+          'Ctrl+Shift+D (or Duplicate track in the track menu) makes a copy right away.',
+        ],
+        tips: ['On a phone, Paste track is also under + Add track.'],
+      },
+      hi: {
+        title: 'पूरा ट्रैक कॉपी, पेस्ट और डुप्लिकेट करें',
+        what: 'किसी ट्रैक का हर आइटम कॉपी करके दूसरे समय पर या नए ट्रैक पर पेस्ट करें, दूसरे प्रोजेक्ट में भी।',
+        where: 'टूलबार → ट्रैक कॉपी करें / ट्रैक पेस्ट करें, या ट्रैक सेटिंग',
+        steps: [
+          'ट्रैक का कोई आइटम चुनें (या ट्रैक चुनें) और "ट्रैक कॉपी करें" दबाएँ (Ctrl+C)। Ctrl+X काटकर कॉपी करता है।',
+          'प्लेहेड को वहाँ ले जाएँ जहाँ से शुरू करना है और "ट्रैक पेस्ट करें" दबाएँ (Ctrl+V)। Ctrl+Shift+V पूछता है कि कहाँ पेस्ट करें।',
+          'Ctrl+Shift+D (या ट्रैक मेन्यू में "ट्रैक की कॉपी बनाएं") तुरंत कॉपी बना देता है।',
+        ],
+        tips: ['फ़ोन पर "ट्रैक पेस्ट करें" "+ ट्रैक जोड़ें" के अंदर भी है।'],
+      },
+    },
+    {
+      id: 'snap',
+      find: { selector: '[data-help="snap"]', needs: 'project' },
+      keywords: ['snap', 'magnet', 'gap', 'align', 'chipakna'],
+      en: {
+        title: 'Magnetic snap and gaps',
+        what: 'With snap on, items stick to the playhead, other items and markers as you drag them, so nothing is a frame off.',
+        where: 'Editor → magnet button next to the zoom buttons',
+        steps: [
+          'Tap the magnet to turn snap on (blue) or off.',
+          'Drag an item: a line shows where it snapped.',
+          'With snap off you can leave a gap between main clips; the gap shows the Format background colour.',
+        ],
+      },
+      hi: {
+        title: 'मैग्नेटिक स्नैप और खाली जगह',
+        what: 'स्नैप चालू हो तो खींचते समय आइटम प्लेहेड, दूसरे आइटम और मार्कर से चिपक जाते हैं, ताकि एक फ़्रेम का भी फ़र्क न रहे।',
+        where: 'एडिटर → ज़ूम बटन के पास चुंबक वाला बटन',
+        steps: [
+          'स्नैप चालू (नीला) या बंद करने के लिए चुंबक दबाएँ।',
+          'आइटम खींचें: एक लाइन बताती है कि वो कहाँ चिपका।',
+          'स्नैप बंद हो तो मुख्य क्लिप के बीच खाली जगह छोड़ सकते हैं; वहाँ "फ़ॉर्मेट" का बैकग्राउंड रंग दिखता है।',
+        ],
+      },
+    },
+    {
+      id: 'markers',
+      find: { tool: 'Add marker', needs: 'nothing' },
+      keywords: ['marker', 'flag', 'chapter', 'youtube chapters', 'jhanda'],
+      en: {
+        title: 'Markers and YouTube chapters',
+        what: 'A marker is a flag on the timeline so you can find a moment again. Your markers can be copied as YouTube chapters.',
+        where: 'Toolbar → Add marker (Shift+M)',
+        steps: [
+          'Move the playhead to the moment and tap Add marker (or press Shift+M). A flag appears on the ruler.',
+          'Tap the flag (or the Markers tool) to name it and pick a colour.',
+          'Ctrl+← and Ctrl+→ jump to the previous / next marker.',
+          'In the marker list tap Copy as YouTube chapters, then paste into your YouTube description.',
+        ],
+      },
+      hi: {
+        title: 'मार्कर और YouTube चैप्टर',
+        what: 'मार्कर टाइमलाइन पर एक झंडा है, ताकि कोई पल फिर से आसानी से मिल जाए। आपके मार्कर YouTube चैप्टर की तरह कॉपी हो सकते हैं।',
+        where: 'टूलबार → मार्कर लगाएँ (Shift+M)',
+        steps: [
+          'प्लेहेड को उस पल पर रखें और "मार्कर लगाएँ" दबाएँ (या Shift+M)। रूलर पर झंडा लग जाएगा।',
+          'नाम और रंग देने के लिए झंडे पर (या "मार्कर" टूल पर) दबाएँ।',
+          'Ctrl+← और Ctrl+→ पिछले / अगले मार्कर पर ले जाते हैं।',
+          'मार्कर की सूची में "YouTube चैप्टर की तरह कॉपी करें" दबाएँ, फिर YouTube के डिस्क्रिप्शन में पेस्ट करें।',
+        ],
+      },
+    },
+    {
+      id: 'format',
+      find: { tool: 'Format', needs: 'nothing' },
+      keywords: ['format', 'aspect', 'ratio', '9:16', '16:9', 'reels', 'square', 'background', 'canvas'],
+      en: {
+        title: 'Format: video shape (16:9, 9:16, 1:1…) and background',
+        what: 'Choose the shape of your video for YouTube, Reels, Shorts, Instagram posts and more, and what fills the empty space.',
+        where: 'Toolbar (nothing selected) → Format',
+        steps: [
+          'Tap Format and pick a shape: 16:9 YouTube, 9:16 Reels, 1:1 Square, 4:5 Post, 4:3, 3:4 or 21:9 Cinema.',
+          'Choose the Background for empty space around the video: a blurred copy of the video itself (◌), black, white or a colour.',
+          'Turn on Fill frame to make the clips fill the whole frame (edges are cut); off shows the whole picture with borders. With a clip selected it changes only that clip.',
+        ],
+        tips: ['Change the format any time; text and overlays keep their place on the screen.'],
+      },
+      hi: {
+        title: 'फ़ॉर्मेट: वीडियो का आकार (16:9, 9:16, 1:1…) और बैकग्राउंड',
+        what: 'YouTube, Reels, Shorts, Instagram पोस्ट वगैरह के लिए वीडियो का आकार चुनें, और खाली जगह में क्या दिखे।',
+        where: 'टूलबार (कुछ चुना न हो) → फ़ॉर्मेट',
+        steps: [
+          '"फ़ॉर्मेट" दबाकर आकार चुनें: 16:9 YouTube, 9:16 Reels, 1:1 Square, 4:5 Post, 4:3, 3:4 या 21:9 Cinema।',
+          'वीडियो के आसपास की खाली जगह का "बैकग्राउंड" चुनें: उसी वीडियो की धुंधली कॉपी (◌), काला, सफ़ेद या कोई रंग।',
+          '"फ़्रेम भरें" चालू करने पर क्लिप पूरा फ़्रेम भरती हैं (किनारे कटते हैं); बंद हो तो पूरी तस्वीर किनारों पर पट्टी के साथ दिखती है। कोई क्लिप चुनी हो तो सिर्फ़ वही बदलती है।',
+        ],
+        tips: ['फ़ॉर्मेट कभी भी बदल सकते हैं; टेक्स्ट और ओवरले स्क्रीन पर अपनी जगह पर रहते हैं।'],
+      },
+    },
+  ],
+}
+
+export default section
