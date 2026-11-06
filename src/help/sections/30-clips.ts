@@ -1,0 +1,326 @@
+import type { HelpSection } from '../types'
+
+const section: HelpSection = {
+  id: 'clips',
+  order: 30,
+  icon: 'split',
+  title: { en: 'Cutting and arranging clips', hi: 'क्लिप काटना और सजाना' },
+  intro: { en: 'Split, trim, delete, reorder, speed up, freeze, reverse and crop your main video.', hi: 'मुख्य वीडियो को काटें, छोटा करें, हटाएँ, क्रम बदलें, तेज़ करें, रोकें, उल्टा चलाएँ और क्रॉप करें।' },
+  topics: [
+    {
+      id: 'add-media',
+      find: { tool: 'Add', needs: 'nothing' },
+      keywords: ['import', 'add video', 'add photo', 'jodna', 'media'],
+      related: ['place-chooser', 'overlay'],
+      en: {
+        title: 'Add videos, photos and audio',
+        what: 'Bring more videos or photos into the project at any time.',
+        where: 'Toolbar (nothing selected) → Add',
+        steps: [
+          'Tap Add and pick one or more files. Videos, photos and audio files all work.',
+          'If the project already has clips, choose where it goes (see "Where should it go?").',
+          'A photo becomes a 3-second clip; change its length with the Photo tool.',
+          'An audio file goes onto an audio track.',
+        ],
+        tips: ['On Windows you can also use File → Open Video (Ctrl+O), or open a video with Apna Editor from Explorer.'],
+      },
+      hi: {
+        title: 'वीडियो, फ़ोटो और ऑडियो जोड़ें',
+        what: 'कभी भी प्रोजेक्ट में और वीडियो या फ़ोटो लाएँ।',
+        where: 'टूलबार (कुछ चुना न हो) → जोड़ें',
+        steps: [
+          '"जोड़ें" दबाएँ और एक या ज़्यादा फ़ाइलें चुनें। वीडियो, फ़ोटो और ऑडियो, सब चलते हैं।',
+          'अगर प्रोजेक्ट में पहले से क्लिप हैं, तो चुनें कि नई फ़ाइल कहाँ जाए (देखें "इसे कहाँ जोड़ें?")।',
+          'फ़ोटो 3 सेकंड की क्लिप बनती है; उसकी लंबाई "फ़ोटो" टूल से बदलें।',
+          'ऑडियो फ़ाइल ऑडियो ट्रैक पर जाती है।',
+        ],
+        tips: ['Windows पर File → Open Video (Ctrl+O) से भी जोड़ सकते हैं, या Explorer में वीडियो को Apna Editor से खोलें।'],
+      },
+    },
+    {
+      id: 'split-trim',
+      find: { tool: 'Split', needs: 'clip' },
+      keywords: ['split', 'cut', 'trim', 'kaatna', 'chota', 'q', 'w', 'remove part'],
+      related: ['delete-clip', 'smart-cut'],
+      en: {
+        title: 'Split and trim (cut out parts)',
+        what: 'Split cuts a clip in two at the playhead. Trim shortens the start or end. Together they remove any part you do not want.',
+        where: 'Select a clip → Split / Trim (keys: S, Q, W)',
+        steps: [
+          'Move the playhead to the exact spot (use ← / → for single frames).',
+          'Tap the clip, then tap Split (or press S). The clip is now two pieces.',
+          'To shorten a clip, drag its left or right edge on the timeline.',
+          'Or open Trim: Cut start to playhead (Q) removes everything before the playhead, Cut end to playhead (W) removes everything after it. The video closes up by itself.',
+          'To remove a middle part: split at its start, split at its end, select the piece and Delete.',
+        ],
+        tips: [
+          'In Trim, Slip shows another part of the same video without moving the clip; Slide moves the clip between its neighbours; Roll moves the cut between two clips.',
+          'With a mouse: Alt+drag a clip to slip, Alt+Shift+drag to slide, Alt+drag an edge to roll.',
+          'Split also works on text, music, stickers and overlays.',
+        ],
+      },
+      hi: {
+        title: 'काटें और ट्रिम करें (हिस्से निकालें)',
+        what: '"काटें" प्लेहेड पर क्लिप के दो टुकड़े करता है। "ट्रिम" शुरू या अंत को छोटा करता है। दोनों से कोई भी फ़ालतू हिस्सा निकाल सकते हैं।',
+        where: 'क्लिप चुनें → काटें / ट्रिम (कीबोर्ड: S, Q, W)',
+        steps: [
+          'प्लेहेड को ठीक उस जगह रखें (एक-एक फ़्रेम के लिए ← / →)।',
+          'क्लिप पर दबाएँ, फिर "काटें" दबाएँ (या S)। अब क्लिप के दो टुकड़े हो गए।',
+          'क्लिप छोटी करने के लिए टाइमलाइन पर उसका बायाँ या दायाँ किनारा खींचें।',
+          'या "ट्रिम" खोलें: "शुरू से प्लेहेड तक काटें" (Q) प्लेहेड से पहले का सब हटाता है, "प्लेहेड से अंत तक काटें" (W) बाद का सब। वीडियो अपने आप जुड़ जाती है।',
+          'बीच का हिस्सा हटाना हो: उसकी शुरुआत पर काटें, अंत पर काटें, उस टुकड़े को चुनकर "हटाएं" दबाएँ।',
+        ],
+        tips: [
+          '"ट्रिम" में Slip क्लिप को हिलाए बिना उसी वीडियो का दूसरा हिस्सा दिखाता है; Slide क्लिप को पड़ोसी क्लिप के बीच खिसकाता है; Roll दो क्लिप के बीच का कट आगे-पीछे करता है।',
+          'माउस से: Alt+खींचें = Slip, Alt+Shift+खींचें = Slide, किनारे पर Alt+खींचें = Roll।',
+          '"काटें" टेक्स्ट, म्यूज़िक, स्टिकर और ओवरले पर भी चलता है।',
+        ],
+      },
+    },
+    {
+      id: 'delete-clip',
+      find: { tool: 'Delete', needs: 'item' },
+      keywords: ['delete', 'remove', 'hatana', 'ripple', 'gap'],
+      en: {
+        title: 'Delete, and delete without leaving a gap',
+        what: 'Remove a clip or any other item.',
+        where: 'Select an item → Delete (Delete key)',
+        steps: [
+          'Tap the item and tap Delete (or press Delete). Main clips close up by themselves.',
+          'On other tracks, Shift+Delete (or Trim → Delete and close the gap) also moves the later items back so no gap is left.',
+          'Use Select all first to delete many at once.',
+        ],
+      },
+      hi: {
+        title: 'हटाएँ, और बिना खाली जगह छोड़े हटाएँ',
+        what: 'कोई क्लिप या दूसरा आइटम हटाएँ।',
+        where: 'आइटम चुनें → हटाएं (Delete बटन)',
+        steps: [
+          'आइटम पर दबाकर "हटाएं" दबाएँ (या Delete)। मुख्य क्लिप अपने आप जुड़ जाती हैं।',
+          'दूसरे ट्रैक पर Shift+Delete (या ट्रिम → "हटाएँ और खाली जगह भरें") बाद के आइटम भी पीछे खिसका देता है, ताकि जगह खाली न रहे।',
+          'कई एक साथ हटाने के लिए पहले "सब चुनें" दबाएँ।',
+        ],
+      },
+    },
+    {
+      id: 'move-clips',
+      find: { tool: 'Move / swap', needs: 'clip' },
+      keywords: ['move', 'swap', 'reorder', 'order', 'insert', 'aage peeche', 'drag'],
+      en: {
+        title: 'Move, swap and insert clips',
+        what: 'Change the order of clips in the main video, swap two clips, or insert new ones between them.',
+        where: 'Select a clip → Move / swap, Swap, Insert after',
+        steps: [
+          'Easiest: long-press (or drag) a clip on the timeline and drop it at its new place.',
+          'Or tap Move / swap: the panel shows every clip in order. Pick a clip, then tap a slot (Move here) or First / Earlier / Later / Last.',
+          'Swap: tap Swap, then tap the other clip. The two change places.',
+          'Insert after: pick files to add right after the selected clip.',
+          'Replace: swaps the clip\'s file for another one but keeps its place, length and effects.',
+        ],
+      },
+      hi: {
+        title: 'क्लिप आगे-पीछे करें, अदला-बदली करें, बीच में डालें',
+        what: 'मुख्य वीडियो में क्लिप का क्रम बदलें, दो क्लिप की जगह बदलें, या उनके बीच नई क्लिप डालें।',
+        where: 'क्लिप चुनें → आगे-पीछे / अदला-बदली, अदला-बदली, इसके बाद डालें',
+        steps: [
+          'सबसे आसान: टाइमलाइन पर क्लिप को देर तक दबाएँ (या खींचें) और नई जगह छोड़ दें।',
+          'या "आगे-पीछे / अदला-बदली" दबाएँ: पैनल में सारी क्लिप क्रम से दिखेंगी। क्लिप चुनें, फिर कोई जगह ("यहाँ ले जाएँ") या पहला / पहले / बाद में / आख़िरी दबाएँ।',
+          '"अदला-बदली": इसे दबाएँ, फिर दूसरी क्लिप पर दबाएँ। दोनों की जगह बदल जाएगी।',
+          '"इसके बाद डालें": चुनी हुई क्लिप के ठीक बाद जोड़ने के लिए फ़ाइलें चुनें।',
+          '"बदलें": क्लिप की फ़ाइल दूसरी फ़ाइल से बदलता है, पर जगह, लंबाई और इफ़ेक्ट वही रहते हैं।',
+        ],
+      },
+    },
+    {
+      id: 'duplicate',
+      find: { tool: 'Duplicate', needs: 'item' },
+      keywords: ['duplicate', 'copy', 'ctrl+d'],
+      en: {
+        title: 'Duplicate an item',
+        what: 'Make an exact copy of a clip, text, sticker or overlay.',
+        where: 'Select an item → Duplicate (Ctrl+D)',
+        steps: ['Tap the item and tap Duplicate (or Ctrl+D).', 'The copy appears right after it (main video) or on the same track.'],
+      },
+      hi: {
+        title: 'आइटम की कॉपी बनाएँ',
+        what: 'किसी क्लिप, टेक्स्ट, स्टिकर या ओवरले की हूबहू कॉपी बनाएँ।',
+        where: 'आइटम चुनें → कॉपी (Ctrl+D)',
+        steps: ['आइटम पर दबाकर "कॉपी" दबाएँ (या Ctrl+D)।', 'कॉपी उसके ठीक बाद (मुख्य वीडियो में) या उसी ट्रैक पर आ जाती है।'],
+      },
+    },
+    {
+      id: 'speed',
+      find: { tool: 'Speed', needs: 'clip' },
+      keywords: ['speed', 'slow motion', 'fast', 'tez', 'dheema', 'ramp', 'timelapse', 'velocity'],
+      related: ['motion-tools', 'beat-sync'],
+      en: {
+        title: 'Speed: slow motion, fast forward and speed ramps',
+        what: 'Make a clip faster or slower, or let the speed change inside the clip (speed ramp).',
+        where: 'Select a clip (or overlay, or music) → Speed',
+        steps: [
+          'Select the clip and tap Speed.',
+          'Drag the Speed slider: below 1x is slow motion, above 1x is faster. The clip gets shorter or longer on the timeline.',
+          'For a speed ramp, pick a preset: Montage, Hero, Bullet, Jump cut, Flash in, Flash out, Slow middle or Build up.',
+          'Pick Custom to draw your own: drag the dots up for faster, down for slower.',
+          'Apply to all clips uses the same speed everywhere.',
+        ],
+        tips: [
+          'For smooth slow motion (no stutter), also turn on Motion → Smooth slow motion.',
+          'Speed on music changes its tempo.',
+        ],
+      },
+      hi: {
+        title: 'स्पीड: स्लो मोशन, तेज़ और स्पीड रैम्प',
+        what: 'क्लिप को तेज़ या धीमा करें, या क्लिप के अंदर स्पीड बदलती रहे (स्पीड रैम्प)।',
+        where: 'क्लिप (या ओवरले, या म्यूज़िक) चुनें → स्पीड',
+        steps: [
+          'क्लिप चुनकर "स्पीड" दबाएँ।',
+          '"स्पीड" स्लाइडर खींचें: 1x से कम = स्लो मोशन, 1x से ज़्यादा = तेज़। टाइमलाइन पर क्लिप छोटी या लंबी हो जाएगी।',
+          'स्पीड रैम्प के लिए कोई प्रीसेट चुनें: Montage, Hero, Bullet, Jump cut, Flash in, Flash out, Slow middle या Build up।',
+          'अपना बनाने के लिए "अपना" चुनें: बिंदु ऊपर खींचें = तेज़, नीचे = धीमा।',
+          '"सब क्लिप पर लगाएं" हर जगह वही स्पीड लगा देता है।',
+        ],
+        tips: [
+          'बिना अटके स्मूद स्लो मोशन के लिए "मोशन" → "स्मूद स्लो मोशन" भी चालू करें।',
+          'म्यूज़िक पर स्पीड बदलने से उसकी रफ़्तार बदलती है।',
+        ],
+      },
+    },
+    {
+      id: 'freeze-reverse',
+      find: { tool: 'Freeze frame', needs: 'clip' },
+      keywords: ['freeze', 'still', 'reverse', 'ulta', 'backwards', 'rukna'],
+      en: {
+        title: 'Freeze frame and reverse',
+        what: 'Freeze frame holds the picture at the playhead for a few seconds. Reverse plays a clip backwards.',
+        where: 'Select a clip → Freeze frame / Reverse',
+        steps: [
+          'Put the playhead on the moment, select the clip and tap Freeze frame. A still picture of that frame is inserted; drag its edge to change how long it stays.',
+          'Tap Reverse to play the clip backwards. A percentage shows while it is prepared. Undo takes it back.',
+        ],
+        tips: ['Reverse works on up to 5 minutes of video. Split a long clip first.'],
+      },
+      hi: {
+        title: 'फ़्रीज़ फ़्रेम और उल्टा चलाएँ',
+        what: '"फ़्रीज़ फ़्रेम" प्लेहेड वाली तस्वीर को कुछ सेकंड रोक देता है। "उल्टा चलाएँ" क्लिप को पीछे की ओर चलाता है।',
+        where: 'क्लिप चुनें → फ़्रीज़ फ़्रेम / उल्टा चलाएँ',
+        steps: [
+          'प्लेहेड को उस पल पर रखें, क्लिप चुनें और "फ़्रीज़ फ़्रेम" दबाएँ। उस फ़्रेम की रुकी हुई तस्वीर डल जाएगी; कितनी देर रहे, यह उसका किनारा खींचकर बदलें।',
+          'क्लिप को पीछे की ओर चलाने के लिए "उल्टा चलाएँ" दबाएँ। तैयारी के दौरान प्रतिशत दिखता है। "वापस" (Undo) से पहले जैसा हो जाता है।',
+        ],
+        tips: ['"उल्टा चलाएँ" 5 मिनट तक की वीडियो पर चलता है। लंबी क्लिप को पहले काट लें।'],
+      },
+    },
+    {
+      id: 'crop-rotate',
+      find: { tool: 'Crop', needs: 'clip' },
+      keywords: ['crop', 'rotate', 'flip', 'mirror', 'ghumana', 'turn'],
+      en: {
+        title: 'Crop, rotate and flip',
+        what: 'Cut away the edges of a clip, turn it, or mirror it.',
+        where: 'Select a clip or overlay → Crop',
+        steps: [
+          'Select the clip and tap Crop.',
+          'Drag the corners of the box, or pick a shape (Free, 16:9, 9:16, 1:1, 4:5, 4:3).',
+          'Rotate turns the picture by 90°, Flip mirrors it.',
+          'Tap Done. Reset brings back the whole picture.',
+        ],
+      },
+      hi: {
+        title: 'क्रॉप करें, घुमाएँ और पलटें',
+        what: 'क्लिप के किनारे काटें, उसे घुमाएँ, या आईने की तरह पलटें।',
+        where: 'क्लिप या ओवरले चुनें → क्रॉप',
+        steps: [
+          'क्लिप चुनकर "क्रॉप" दबाएँ।',
+          'बॉक्स के कोने खींचें, या कोई आकार चुनें (Free, 16:9, 9:16, 1:1, 4:5, 4:3)।',
+          '"घुमाएँ" तस्वीर को 90° घुमाता है, "पलटें" आईने जैसा उल्टा करता है।',
+          '"हो गया" दबाएँ। "रीसेट" पूरी तस्वीर वापस लाता है।',
+        ],
+      },
+    },
+    {
+      id: 'zoom-move',
+      find: { tool: 'Zoom & move', needs: 'clip' },
+      keywords: ['zoom', 'pan', 'ken burns', 'keyframe', 'move picture', 'position'],
+      related: ['keyframes'],
+      en: {
+        title: 'Zoom & move (pan and zoom inside a clip)',
+        what: 'Zoom into the picture or move it, for the whole clip or as a slow movement (keyframes).',
+        where: 'Select a clip → Zoom & move',
+        steps: [
+          'Select the clip and tap Zoom & move.',
+          'Quick looks: Slow zoom in, Slow zoom out, Pan left, Pan right.',
+          'The sliders (zoom, left/right, up/down, turn) change the picture for the whole clip.',
+          'For movement: put the playhead at the start, tap Add keyframe, move the playhead later and change the sliders. The picture glides between the keyframes.',
+          'Use Previous / Next to jump between keyframes, Remove keyframe to delete one, Reset to start over.',
+        ],
+      },
+      hi: {
+        title: 'ज़ूम और मूव (क्लिप के अंदर ज़ूम और खिसकाना)',
+        what: 'तस्वीर में ज़ूम करें या उसे खिसकाएँ, पूरी क्लिप के लिए या धीरे-धीरे चलती हरकत की तरह (कीफ़्रेम)।',
+        where: 'क्लिप चुनें → ज़ूम और मूव',
+        steps: [
+          'क्लिप चुनकर "ज़ूम और मूव" दबाएँ।',
+          'तैयार लुक: धीरे ज़ूम इन, धीरे ज़ूम आउट, बाएँ खिसकाएँ, दाएँ खिसकाएँ।',
+          'स्लाइडर (ज़ूम, बाएँ/दाएँ, ऊपर/नीचे, घुमाव) पूरी क्लिप की तस्वीर बदलते हैं।',
+          'हरकत के लिए: प्लेहेड शुरुआत पर रखें, "कीफ़्रेम जोड़ें" दबाएँ, प्लेहेड आगे ले जाकर स्लाइडर बदलें। तस्वीर दोनों कीफ़्रेम के बीच धीरे-धीरे चलेगी।',
+          'पिछला / अगला से कीफ़्रेम पर जाएँ, "कीफ़्रेम हटाएँ" से एक हटाएँ, "रीसेट" से फिर शुरू करें।',
+        ],
+      },
+    },
+    {
+      id: 'photo-clip',
+      find: { tool: 'Photo', needs: 'clip' },
+      keywords: ['photo', 'image', 'duration', 'ken burns', 'picture length'],
+      en: {
+        title: 'Photo clips: length and Ken Burns',
+        what: 'Set how long a photo shows and give it a gentle zoom (Ken Burns).',
+        where: 'Select a photo clip → Photo',
+        steps: [
+          'Select the photo and tap Photo.',
+          'Drag Duration to set how many seconds it shows (or drag its edge on the timeline).',
+          'Pick a Ken Burns movement for a slow zoom or pan, or None.',
+        ],
+        tips: ['For a photo, the Motion tool becomes 3D zoom: the photo gets depth as the camera moves.'],
+      },
+      hi: {
+        title: 'फ़ोटो क्लिप: लंबाई और Ken Burns',
+        what: 'तय करें कि फ़ोटो कितनी देर दिखे, और उस पर हल्का ज़ूम (Ken Burns) लगाएँ।',
+        where: 'फ़ोटो क्लिप चुनें → फ़ोटो',
+        steps: [
+          'फ़ोटो चुनकर "फ़ोटो" दबाएँ।',
+          '"Duration" खींचकर तय करें कि कितने सेकंड दिखे (या टाइमलाइन पर उसका किनारा खींचें)।',
+          'धीमे ज़ूम या खिसकने के लिए कोई Ken Burns चाल चुनें, या None।',
+        ],
+        tips: ['फ़ोटो पर "मोशन" टूल "3D ज़ूम" बन जाता है: कैमरा चलने पर फ़ोटो में गहराई दिखती है।'],
+      },
+    },
+    {
+      id: 'copy-style',
+      find: { tool: 'Copy style', needs: 'item' },
+      keywords: ['copy style', 'paste style', 'same look', 'match'],
+      en: {
+        title: 'Copy style and paste it on other items',
+        what: 'Copy the look of one item (filters, colour, effects, volume, speed, text style, place on screen) and paste it on others.',
+        where: 'Select an item → Copy style, then select others → Paste style (Ctrl+Alt+C / Ctrl+Alt+V)',
+        steps: [
+          'Select the item that looks right and tap Copy style.',
+          'Select another item, or Select all, and tap Paste style.',
+          'Tick which parts to paste (for example only Color & look, not the speed) and confirm.',
+        ],
+      },
+      hi: {
+        title: 'स्टाइल कॉपी करके दूसरे आइटम पर लगाएँ',
+        what: 'एक आइटम का लुक (फ़िल्टर, रंग, इफ़ेक्ट, आवाज़, स्पीड, टेक्स्ट स्टाइल, स्क्रीन पर जगह) कॉपी करके दूसरों पर लगाएँ।',
+        where: 'आइटम चुनें → स्टाइल कॉपी करें, फिर दूसरे चुनें → स्टाइल पेस्ट करें (Ctrl+Alt+C / Ctrl+Alt+V)',
+        steps: [
+          'जिस आइटम का लुक सही है उसे चुनकर "स्टाइल कॉपी करें" दबाएँ।',
+          'दूसरा आइटम चुनें, या "सब चुनें", और "स्टाइल पेस्ट करें" दबाएँ।',
+          'कौन से हिस्से लगाने हैं, उन पर टिक करें (जैसे सिर्फ़ "रंग और लुक", स्पीड नहीं) और पक्का करें।',
+        ],
+      },
+    },
+  ],
+}
+
+export default section
