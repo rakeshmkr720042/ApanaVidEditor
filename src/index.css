@@ -1009,3 +1009,77 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .match-list button.on { border-color: var(--accent, #7c5cff); }
 .match-list img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 5px; background: #000; }
 .match-photo { width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; font-size: 22px; border-radius: 5px; background: rgba(0,0,0,0.35); }
+
+/* ---------- full screen preview (with the edit panel sliding in) and before / after */
+.stage-corner { position: absolute; right: 8px; bottom: 8px; z-index: 4; display: flex; gap: 6px; }
+.stage-corner button {
+  width: 34px; height: 34px; border-radius: 10px; border: 0; display: grid; place-items: center; color: #fff;
+  background: rgba(10, 12, 18, 0.6); backdrop-filter: blur(4px); opacity: .85;
+}
+.stage-corner button:hover { opacity: 1; background: rgba(10, 12, 18, 0.85); }
+.stage-corner button.on { color: var(--sel); box-shadow: inset 0 0 0 1.5px var(--sel); }
+.preview-canvas.before { pointer-events: none; }
+.split-line { position: absolute; z-index: 3; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); touch-action: none; cursor: ew-resize; }
+.split-line::before { content: ''; position: absolute; inset: 0 -14px; } /* a wide grip for fingers */
+.split-grip {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 32px; height: 32px; border-radius: 50%;
+  background: #fff; color: #000; display: grid; place-items: center; font-size: 16px; box-shadow: 0 1px 6px rgba(0,0,0,.5); pointer-events: none;
+}
+.split-tag { position: absolute; top: 8px; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; background: rgba(10,12,18,.75); color: #fff; pointer-events: none; }
+.split-tag.l { right: 10px; } .split-tag.r { left: 10px; }
+
+.edit-dock { display: contents; }
+.dock-head { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; border-bottom: 1px solid var(--line); }
+.dock-head .muted { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.app.editor.fs .top, .app.editor.fs .transport, .app.editor.fs .missing-bar { display: none; }
+.app.editor.fs .stage-wrap { position: fixed; inset: 0; z-index: 15; min-height: 0; transition: right .22s ease, bottom .22s ease; }
+.app.editor.fs .edit-dock { display: none; }
+.app.editor.fs-idle .stage { cursor: none; }
+
+.fs-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; padding: 26px 12px calc(8px + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, rgba(0,0,0,.78)); transition: opacity .3s; display: grid; gap: 2px;
+}
+.fs-bar.idle { opacity: 0; pointer-events: none; }
+.fs-row { display: flex; align-items: center; gap: 4px; color: #fff; }
+.fs-row .icon-btn { color: #fff; }
+.fs-row .icon-btn.play { background: rgba(255,255,255,.16); }
+.fs-time { font-variant-numeric: tabular-nums; font-size: 13px; margin-left: 4px; white-space: nowrap; }
+.fs-spacer { flex: 1; }
+.fs-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 99px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; font-size: 13px; white-space: nowrap; }
+.fs-btn:hover { background: rgba(255,255,255,.18); }
+.fs-btn.on { color: var(--sel); border-color: var(--sel); }
+.fs-seek { width: 100%; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+@media (max-width: 640px) {
+  .fs-btn span { display: none; } /* phones: icons only */
+  .fs-btn { padding: 0 9px; }
+}
+@media (max-width: 480px) {
+  .fs-row { gap: 2px; }
+  .fs-row .skip, .fs-row .rate-btn { display: none; } /* narrow phones: play, time and the three buttons */
+  .fs-time { font-size: 12px; }
+}
+.app.editor.fs .stage-wrap .toast { bottom: auto; top: 12px; }
+
+/* the edit panel: on the right on a wide screen, at the bottom on a tall one; the video shrinks to stay in view */
+.app.editor.fs-edit { --dock-w: min(440px, 46vw); --dock-h: 58dvh; }
+.app.editor.fs-edit .edit-dock {
+  display: flex; flex-direction: column; position: fixed; z-index: 16; right: 0; top: 0; bottom: 0; width: var(--dock-w);
+  background: var(--bg); border-left: 1px solid var(--line); box-shadow: -10px 0 30px rgba(0,0,0,.45);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); animation: dock-in-side .22s ease;
+}
+.app.editor.fs-edit .stage-wrap { right: var(--dock-w); }
+.app.editor.fs-edit .edit-dock .timeline { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.app.editor.fs-edit .edit-dock .tl-scroll { max-height: none; flex: 1 1 auto; }
+.app.editor.fs-edit .edit-dock .tools { flex-wrap: wrap; overflow-x: hidden; overflow-y: auto; max-height: 40dvh; justify-content: flex-start; }
+@media (orientation: portrait) {
+  .app.editor.fs-edit .edit-dock { top: auto; left: 0; width: auto; height: var(--dock-h); border-left: 0; border-top: 1px solid var(--line); box-shadow: 0 -10px 30px rgba(0,0,0,.45); animation-name: dock-in-up; }
+  .app.editor.fs-edit .stage-wrap { right: 0; bottom: var(--dock-h); }
+  .app.editor.fs-edit .edit-dock .tools { flex-wrap: nowrap; overflow-x: auto; max-height: none; }
+}
+@keyframes dock-in-side { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes dock-in-up { from { transform: translateY(100%); } to { transform: none; } }
+/* with the edit panel open the video is narrower: icons only */
+.app.editor.fs-edit .fs-btn span, .app.editor.fs-edit .fs-row .skip, .app.editor.fs-edit .fs-row .rate-btn { display: none; }
+.app.editor.fs-edit .fs-btn { padding: 0 9px; }
