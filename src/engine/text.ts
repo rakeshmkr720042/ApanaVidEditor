@@ -1,10 +1,73 @@
 import { drawShower } from './shower'
 import type { CaptionFrame, CaptionFramePreset, LoopAnim, StickerLayer, TextAnim, TextFill, TextLayer, TextStyle, WordFx } from '../types'
 
-export const FONTS = [
-  'Poppins', 'Montserrat', 'Noto Sans Devanagari', 'Hind', 'Bebas Neue', 'Anton', 'Oswald', 'Teko', 'Bangers',
-  'Righteous', 'Playfair Display', 'Pacifico', 'Lobster', 'Dancing Script', 'Caveat', 'Permanent Marker', 'Kalam', 'Yatra One',
+/** How a font looks, so the font picker can group them. */
+export type FontKind = 'simple' | 'bold' | 'stylish' | 'hand' | 'classic'
+
+export interface FontInfo {
+  family: string
+  /** has its own Devanagari letters, so Hindi (matras, half letters, conjuncts) is drawn in this font */
+  hindi: boolean
+  kind: FontKind
+}
+
+/** Every bundled font (see scripts/copy-assets.mjs). All are SIL Open Font License 1.1. */
+export const FONT_INFO: FontInfo[] = [
+  { family: 'Poppins', hindi: true, kind: 'simple' },
+  { family: 'Montserrat', hindi: false, kind: 'simple' },
+  { family: 'Noto Sans Devanagari', hindi: true, kind: 'simple' },
+  { family: 'Hind', hindi: true, kind: 'simple' },
+  { family: 'Mukta', hindi: true, kind: 'simple' },
+  { family: 'Khula', hindi: true, kind: 'simple' },
+  { family: 'Baloo 2', hindi: true, kind: 'bold' },
+  { family: 'Bebas Neue', hindi: false, kind: 'bold' },
+  { family: 'Anton', hindi: false, kind: 'bold' },
+  { family: 'Oswald', hindi: false, kind: 'bold' },
+  { family: 'Teko', hindi: true, kind: 'bold' },
+  { family: 'Khand', hindi: true, kind: 'bold' },
+  { family: 'Rajdhani', hindi: true, kind: 'bold' },
+  { family: 'Sarpanch', hindi: true, kind: 'bold' },
+  { family: 'Modak', hindi: true, kind: 'bold' },
+  { family: 'Bangers', hindi: false, kind: 'bold' },
+  { family: 'Righteous', hindi: false, kind: 'stylish' },
+  { family: 'Yatra One', hindi: true, kind: 'stylish' },
+  { family: 'Rozha One', hindi: true, kind: 'stylish' },
+  { family: 'Laila', hindi: true, kind: 'stylish' },
+  { family: 'Gotu', hindi: true, kind: 'stylish' },
+  { family: 'Playfair Display', hindi: false, kind: 'classic' },
+  { family: 'Tiro Devanagari Hindi', hindi: true, kind: 'classic' },
+  { family: 'Noto Serif Devanagari', hindi: true, kind: 'classic' },
+  { family: 'Martel', hindi: true, kind: 'classic' },
+  { family: 'Eczar', hindi: true, kind: 'classic' },
+  { family: 'Pacifico', hindi: false, kind: 'hand' },
+  { family: 'Lobster', hindi: false, kind: 'hand' },
+  { family: 'Dancing Script', hindi: false, kind: 'hand' },
+  { family: 'Caveat', hindi: false, kind: 'hand' },
+  { family: 'Permanent Marker', hindi: false, kind: 'hand' },
+  { family: 'Kalam', hindi: true, kind: 'hand' },
+  { family: 'Amita', hindi: true, kind: 'hand' },
+  { family: 'Kurale', hindi: true, kind: 'hand' },
 ]
+
+export const FONTS = FONT_INFO.map((f) => f.family)
+export const HINDI_FONTS = FONT_INFO.filter((f) => f.hindi).map((f) => f.family)
+export const hasHindiLetters = (family: string) => HINDI_FONTS.includes(family)
+/** true when the text has any Devanagari letter */
+export const isDevanagari = (s: string) => /[\u0900-\u097F]/.test(s)
+
+/** Drawn for Hindi letters when the chosen font has none (see fontString) */
+export const DEVA_FALLBACK = 'Noto Sans Devanagari'
+
+const HINDI_FONT_KEY = 'hindi-font'
+/** The Hindi font the person picked last: used for new Hindi captions. */
+export function preferredHindiFont(): string {
+  try { const f = localStorage.getItem(HINDI_FONT_KEY); if (f && hasHindiLetters(f)) return f } catch { /* private mode */ }
+  return 'Noto Sans Devanagari'
+}
+export function rememberHindiFont(family: string) {
+  if (!hasHindiLetters(family)) return
+  try { localStorage.setItem(HINDI_FONT_KEY, family) } catch { /* private mode */ }
+}
 
 const RANGES: Record<string, string> = {
   latin: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',

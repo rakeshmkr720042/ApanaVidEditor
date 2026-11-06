@@ -248,7 +248,8 @@ export async function exportProject(
 
     // ---- video frames
     const fonts = new Set(project.layers.flatMap((l) => (l.type === 'text' ? [l.style.font] : [])))
-    await Promise.all([...fonts, 'Poppins'].map(ensureFont))
+    // Noto Sans Devanagari is the fallback for Hindi letters in fonts without them, so it must be ready too
+    await Promise.all([...fonts, 'Poppins', 'Noto Sans Devanagari'].map(ensureFont))
     const renderer = new Renderer(canvasFor(w, h))
     renderer.resize(w, h)
     await renderer.prepareWatermark(project, sources)

@@ -31,6 +31,10 @@ const fonts = {
   righteous: 'Righteous', 'playfair-display': 'Playfair Display', pacifico: 'Pacifico', lobster: 'Lobster',
   'dancing-script': 'Dancing Script', caveat: 'Caveat', 'permanent-marker': 'Permanent Marker',
   kalam: 'Kalam', 'yatra-one': 'Yatra One',
+  // more Hindi (Devanagari) fonts, all SIL Open Font License 1.1 (free to bundle and use in videos)
+  mukta: 'Mukta', 'baloo-2': 'Baloo 2', 'tiro-devanagari-hindi': 'Tiro Devanagari Hindi', 'rozha-one': 'Rozha One',
+  khand: 'Khand', rajdhani: 'Rajdhani', amita: 'Amita', sarpanch: 'Sarpanch', martel: 'Martel', eczar: 'Eczar',
+  laila: 'Laila', kurale: 'Kurale', gotu: 'Gotu', modak: 'Modak', 'noto-serif-devanagari': 'Noto Serif Devanagari', khula: 'Khula',
 }
 const fontDest = join(root, 'public/fonts')
 mkdirSync(fontDest, { recursive: true })

@@ -3,7 +3,7 @@ import type { Layer, TextLayer, WordFx, WordFxStyle } from '../types'
 import type { Editor } from '../model/useEditor'
 import { isSub } from '../model/useEditor'
 import { CAPTION_LOOKS, splitShort, withEmoji, withoutEmoji } from '../lib/captions'
-import { ensureFont, prefetchFonts } from '../engine/text'
+import { FONT_INFO, ensureFont, isDevanagari, preferredHindiFont, prefetchFonts, rememberHindiFont } from '../engine/text'
 import { Chips, ColorRow, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
 
@@ -30,6 +30,8 @@ export function CaptionStyle({ ed, layer }: { ed: Editor; layer: TextLayer }) {
   const fx = layer.words ?? null
   const setFx = (patch: Partial<WordFx> | null) => update((l) => ({ words: patch === null ? null : { style: 'color', color: '#ffe600', ...l.words, ...patch } }))
   const count = subs ? ed.project.layers.filter(isSub).length : 1
+  const hindiCaps = subs && isDevanagari(layer.text)
+  const sample = (layer.text.split(/\s+/).slice(0, 2).join(' ') || 'नमस्ते').slice(0, 14)
 
   const split = (max: number) => {
     const p = ed.project
@@ -49,9 +51,11 @@ export function CaptionStyle({ ed, layer }: { ed: Editor; layer: TextLayer }) {
             className={look.words?.style === fx?.style && look.style.font === layer.style.font ? 'on' : ''}
             onPointerEnter={() => look.style.font && ensureFont(look.style.font)}
             onClick={() => {
-              if (look.style.font) ensureFont(look.style.font)
+              // the Hindi look uses the Hindi font picked last
+              const font = look.name === 'Hindi' ? preferredHindiFont() : look.style.font
+              if (font) ensureFont(font)
               update((l) => ({
-                style: { ...l.style, ...look.style, size: look.size ?? (l.words?.style === 'one' ? 0.055 : l.style.size) },
+                style: { ...l.style, ...look.style, ...(font ? { font } : {}), size: look.size ?? (l.words?.style === 'one' ? 0.055 : l.style.size) },
                 words: look.words && { ...look.words },
               }))
             }}
@@ -75,6 +79,21 @@ export function CaptionStyle({ ed, layer }: { ed: Editor; layer: TextLayer }) {
             <Toggle label="CAPITALS" value={!!fx.caps} onChange={(caps) => setFx({ caps })} />
           </div>
           <p className="muted small">{t('Word timing follows each caption\'s length. If a word lights up early or late, drag the caption\'s ends on the timeline.')}</p>
+        </>
+      )}
+      {subs && hindiCaps && (
+        <>
+          <span className="field-label">{t('Hindi font for captions')}</span>
+          <div className="font-strip" lang="hi">
+            {FONT_INFO.filter((f) => f.hindi).map((f) => (
+              <button key={f.family} className={layer.style.font === f.family ? 'on' : ''} style={{ fontFamily: `"${f.family}", "Noto Sans Devanagari"` }}
+                onPointerEnter={() => ensureFont(f.family)}
+                onClick={() => { ensureFont(f.family); rememberHindiFont(f.family); update((l) => ({ style: { ...l.style, font: f.family } })) }}>
+                {sample}<small>{f.family}</small>
+              </button>
+            ))}
+          </div>
+          <p className="muted small">{t('New Hindi captions use the font you pick here.')}</p>
         </>
       )}
       {subs && (
