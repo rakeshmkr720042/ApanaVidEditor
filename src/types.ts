@@ -355,6 +355,21 @@ export interface BlurLayer extends LayerBase {
   strength: number // 0..1
 }
 
+/**
+ * Adjustment layer (Premiere / Resolve): changes the look of everything under it (main video and lower rows) for
+ * as long as it lasts, without touching the clips themselves. One place to grade a whole scene.
+ */
+export interface AdjustmentLayer extends LayerBase {
+  type: 'adjustment'
+  name: string
+  adjust: Adjust
+  filter: string | null
+  filterAmount: number
+  effect?: VideoEffect | null
+  grade?: Grade | null
+  amount: number // 0..1, how strongly it shows (mixed with the picture under it)
+}
+
 export interface AudioLayer extends LayerBase {
   type: 'audio'
   sourceId: string
@@ -394,8 +409,8 @@ export interface WaveLayer extends LayerBase, Keyed {
   box: Box
 }
 
-export type Layer = TextLayer | StickerLayer | MediaLayer | BlurLayer | AudioLayer | WaveLayer
-export type VisualLayer = Exclude<Layer, AudioLayer>
+export type Layer = TextLayer | StickerLayer | MediaLayer | BlurLayer | AudioLayer | WaveLayer | AdjustmentLayer
+export type VisualLayer = Exclude<Layer, AudioLayer | AdjustmentLayer>
 
 export type AspectRatio = 'original' | '16:9' | '9:16' | '1:1' | '4:5' | '4:3' | '3:4' | '21:9'
 
