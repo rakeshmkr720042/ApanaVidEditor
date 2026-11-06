@@ -1,4 +1,5 @@
 import type { Clip, Layer, MediaSource, Project } from '../types'
+import type { MediaInfo } from './relink'
 
 /** Projects and their media are kept in IndexedDB so work survives reloads and works offline. */
 export interface ProjectRecord {
@@ -9,6 +10,8 @@ export interface ProjectRecord {
   mediaIds: string[]
   thumb: string | null
   duration: number
+  /** Name and kind of every file the project uses, kept so a missing file can still be named (see lib/relink.ts). */
+  mediaInfo?: Record<string, MediaInfo>
 }
 
 export type MediaMeta = Omit<MediaSource, 'url' | 'file'>

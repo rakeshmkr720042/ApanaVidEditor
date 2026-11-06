@@ -239,7 +239,8 @@ export function OverlayPanel({ ed, layer, onClose }: P & { layer: MediaLayer }) 
     <Panel title="Overlay" onClose={onClose}>
       <Slider label="Opacity" min={0} max={1} value={layer.box.opacity} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ box: { ...layer.box, opacity: v } })} />
       <Slider label="Size" min={0.1} max={4} value={layer.box.scale} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ box: { ...layer.box, scale: v } })} />
-      {isVideo && <Slider label="Volume" min={0} max={2} value={layer.volume} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ volume: v })} />}
+      {isVideo && !layer.volKeys?.length && <Slider label="Volume" min={0} max={2} value={layer.volume} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ volume: v })} />}
+      {isVideo && !!layer.volKeys?.length && <p className="muted small">{t('This video\'s volume has keyframes: change it with the Volume tool.')}</p>}
       <span className="field-label">{t('Shape')}</span>
       <Chips options={[{ value: 'none', label: 'Rectangle' }, { value: 'rounded', label: 'Rounded' }, { value: 'circle', label: 'Circle' }, { value: 'oval', label: 'Oval' }, { value: 'heart', label: 'Heart' }, { value: 'star', label: 'Star' }]} value={layer.mask} onChange={(mask) => set({ mask })} wrap />
       <div className="row">
