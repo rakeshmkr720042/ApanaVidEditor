@@ -984,3 +984,11 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .speed-curve circle { fill: #fff; stroke: var(--accent); stroke-width: 3; cursor: ns-resize; }
 .tl-ckey { position: absolute; bottom: 2px; width: 8px; height: 8px; margin-left: -4px; background: #ffcc00; transform: rotate(45deg); pointer-events: none; z-index: 2; box-shadow: 0 0 2px #000; }
 .tl-ckey.vol { background: #3ecf6a; bottom: 12px; }
+
+/* missing files (relink) */
+.missing-bar { display: block; width: 100%; border: 0; padding: 8px 12px; background: #5a3d00; color: #ffd98a; font-size: 14px; text-align: left; cursor: pointer; }
+.missing-bar b { color: #fff; }
+.relink-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.relink-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px; border-radius: 10px; background: rgba(255,255,255,0.05); }
+.relink-text { display: flex; flex-direction: column; min-width: 0; }
+.relink-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

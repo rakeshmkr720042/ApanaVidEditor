@@ -41,6 +41,8 @@ import { copyTrack, useCopiedTrack, type PasteTrackHow } from '../model/trackCop
 import { PasteTrackSheet } from './PasteTrackSheet'
 import { KeysSheet } from './KeysSheet'
 import { MarkerSheet } from './MarkerSheet'
+import { RelinkSheet } from './RelinkSheet'
+import { mediaInfoOf, missingSources, unreadable, usedSources, type MediaInfo } from '../lib/relink'
 import { TrimPanel, LayerTrimPanel } from '../panels/TrimPanel'
 import { ZoomMovePanel } from '../panels/ClipKeysPanel'
 import { MaskPanel } from '../panels/MaskPanel'
@@ -77,7 +79,7 @@ const PREMIUM_TOOLS: Record<string, Feature> = {
 const SKIP = 5 // seconds jumped by fast backward / forward
 const RATES = [1, 1.5, 2, 4, 0.5]
 
-interface Loaded { id: string; name: string; project: Project; sources: Record<string, MediaSource> }
+interface Loaded { id: string; name: string; project: Project; sources: Record<string, MediaSource>; mediaInfo: Record<string, MediaInfo> }
 
 export function Editor({ projectId, onBack }: { projectId: string; onBack: () => void }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null)
@@ -87,11 +89,16 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
       const rec = await getProject(projectId)
       if (!rec) { setError('Project not found'); return }
       const sources: Record<string, MediaSource> = {}
-      for (const id of rec.mediaIds) {
+      const mediaInfo: Record<string, MediaInfo> = { ...rec.mediaInfo }
+      const ids = new Set([...rec.mediaIds, ...usedSources(rec.data).keys()])
+      for (const id of ids) {
         const m = await getMedia(id)
-        if (m) sources[id] = restoreSource(m.meta, m.blob)
+        if (!m) continue
+        if (m.meta?.name) mediaInfo[id] = { name: m.meta.name, kind: m.meta.kind, duration: m.meta.duration }
+        // a stored file that can no longer be read counts as missing, so it can be found again
+        if (!(await unreadable(m.blob))) sources[id] = restoreSource(m.meta, m.blob)
       }
-      setLoaded({ id: rec.id, name: rec.name, project: rec.data, sources })
+      setLoaded({ id: rec.id, name: rec.name, project: rec.data, sources, mediaInfo })
     })().catch((e) => setError(String(e)))
   }, [projectId])
   if (error) return <div className="center-msg">{error} <button className="btn" onClick={onBack}>{t('Back')}</button></div>
@@ -175,13 +182,21 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const output = useMemo(() => playable(ed.project), [ed.project])
   useEffect(() => { player?.setProject(output, ed.sources) }, [player, output, ed.sources])
 
+  // files the project uses that are not here any more (storage cleared): found again in the Missing files sheet
+  const mediaInfo = useRef(initial.mediaInfo)
+  const missing = useMemo(() => missingSources(ed.project, ed.sources, initial.mediaInfo), [ed.project, ed.sources, initial.mediaInfo])
+  const [relinkSheet, setRelinkSheet] = useState(false)
+
   const saveNow = useCallback(() => {
     const first = ed.project.clips.find((c) => !c.fromTemplate) ?? ed.project.clips[0]
+    mediaInfo.current = mediaInfoOf(ed.sources, mediaInfo.current, ed.project)
     return saveProject({
-      id: initial.id, name, updatedAt: Date.now(), data: ed.project, mediaIds: Object.keys(ed.sources),
-      thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: ed.layout.total,
+      id: initial.id, name, updatedAt: Date.now(), data: ed.project,
+      // missing files stay listed, so they are still cleaned up with the project and can be found again
+      mediaIds: [...new Set([...Object.keys(ed.sources), ...missing.map((m) => m.id)])],
+      thumb: first ? ed.sources[first.sourceId]?.thumbs[0] ?? null : null, duration: ed.layout.total, mediaInfo: mediaInfo.current,
     }).then(() => true, () => { setToast(t('Could not save the project (storage full?)')); return false })
-  }, [ed.project, ed.sources, name, initial.id, ed.layout.total])
+  }, [ed.project, ed.sources, name, initial.id, ed.layout.total, missing])
 
   // a Short made by Smart cut: saved as a new project next to this one, then opened
   const makeShort = useCallback(async (data: Project, label: string) => {
@@ -884,6 +899,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!(selLayer as MediaLayer).chroma?.enabled } as Tool,
         { icon: 'user', label: 'Remove BG', on: () => setPanel('cutout'), active: !!(selLayer as MediaLayer).cutout?.enabled } as Tool,
         ...(ed.sources[(selLayer as MediaLayer).sourceId]?.kind === 'video' ? [{ icon: 'speed', label: 'Speed', on: () => setPanel('speed') } as Tool] : []),
+        ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [{ icon: 'volume', label: 'Volume', on: () => setPanel('volume'), active: !!(selLayer as MediaLayer).volKeys?.length } as Tool] : []),
         ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [{ icon: 'detach', label: 'Detach audio', on: () => detach([selLayer.id]) } as Tool] : []),
         ...(hasSound(ed.sources[(selLayer as MediaLayer).sourceId]) ? [
           { icon: 'denoise', label: 'Remove noise', on: () => setPanel('noise'), active: !!(selLayer as MediaLayer).denoise } as Tool,
@@ -1043,6 +1059,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'trim' && selLayer) panelView = <LayerTrimPanel onTrim={trimToPlayhead} onRippleDelete={rippleDelete} onClose={closePanel} />
   else if (panel === 'speed' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <LayerSpeedPanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'speed' && tclip) panelView = <SpeedPanel ed={ed} clip={tclip} onClose={closePanel} />
+  else if (panel === 'volume' && selLayer?.type === 'media') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, volKeys: selLayer.volKeys }} onClose={closePanel}
+    src={group ? undefined : time >= selLayer.start && time < selLayer.end ? layerSrcAt(selLayer, time - selLayer.start) : null} />
   else if (panel === 'volume' && selLayer?.type === 'audio') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, fadeIn: selLayer.fadeIn, fadeOut: selLayer.fadeOut, volKeys: selLayer.volKeys }} onClose={closePanel}
     src={group ? undefined : time >= selLayer.start && time < selLayer.end ? layerSrcAt(selLayer, time - selLayer.start) : null} />
   else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} src={group ? undefined : srcOfClip(tclip)} />
@@ -1130,6 +1148,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         </div>
       </header>
 
+      {missing.length > 0 && (
+        <button className="missing-bar" onClick={() => { player?.pause(); setRelinkSheet(true) }} data-testid="missing-bar">
+          ⚠ {missing.length === 1 ? t('1 file is missing') : `${missing.length} ${t('files are missing')}`} · <b>{t('Find files')}</b>
+        </button>
+      )}
       <div className="stage-wrap">
         <Preview ed={ed} player={player} canvasRef={canvasRef} t={time} onTogglePlay={togglePlay}
           onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} />
@@ -1248,6 +1271,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         <MarkerSheet markers={markers} focus={markerSheet.focus} time={time} onAdd={() => { const m = ed.addMarker(time); setMarkerSheet({ focus: m.id }) }}
           onUpdate={ed.updateMarker} onRemove={ed.removeMarker} onSeek={seek} onClose={() => setMarkerSheet(null)} onToast={setToast} />
       )}
+      {relinkSheet && <RelinkSheet missing={missing} onClose={() => setRelinkSheet(false)} onToast={setToast}
+        onLinked={async (src) => { ed.addSource(src); await saveMedia(src) }} />}
       {styleSheet && styleCopied && sel && <PasteStyleSheet style={styleCopied} parts={styleParts()} count={styleTargets().length} onPaste={pasteStyle} onClose={() => setStyleSheet(false)} />}
       {pasteSheet && copied && <PasteTrackSheet copy={copied} time={time} mainLocked={!!ed.project.main?.locked} onPaste={pasteRow} onClose={() => setPasteSheet(false)} />}
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
