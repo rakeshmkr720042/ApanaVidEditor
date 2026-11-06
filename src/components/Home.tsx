@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { interruptedJob } from '../engine/background'
+import { forgetOpen, wasOpen } from '../lib/recover'
+import { openBlackbox } from '../lib/blackbox'
 import { importProjectFile } from '../lib/projectFile'
 import { deleteProject, listProjects, storageEstimate, type ProjectRecord } from '../lib/db'
 import { createProject } from '../lib/newProject'
@@ -36,6 +38,8 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [error, setError] = useState<string | null>(null)
   // the app was closed in the middle of saving a video last time (usually: the phone ran out of memory)
   const [stopped] = useState(() => interruptedJob())
+  // the project that was open when the app closed (crash, out of memory, or swiped away)
+  const [recover, setRecover] = useState(() => wasOpen())
   const fileInput = useRef<HTMLInputElement>(null)
   const [aiSheet, setAiSheet] = useState(false)
   const [habitsSheet, setHabitsSheet] = useState(false)
@@ -84,6 +88,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           <button className="btn ghost small notes-btn" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
             <Icon name="note" size={16} /><span className="wide-only"> {t('Notes')}</span>{openNotes > 0 && <span className="count">{openNotes}</span>}
           </button>
+          <button className="btn ghost small" onClick={openBlackbox} aria-label={t('Blackbox log')} title={`${t('Blackbox log')} (Ctrl+Shift+L)`} data-testid="home-blackbox">
+            <Icon name="blackbox" size={16} /><span className="wide-only"> {t('Blackbox')}</span>
+          </button>
           <button className="btn ghost small" onClick={() => setHabitsSheet(true)} aria-label={t('Smart shortcuts')} title={t('Smart shortcuts')}>
             <Icon name="habit" size={16} /><span className="wide-only"> {t('Shortcuts')}</span>
           </button>
@@ -110,10 +117,18 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         </button>
         <input ref={fileInput} type="file" accept=".avp,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
         {error && <p className="error-text">{error}</p>}
+        {recover && projects?.some((p) => p.id === recover.id) && (
+          <div className="recover-card" data-testid="recover-card">
+            <span><b>{t('Continue where you left off')}</b><br /><small className="muted">“{recover.name}” {t('was open when the app closed. All changes are saved.')}</small></span>
+            <button className="btn primary small" onClick={() => { const id = recover.id; forgetOpen(); setRecover(null); onOpen(id) }}>{t('Open')}</button>
+            <button className="btn ghost small" onClick={() => { forgetOpen(); setRecover(null) }}>{t('Dismiss')}</button>
+          </div>
+        )}
         {stopped && (
           <p className="error-text" data-testid="job-stopped">
             {t(stopped.kind === 'compress' ? 'Last time the app closed while compressing a video.' : 'Last time the app closed while saving a video.')}{' '}
-            {t('Your project is saved. The phone probably ran out of memory: close other apps, then try a lower quality (720p) or the Small file size.')}
+            {t('Your project is saved. The phone probably ran out of memory: close other apps, then try a lower quality (720p) or the Small file size.')}{' '}
+            <button className="link-btn" onClick={openBlackbox}>{t('See blackbox log')}</button>
           </p>
         )}
         <div className="offline-row">

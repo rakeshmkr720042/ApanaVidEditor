@@ -13,6 +13,8 @@ import { getMedia, getProject, saveMedia, saveProject } from '../lib/db'
 import { fmtTime, fmtTimecode, uid } from '../lib/format'
 import { projectToFile } from '../lib/projectFile'
 import { isNative, saveNative } from '../lib/save'
+import { markClosed, markOpen } from '../lib/recover'
+import { info as logInfo, openBlackbox } from '../lib/blackbox'
 import { t } from '../lib/i18n'
 import { onPendingFiles, takePendingFiles } from '../lib/desktop'
 import { Timeline } from './Timeline'
@@ -216,6 +218,23 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const id = setTimeout(saveNow, 600)
     return () => clearTimeout(id)
   }, [saveNow])
+  // crash-safe: save at once when the app goes to the background (Android may close it there), and
+  // remember the open project so Home can offer it again if the app dies
+  const saveRef = useRef(saveNow)
+  useEffect(() => { saveRef.current = saveNow }, [saveNow])
+  useEffect(() => { markOpen(initial.id, name) }, [initial.id, name])
+  useEffect(() => {
+    logInfo('Editor opened', `${initial.project.clips.length} clips, ${initial.project.layers.length} layers, ${Object.keys(initial.sources).length} files`)
+    const now = () => { if (document.hidden) void saveRef.current() }
+    const leave = () => { void saveRef.current() }
+    document.addEventListener('visibilitychange', now)
+    window.addEventListener('pagehide', leave)
+    return () => {
+      document.removeEventListener('visibilitychange', now)
+      window.removeEventListener('pagehide', leave)
+      markClosed(initial.id)
+    }
+  }, [initial.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Smart shortcuts learn from how the items end up (on this device only)
   useEffect(() => {
@@ -1141,10 +1160,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <div className="menu">
                 <button onClick={saveToApp}><Icon name="save" size={18} /> {t('Save project')}</button>
                 <button onClick={saveToFile}><Icon name="download" size={18} /> {t('Save as .avp file')}</button>
+                <button onClick={() => { setSaveMenu(false); player?.pause(); openBlackbox() }} data-testid="editor-blackbox"><Icon name="blackbox" size={18} /> {t('Blackbox log')}</button>
               </div>
             )}
           </span>
-          <button className="btn primary small" disabled={empty || importing > 0} onClick={() => { player?.pause(); setExporting(true) }}>{t('Export')}</button>
+          <button className="btn primary small" disabled={empty || importing > 0} onClick={() => { player?.pause(); void saveNow(); setExporting(true) }}>{t('Export')}</button>
         </div>
       </header>
 

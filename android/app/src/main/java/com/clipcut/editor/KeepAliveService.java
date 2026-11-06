@@ -21,8 +21,17 @@ public class KeepAliveService extends Service {
     private static final String CHANNEL = "long-jobs";
     private static final int ID = 4107;
     private PowerManager.WakeLock wakeLock;
+    /**
+     * Android closes the whole app if a service started with startForegroundService() is stopped
+     * before it called startForeground() ("did not then call startForeground"). That happened when
+     * an export ended (or failed) a moment after it began. So stop() only asks; the service stops
+     * itself right after it has become a foreground service.
+     */
+    private static volatile boolean stopWanted = false;
+    private static volatile boolean inForeground = false;
 
     public static void start(Context context, String title, String text) {
+        stopWanted = false;
         Intent i = new Intent(context, KeepAliveService.class);
         i.putExtra("title", title);
         i.putExtra("text", text);
@@ -30,7 +39,8 @@ public class KeepAliveService extends Service {
     }
 
     public static void stop(Context context) {
-        context.stopService(new Intent(context, KeepAliveService.class));
+        stopWanted = true;
+        if (inForeground) context.stopService(new Intent(context, KeepAliveService.class));
     }
 
     @Override
@@ -55,7 +65,26 @@ public class KeepAliveService extends Service {
         int type = 0;
         if (Build.VERSION.SDK_INT >= 35) type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING;
         else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC;
-        ServiceCompat.startForeground(this, ID, n, type);
+        try {
+            ServiceCompat.startForeground(this, ID, n, type);
+        } catch (Exception e) {
+            // e.g. the media processing time for today is used up: try the other declared type once
+            CrashLog.append(this, "Foreground service type " + type + " refused: " + e);
+            try {
+                int other = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ? ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC : 0;
+                ServiceCompat.startForeground(this, ID, n, other);
+            } catch (Exception e2) {
+                CrashLog.append(this, "Foreground service not possible: " + e2);
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+        }
+        inForeground = true;
+        if (stopWanted) {
+            // the job already ended while the service was starting
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         if (wakeLock == null) {
             PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
             if (pm != null) {
@@ -70,11 +99,13 @@ public class KeepAliveService extends Service {
     @Override
     public void onTimeout(int startId, int fgsType) {
         // Android 15+ limits media processing to 6 hours a day
+        CrashLog.append(this, "Foreground service time limit reached (type " + fgsType + ")");
         stopSelf();
     }
 
     @Override
     public void onDestroy() {
+        inForeground = false;
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         wakeLock = null;
         super.onDestroy();

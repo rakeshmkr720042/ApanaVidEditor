@@ -14,6 +14,7 @@ import { mediaNeeds } from './player'
 import { prepare3d } from './photo3d'
 import { outputSize, Renderer, type FrameImage } from './renderer'
 import { ensureFont } from './text'
+import { info as logInfo } from '../lib/blackbox'
 
 export type Format = 'mp4' | 'webm' | 'mov' | 'gif' | 'mp3'
 export type Resolution = '480' | '720' | '1080' | '1440' | '2160'
@@ -277,6 +278,7 @@ export async function exportProject(
     if (!target && !gif && job.resolution === '2160') throw new Error('This device cannot make 4K videos. Please choose 2K or 1080p.')
     const chunks = new ChunkStore()
     let encoderName = 'ffmpeg'
+    logInfo('Export video encoder', `${target ? target.codec : 'none (ffmpeg JPEG frames, slow, uses much memory)'} · ${w}x${h} · ${fps} fps · ${(bitrate / 1e6).toFixed(1)} Mbit/s · ${frameCount} frames`, true)
 
     if (target) {
       encoderName = target.codec
@@ -328,6 +330,7 @@ export async function exportProject(
     }
 
     // ---- mux / transcode
+    logInfo('Export: video encoded', `${(chunks.bytes / 1048576).toFixed(1)} MB in ${chunks.count} pieces, audio ${audioBlob ? (audioBlob.size / 1048576).toFixed(1) + ' MB' : 'none'}`, true)
     onProgress(0.9, 'Finishing…')
     const ext = job.format
     const out = `out.${ext}`
