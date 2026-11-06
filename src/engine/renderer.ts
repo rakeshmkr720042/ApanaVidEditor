@@ -1,4 +1,4 @@
-import type { Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
+import type { AdjustmentLayer, Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
 import { activeAt, sourceAt, type LaidClip } from '../model/timeline'
 import { stabAt } from './motion'
 import { drawPhoto3d, photo3dKey } from './photo3d'
@@ -89,6 +89,7 @@ export class Renderer {
   private scratch = makeCanvas()
   private cutScratch = makeCanvas()
   private base = makeCanvas() // the main video alone, for text behind the person
+  private adjBase = makeCanvas() // the picture under an adjustment layer
   private bgSmall = makeCanvas(48, 48)
   private wmImage: { id: string; img: CanvasImageSource | null; ready: Promise<void> } | null = null
   private prImage: { url: string; img: ImageBitmap | null; ready: Promise<void> } | null = null
@@ -110,7 +111,7 @@ export class Renderer {
     if (this.W === w && this.H === h) return
     this.W = w; this.H = h
     this.canvas.width = w; this.canvas.height = h
-    for (const f of [...this.frames, ...this.comps, this.base]) { f.width = w; f.height = h }
+    for (const f of [...this.frames, ...this.comps, this.base, this.adjBase]) { f.width = w; f.height = h }
     this.grader?.resize(w, h)
   }
 
@@ -179,6 +180,7 @@ export class Renderer {
       } else if (l.type === 'sticker') drawSticker(ctx, l, inp.t, W, H)
       else if (l.type === 'media') this.drawMediaLayer(l, inp, seed)
       else if (l.type === 'blur') this.drawBlur(l)
+      else if (l.type === 'adjustment') this.drawAdjustment(l, inp, seed)
       else if (l.type === 'wave') {
         const src = inp.sources[l.sourceId]
         // until the sound is analysed the bars lie flat; a redraw follows
@@ -552,6 +554,26 @@ export class Renderer {
     const h = ar >= 1 ? base : base / ar
     const sq = l.mask === 'circle' || l.mask === 'heart' || l.mask === 'star'
     return { w: sq ? Math.min(w, h) : w, h: sq ? Math.min(w, h) : h, fw: w, fh: h }
+  }
+
+  /** An adjustment layer: everything drawn so far goes through its look, mixed by its strength. */
+  private drawAdjustment(l: AdjustmentLayer, inp: RenderInput, seed: number) {
+    const p = { ...colorParams(l.adjust, l.filter, l.filterAmount), gpu: gradeGpu(l.grade, inp.project) }
+    const fx = effectFrame(l, inp.t - l.start)
+    if (!l.filter && !fx && !p.gpu && Object.values(l.adjust).every((v) => v === 0)) return
+    if (l.amount <= 0) return
+    const { ctx } = this
+    const b = ctx2d(this.adjBase)
+    b.globalCompositeOperation = 'copy'
+    b.drawImage(this.canvas, 0, 0)
+    b.globalCompositeOperation = 'source-over'
+    ctx.save()
+    ctx.globalAlpha = Math.min(1, l.amount)
+    if (this.grader) {
+      this.grader.drawGraded(this.adjBase, p, seed, undefined, fx)
+      ctx.drawImage(this.grader.canvas, 0, 0)
+    } else this.draw2dGraded(this.adjBase, p)
+    ctx.restore()
   }
 
   private maskScratch: Canvas | null = null
