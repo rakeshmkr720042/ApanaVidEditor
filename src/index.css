@@ -1009,3 +1009,22 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .match-list button.on { border-color: var(--accent, #7c5cff); }
 .match-list img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 5px; background: #000; }
 .match-photo { width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; font-size: 22px; border-radius: 5px; background: rgba(0,0,0,0.35); }
+
+/* Hindi text: typing help and font picker */
+.hindi-input { display: grid; gap: 6px; }
+.hindi-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hindi-bar .grow { flex: 1; }
+.hindi-bar .btn.on { border-color: var(--accent); color: var(--accent); }
+.hindi-toggle { display: inline-flex; justify-content: flex-start; font-size: 13px; padding: 2px 0; }
+.hindi-preview { font-family: 'Noto Sans Devanagari', system-ui, sans-serif; font-size: 16px; border-color: var(--accent); }
+.hindi-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; }
+.hindi-keys button { font-family: 'Noto Sans Devanagari', system-ui, sans-serif; font-size: 20px; padding: 6px 0; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; }
+.hindi-keys button:active { background: var(--accent); color: #000; }
+.hindi-warn { color: #ffcc66; }
+.hindi-font-tip { justify-self: start; }
+.font-grid .font-sample { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.5; }
+.hindi-mark { display: inline-block; margin-right: 4px; padding: 0 4px; border-radius: 4px; background: var(--accent); color: #000; font-family: 'Noto Sans Devanagari', system-ui; font-weight: 700; }
+.font-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.font-strip button { flex: 0 0 auto; display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; font-size: 18px; line-height: 1.5; }
+.font-strip button small { font-family: system-ui; font-size: 10px; color: var(--muted); }
+.font-strip .on { border-color: var(--accent); }

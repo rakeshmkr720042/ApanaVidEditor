@@ -14,7 +14,7 @@ import { toChroma } from './chromakey'
 import { drawOutline, keepPerson, personMask } from './cutout'
 import { beatLayer, beatPulse, layerBeats } from './beats'
 import { defaultAdjust } from '../model/timeline'
-import { animState, drawSticker, drawText, ensureFont, fontLoaded, frameHeightFor, measureText, STICKER_BASE } from './text'
+import { DEVA_FALLBACK, animState, drawSticker, drawText, ensureFont, fontLoaded, isDevanagari, frameHeightFor, measureText, STICKER_BASE } from './text'
 import { drawWave, waveData, waveReady, waveSize } from './visualizer'
 import { captionsDuring, drawPresenter, presenterAt } from './presenter'
 import { drawUserWatermark, watermarkCenter, watermarkSize, watermarkVisible } from './watermark'
@@ -175,6 +175,8 @@ export class Renderer {
       const l = atTime(l0, inp.t)
       if (l.type === 'text') {
         if (!fontLoaded(l.style.font)) ensureFont(l.style.font).then(() => this.onNeedsRedraw?.())
+        // Hindi letters in a font without them are drawn in the Devanagari fallback: load it too
+        else if (!fontLoaded(DEVA_FALLBACK) && isDevanagari(l.text)) ensureFont(DEVA_FALLBACK).then(() => this.onNeedsRedraw?.())
         drawText(ctx, l, inp.t, W, H)
         if (l.behind && personOver) ctx.drawImage(keepPerson(this.base, personOver, W, H), 0, 0)
       } else if (l.type === 'sticker') drawSticker(ctx, l, inp.t, W, H)
