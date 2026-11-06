@@ -91,6 +91,9 @@ const paths = {
   habit: 'M7 2v11h3v9l7-12h-4l4-8z',
   crown: 'M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5z',
   film: 'M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V4h-4z',
+  fullscreen: 'M5 5h5v2H7v3H5zm9 0h5v5h-2V7h-3zM5 14h2v3h3v2H5zm12 0h2v5h-5v-2h3z',
+  fsExit: 'M8 5h2v5H5V8h3zm6 0h2v3h3v2h-5zM5 14h5v5H8v-3H5zm9 0h5v2h-3v3h-2z',
+  compare: 'M11 2h2v20h-2zM9 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4v-2H5V7h4zm6 0v2h4v10h-4v2h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z',
 }
 
 export type IconName = keyof typeof paths
