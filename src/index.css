@@ -993,13 +993,13 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .relink-text { display: flex; flex-direction: column; min-width: 0; }
 .relink-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-<<<<<<< HEAD
 /* ---- Blackbox log */
 .link-btn { background: none; border: 0; padding: 0; color: var(--accent, #7c9cff); text-decoration: underline; font: inherit; cursor: pointer; }
 .sheet.blackbox .row .btn { flex: 1 1 auto; }
 .bb-filter { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; font-size: 14px; }
 .bb-help { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; line-height: 1.45; max-height: 40vh; overflow-y: auto; }
 .bb-help p { margin: 4px 0; }
+.bb-help ol { margin: 4px 0; padding-left: 20px; }
 .bb-help p.bb-bullet { padding-left: 10px; }
 .bb-help > div + div { margin-top: 10px; }
 .bb-list { max-height: 48vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; }
@@ -1024,7 +1024,6 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .export-check .btn { margin-top: 2px; }
 .recover-card { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: rgba(124, 156, 255, 0.1); border: 1px solid rgba(124, 156, 255, 0.45); border-radius: 12px; padding: 10px 12px; }
 .recover-card span { flex: 1 1 180px; }
-=======
 /* video scopes over the preview */
 .scopes { position: absolute; left: 8px; top: 8px; z-index: 6; width: min(272px, 46vw); padding: 6px; border-radius: 10px; background: rgba(10,12,18,0.88); border: 1px solid rgba(255,255,255,0.12); display: flex; flex-direction: column; gap: 4px; }
 .scopes canvas { width: 100%; height: auto; aspect-ratio: 2 / 1; border-radius: 6px; background: #000; display: block; }
@@ -1115,4 +1114,3 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 /* with the edit panel open the video is narrower: icons only */
 .app.editor.fs-edit .fs-btn span, .app.editor.fs-edit .fs-row .skip, .app.editor.fs-edit .fs-row .rate-btn { display: none; }
 .app.editor.fs-edit .fs-btn { padding: 0 9px; }
->>>>>>> origin/main

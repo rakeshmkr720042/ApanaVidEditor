@@ -88,7 +88,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
           <button className="btn ghost small notes-btn" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
             <Icon name="note" size={16} /><span className="wide-only"> {t('Notes')}</span>{openNotes > 0 && <span className="count">{openNotes}</span>}
           </button>
-          <button className="btn ghost small" onClick={openBlackbox} aria-label={t('Blackbox log')} title={`${t('Blackbox log')} (Ctrl+Shift+L)`} data-testid="home-blackbox">
+          <button className="btn ghost small" onClick={openBlackbox} aria-label={t('Blackbox log')} title={`${t('Blackbox log')} (Ctrl+Shift+L)`} data-testid="home-blackbox" data-help="blackbox">
             <Icon name="blackbox" size={16} /><span className="wide-only"> {t('Blackbox')}</span>
           </button>
           <button className="btn ghost small" onClick={() => setHabitsSheet(true)} aria-label={t('Smart shortcuts')} title={t('Smart shortcuts')}>
@@ -118,7 +118,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         <input ref={fileInput} type="file" accept=".avp,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
         {error && <p className="error-text">{error}</p>}
         {recover && projects?.some((p) => p.id === recover.id) && (
-          <div className="recover-card" data-testid="recover-card">
+          <div className="recover-card" data-testid="recover-card" data-help="recover">
             <span><b>{t('Continue where you left off')}</b><br /><small className="muted">“{recover.name}” {t('was open when the app closed. All changes are saved.')}</small></span>
             <button className="btn primary small" onClick={() => { const id = recover.id; forgetOpen(); setRecover(null); onOpen(id) }}>{t('Open')}</button>
             <button className="btn ghost small" onClick={() => { forgetOpen(); setRecover(null) }}>{t('Dismiss')}</button>

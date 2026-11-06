@@ -3,7 +3,7 @@ import { clearLog, entriesNow, error as logError, logText, onChange, onOpen, onP
 import { isNative, saveTextNative } from '../lib/save'
 import { isDesktop } from '../lib/desktop'
 import { getLang, t } from '../lib/i18n'
-import { blackboxHelp } from '../help/sections/blackbox'
+import safety from '../help/sections/85-safety'
 import { Icon } from './Icon'
 import { SheetClose } from '../ui/kit'
 
@@ -69,12 +69,17 @@ export function BlackboxSheet({ onClose }: { onClose: () => void }) {
         <p className="muted small">{t('Records taps, export steps and every error on this device, so the cause of a crash is never lost.')} <button className="link-btn" onClick={() => setHelp((v) => !v)}>{t(help ? 'Hide help' : 'How it works')}</button></p>
         {help && (
           <div className="bb-help">
-            {blackboxHelp.map((s) => (
-              <div key={s.id}>
-                <b>{s.title[lang]}</b>
-                {s.body[lang].map((p, i) => <p key={i} className={p.startsWith('• ') ? 'bb-bullet' : ''}>{p}</p>)}
-              </div>
-            ))}
+            {safety.topics.map((tp) => {
+              const x = tp[lang]
+              return (
+                <div key={tp.id}>
+                  <b>{x.title}</b>
+                  <p>{x.what}</p>
+                  <ol>{x.steps.map((st, i) => <li key={i}>{st}</li>)}</ol>
+                  {x.tips?.map((tip, i) => <p key={i} className="bb-bullet">• {tip}</p>)}
+                </div>
+              )
+            })}
           </div>
         )}
         <div className="row wrap">

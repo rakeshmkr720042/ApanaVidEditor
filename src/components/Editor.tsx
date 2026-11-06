@@ -1218,7 +1218,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               </div>
             )}
           </span>
-          <button className="btn primary small" disabled={empty || importing > 0} onClick={() => { player?.pause(); void saveNow(); setExporting(true) }}>{t('Export')}</button>
+          <button className="btn primary small" data-help="export" disabled={empty || importing > 0} onClick={() => { player?.pause(); void saveNow(); setExporting(true) }}>{t('Export')}</button>
         </div>
       </header>
 
