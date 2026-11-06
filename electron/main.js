@@ -3,7 +3,7 @@
 // headers (COOP/COEP, needed for SharedArrayBuffer) and a CSP, like the hosted web app.
 import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, net, powerSaveBlocker, protocol, safeStorage, session, shell } from 'electron'
 import { createHash, randomBytes } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { basename, dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -69,6 +69,10 @@ function serveDist() {
     if (!res?.ok) return new Response('Not found', { status: 404 })
     const headers = new Headers(isolationHeaders)
     headers.set('Content-Type', mimeTypes[extname(file).toLowerCase()] ?? res.headers.get('Content-Type') ?? 'application/octet-stream')
+    // without a length the AI engine reads a model by growing its buffer for every piece it
+    // receives, copying everything read so far each time: a 250 MB model took minutes to open
+    const size = await stat(file).then((st) => st.size).catch(() => null)
+    if (size !== null) headers.set('Content-Length', String(size))
     if (file.endsWith('.html')) headers.set('Content-Security-Policy', csp)
     return new Response(res.body, { status: 200, headers })
   })

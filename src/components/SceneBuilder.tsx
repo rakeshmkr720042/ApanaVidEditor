@@ -23,7 +23,7 @@ import { loadSource } from '../lib/media'
 import { TOO_BIG, isLong } from '../lib/longaudio'
 import { saveMedia } from '../lib/db'
 import { fmtTime } from '../lib/format'
-import { ASR_MODELS, SPOKEN, VOICES, langName, savedModel, saveModel, speakLines, stopAI, transcribeSamples, listenError, LISTEN_SLOW } from '../engine/ai'
+import { ASR_MODELS, SPOKEN, VOICES, langName, savedModel, saveModel, speakLines, stopAI, transcribeSamples, listenFailure, LISTEN_SLOW, fellBack, leftText, timeLeft, type Heard } from '../engine/ai'
 import { WAVE_STYLES, analyse, decodeMono, primeWave } from '../engine/visualizer'
 import { audioToScenes, bitmapOf, drawAudioCard, findGaps, type AudioLook } from '../lib/audioScenes'
 import { fillInOrder, picsFromFiles, type Leftover, type Pic } from '../lib/rawMedia'
@@ -414,19 +414,29 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       setBusy({ label: t('Finding pauses…'), p: 0.5 })
       primeWave(src.id, await analyse(pcm)) // the waveform layer will use this analysis
       const gaps = findGaps(pcm)
-      let cues: Awaited<ReturnType<typeof transcribeSamples>> = []
+      let cues: Heard['cues'] = []
       if (ad.listen) {
         try {
           // a long recording is listened to ten minutes at a time, cut in a pause, so only one piece is copied at once
           const listenAll = async () => {
             const all: typeof cues = []
             const pieces = listenPieces(pcm.length, gaps)
+            // when the chosen quality cannot run here, a smaller one takes over for every later piece too
+            let model = ad.model
+            let start = 0
             for (let i = 0; i < pieces.length; i++) {
               const [a, b] = pieces[i]
-              const got = await transcribeSamples(pcm.slice(a, b), { model: ad.model, language: ad.lang, toEnglish: false }, (stage, p) =>
-                setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : `${t('Listening to the audio…')} ${t(LISTEN_SLOW)}`, p: (i + p) / pieces.length }))
+              const got = await transcribeSamples(pcm.slice(a, b), { model, language: ad.lang, toEnglish: false }, (stage, p) => {
+                if (stage === 'download') return setBusy({ label: t('Downloading AI model (first time only)'), p: (i + p) / pieces.length })
+                if (stage === 'load') return setBusy({ label: t('Opening the AI model…'), p: -1 })
+                const done = (i + p) / pieces.length
+                if (!start) start = Date.now()
+                setBusy({ label: `${t('Listening to the audio…')} ${t(LISTEN_SLOW)}${leftText(timeLeft(start, done))}`, p: done })
+              })
+              if (got.fallback && model === ad.model) notes.push(fellBack(got).trim())
+              model = got.used
               const off = a / 16000
-              all.push(...got.map((c) => ({ ...c, start: c.start + off, end: c.end + off })))
+              all.push(...got.cues.map((c) => ({ ...c, start: c.start + off, end: c.end + off })))
             }
             return all
           }
@@ -435,7 +445,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           else if (!heard.length) notes.push(t('No speech was found, so there are no captions. Scenes are cut at the pauses.'))
           cues = heard ?? []
         } catch (e) {
-          notes.push(`${t('Captions could not be made.')} ${t(listenError(e))} ${t('The scenes were still made, cut at the pauses in the audio.')}`)
+          notes.push(`${t('Captions could not be made.')} ${listenFailure(e)} ${t('The scenes were still made, cut at the pauses in the audio.')}`)
         }
       }
       // Local AI writes a key point for each chapter card, a few chapters at a time

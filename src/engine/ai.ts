@@ -1,13 +1,14 @@
 import type { MediaSource, Project } from '../types'
 import type { Cue } from '../lib/srt'
 import type { AiRequest, AiResponse, Task } from './ai.worker'
-import { keepStorage, modelState, mtRoute, type ModelKind } from './offline'
+import { keepStorage, modelState, modelStates, mtRoute, type ModelKind } from './offline'
 import { longMix, mixAudio, mixInPieces, stretch } from './audiomix'
 import { layoutClips } from '../model/timeline'
 import { TOO_BIG } from '../lib/longaudio'
 import { localAI, translateLine } from '../lib/localai'
 import { decodeAudio } from '../lib/media'
 import { cloneLines } from './voiceclone'
+import { t } from '../lib/i18n'
 
 // ---------------------------------------------------------------- languages
 
@@ -68,7 +69,8 @@ export async function downloadModel(id: string, kind: ModelKind, onProgress: (p:
 
 // ---------------------------------------------------------------- worker plumbing
 
-export type Progress = (stage: 'download' | 'work', p: number) => void
+/** 'load' is the model being opened (no percentage: p is -1). */
+export type Progress = (stage: 'download' | 'load' | 'work', p: number) => void
 
 let worker: Worker | null = null
 let nextId = 1
@@ -190,41 +192,132 @@ export const hasVoice = (p: Project) => p.layers.some((l) => l.type === 'audio' 
 export async function transcribe(
   project: Project, sources: Record<string, MediaSource>,
   opts: ListenOpts & { range?: [number, number]; voice?: boolean }, progress: Progress,
-): Promise<{ cues: Cue[]; language: string | null }> {
+): Promise<Heard> {
   progress('work', 0)
   const audio = await timelineAudio(opts.voice ? voiceOnly(project) : project, sources, opts.range)
   if (!audio) throw new Error('This video has no sound to listen to')
   return listen(audio, opts, progress, opts.range ? Math.max(0, opts.range[0]) : 0)
 }
 
-async function listen(audio: Float32Array, opts: ListenOpts, progress: Progress, offset = 0) {
-  const language = opts.language === 'auto' ? null : opts.language.split('-')[0]
-  const model = opts.toEnglish && opts.model === NO_TRANSLATE ? ASR_MODELS[2].id : opts.model
-  const r = await call({ type: 'asr', audio, model, language, task: opts.toEnglish ? 'translate' : 'transcribe', offset }, progress, [audio.buffer])
+/** The result of speech to text, with the model that actually did it. */
+export interface Heard {
+  cues: Cue[]
+  language: string | null
+  /** The model that made the captions. */
+  used: string
+  /** Set when the chosen model could not run and a smaller one took over. */
+  fallback?: { from: string; reason: string }
+}
+
+const isStop = (e: unknown) => /^(Stopped|Skipped)$/.test(String((e as Error)?.message ?? e))
+
+/** Smaller speech models that work on this device right now (built in or downloaded), biggest first. */
+async function smallerModels(model: string) {
+  const at = ASR_MODELS.findIndex((m) => m.id === model)
+  if (at <= 0) return []
+  const below = ASR_MODELS.slice(0, at).reverse()
+  const st = await modelStates(below.map((m) => ({ id: m.id, kind: 'asr' as const })))
+  return below.filter((m) => st[m.id] !== 'none').map((m) => m.id)
+}
+
+async function listenWith(model: string, audio: Float32Array, opts: ListenOpts, progress: Progress, offset: number) {
+  const r = await call({ type: 'asr', audio, model, language: langOf(opts), task: opts.toEnglish ? 'translate' : 'transcribe', offset }, progress, [audio.buffer])
   if (r.type !== 'asr') throw new Error('Unexpected reply')
   return { cues: r.cues.flatMap((c) => splitLong(c)), language: r.language }
 }
 
+const langOf = (opts: ListenOpts) => (opts.language === 'auto' ? null : opts.language.split('-')[0])
+
 /**
- * Why speech to text failed, in plain words (the engine's own message stays in the console).
- * Returns the English text; callers translate it with t().
+ * Speech to text with the chosen model. When that model cannot run here (it is too big for the
+ * memory, its files are broken, or it is not downloaded and there is no internet), the AI engine is
+ * started fresh and the next smaller model that is on the device makes the captions instead, so
+ * the user gets captions rather than an error. Pressing stop never falls back.
+ */
+async function listen(audio: Float32Array, opts: ListenOpts, progress: Progress, offset = 0): Promise<Heard> {
+  const chosen = opts.toEnglish && opts.model === NO_TRANSLATE ? ASR_MODELS[2].id : opts.model
+  // the samples are handed to the engine, so a copy is kept for a second try
+  const spare = audio.slice()
+  try {
+    return { ...(await listenWith(chosen, audio, opts, progress, offset)), used: chosen }
+  } catch (e) {
+    if (isStop(e)) throw e
+    const reason = String((e as Error)?.message ?? e)
+    if (/no sound/i.test(reason)) throw e
+    console.warn(`Speech to text with ${chosen} failed:`, reason)
+    let last = e
+    for (const model of await smallerModels(chosen)) {
+      // a model that failed can leave the engine unable to open any other model: start it fresh
+      stopAI('Stopped')
+      try {
+        return { ...(await listenWith(model, spare.slice(), opts, progress, offset)), used: model, fallback: { from: chosen, reason } }
+      } catch (e2) {
+        if (isStop(e2)) throw e2
+        console.warn(`Speech to text with ${model} failed too:`, String((e2 as Error)?.message ?? e2))
+        last = e2
+      }
+    }
+    throw last === e ? e : new Error(reason)
+  }
+}
+
+/** The quality name of a speech model, e.g. "Balanced". */
+export const modelLabel = (id: string) => ASR_MODELS.find((m) => m.id === id)?.label ?? id
+
+/**
+ * Why speech to text failed, in plain words, followed by the engine's own message (shortened) so a
+ * screenshot shows the real cause. Returns English; callers translate the first part with t().
  */
 export function listenError(e: unknown): string {
   const msg = String((e as Error)?.message ?? e)
   console.warn('Speech to text failed:', msg)
-  if (/not downloaded yet|internet/i.test(msg)) return 'The speech model needs internet the first time. Connect once and try again.'
-  if (/fetch|network|load/i.test(msg)) return 'The speech model could not be downloaded. Check the internet and try again.'
-  if (/memory|allocat|RangeError/i.test(msg)) return 'The computer ran out of memory. Pick the Fast quality, or close other apps, and try again.'
   if (/no sound/i.test(msg)) return msg
+  return listenReason(msg)
+}
+
+/** The plain-words part of listenError. */
+export function listenReason(msg: string): string {
+  if (/not downloaded yet|internet/i.test(msg)) return 'The speech model needs internet the first time. Connect once and try again.'
+  if (/memory|allocat|RangeError|Aborted|OOM/i.test(msg)) return 'The computer ran out of memory. Pick a smaller quality (Balanced or Fast), or close other apps, and try again.'
+  if (/fetch|network|load/i.test(msg)) return 'The speech model could not be downloaded. Check the internet and try again.'
+  if (/protobuf|missing its files|invalid model|onnx/i.test(msg)) return 'The speech model files are damaged. Delete it in Offline & online on the Home screen and download it again.'
   return 'The speech model could not run on this device. Try the Fast quality and try again.'
+}
+
+/** The engine's own message, shortened for a "Details" line. */
+export const errorDetail = (e: unknown) => String((e as Error)?.message ?? e).replace(/\s+/g, ' ').slice(0, 160)
+
+/**
+ * "about 4 min left", worked out from how far a job has come since `start` (Date.now()).
+ * Empty until there is enough to go on. English; callers translate the parts with t().
+ */
+export function timeLeft(start: number, p: number): { n: number; unit: 'min' | 'sec' } | null {
+  const spent = (Date.now() - start) / 1000
+  if (p < 0.02 || p >= 1 || spent < 10) return null
+  const left = (spent * (1 - p)) / p
+  return left < 60 ? { n: Math.max(5, Math.round(left / 5) * 5), unit: 'sec' } : { n: Math.round(left / 60), unit: 'min' }
+}
+
+/** " · about 4 min left" (translated), or nothing until the time can be told. */
+export const leftText = (l: ReturnType<typeof timeLeft>) => (l ? ` · ${t('about')} ${l.n} ${t(l.unit === 'min' ? 'min left' : 'sec left')}` : '')
+
+/** A line (translated) saying a smaller model made the captions because the chosen one could not run. */
+export const fellBack = (h: Heard) => (h.fallback
+  ? ` ${t(modelLabel(h.fallback.from))} ${t('could not run on this device, so')} ${t(modelLabel(h.used))} ${t('made the captions.')} ${t('Details')}: ${errorDetail(h.fallback.reason)}`
+  : '')
+
+/** Why speech to text failed (translated), with the engine's own message so a screenshot shows the cause. */
+export function listenFailure(e: unknown) {
+  const plain = t(listenError(e))
+  return /no sound/i.test(String((e as Error)?.message ?? e)) ? plain : `${plain} ${t('Details')}: ${errorDetail(e)}`
 }
 
 /** What the user sees while speech is being turned into text: it runs on the processor, so long audio takes a while. */
 export const LISTEN_SLOW = 'This runs on your computer and can take a few minutes for long audio.'
 
 /** Speech to text on 16 kHz mono samples (the array is handed to the worker, so pass a copy to keep it). */
-export async function transcribeSamples(audio: Float32Array, opts: ListenOpts, progress: Progress): Promise<Cue[]> {
-  return (await listen(audio, opts, progress)).cues
+export async function transcribeSamples(audio: Float32Array, opts: ListenOpts, progress: Progress): Promise<Heard> {
+  return listen(audio, opts, progress)
 }
 
 // ---------------------------------------------------------------- translation

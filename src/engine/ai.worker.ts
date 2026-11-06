@@ -28,12 +28,28 @@ export type AiRequest = Base & (
 export type Task = 'automatic-speech-recognition' | 'text-to-speech' | 'translation'
 
 export type AiResponse =
-  | { id: number; type: 'progress'; stage: 'download' | 'work'; p: number }
+  | { id: number; type: 'progress'; stage: 'download' | 'load' | 'work'; p: number }
   | { id: number; type: 'asr'; cues: { start: number; end: number; text: string }[]; language: string | null }
   | { id: number; type: 'tts'; clips: (Float32Array | null)[]; rate: number }
   | { id: number; type: 'mt'; texts: string[] }
   | { id: number; type: 'prepare' }
   | { id: number; type: 'error'; message: string }
+
+/**
+ * fetch for the AI engine. A file served without its size (the Windows app's own files, the
+ * Android app's files) is read by transformers.js one piece at a time into a buffer that grows by
+ * copying everything read so far: a 250 MB model took two and a half minutes to open that way.
+ * Such a file from the app itself is read in one go instead, which takes about a second.
+ */
+async function fetchWithLength(input: string | URL, init?: RequestInit) {
+  const res = await fetch(input, init)
+  const url = String(input)
+  if (!res.ok || res.headers.has('content-length') || (init?.method ?? 'GET') !== 'GET' || !base || (!url.startsWith(new URL(base).origin) && !url.startsWith('/'))) return res
+  const body = await res.arrayBuffer()
+  const headers = new Headers(res.headers)
+  headers.set('content-length', String(body.byteLength))
+  return new Response(body, { status: res.status, statusText: res.statusText, headers })
+}
 
 const pipes = new Map<string, Promise<Pipe>>()
 let bundled: Promise<Set<string>> | null = null
@@ -47,6 +63,7 @@ function setup(b: string) {
   if (onnx.wasm) onnx.wasm.wasmPaths = { mjs: b + 'ort/ort-wasm-simd-threaded.mjs', wasm: b + 'ort/ort-wasm-simd-threaded.wasm' }
   // a path without the origin: transformers.js only checks a local file exists when it is not a full URL
   env.localModelPath = new URL(b).pathname + 'models/'
+  env.fetch = fetchWithLength
   // models/index.json lists the models built into this copy of the app (none on the website)
   bundled = fetch(b + 'models/index.json').then((r) => (r.ok ? r.json() : [])).catch(() => []).then((l: string[]) => new Set(l))
 }
@@ -90,6 +107,8 @@ async function hasWeights(model: string, dtype: Dtype) {
 function getPipe(task: Task, model: string, id: number) {
   const key = task + ':' + model
   if (!pipes.has(key)) {
+    // opening a big model takes a while even when it is on the device: say so instead of sitting at 0%
+    post({ id, type: 'progress', stage: 'load', p: -1 })
     const files = new Map<string, [number, number]>()
     const progress_callback = (e: { status: string; file?: string; loaded?: number; total?: number }) => {
       if (e.status !== 'progress' || !e.file || !e.total) return
