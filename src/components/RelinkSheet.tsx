@@ -74,7 +74,7 @@ export function RelinkSheet({ missing, onLinked, onClose, onToast }: {
                   <span className="relink-text">
                     <b>{m.info?.name ?? `${t(KIND[m.kinds[0]])} ${t('(name not known)')}`}</b>
                     <span className="muted small">
-                      {m.where.map((w) => t(WHERE[w])).join(', ')} · {m.uses}× {m.need > 0 && m.kinds[0] !== 'image' ? `· ${t('needs')} ${fmtTime(m.need)}` : ''}
+                      {m.where.map((w) => t(WHERE[w])).join(', ')} {m.need > 0 && m.kinds[0] !== 'image' ? `· ${t('needs')} ${fmtTime(m.need)}` : ''}
                     </span>
                   </span>
                   <button className="btn small" disabled={busy} onClick={() => { setForId(m.id); one.current?.click() }}>{t('Find file')}</button>
