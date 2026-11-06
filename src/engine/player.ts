@@ -219,9 +219,13 @@ export class Player {
       el.addEventListener('loadeddata', () => this.requestRender())
       this.els.set(key, el)
     }
-    if (el.dataset.src !== src.id) {
+    // a new file, or the same file's preview copy switched on or off
+    if (el.dataset.src !== src.id || el.dataset.url !== src.url) {
+      const at = el.dataset.src === src.id ? el.currentTime : 0
       el.dataset.src = src.id
+      el.dataset.url = src.url
       el.src = src.url
+      if (at) el.currentTime = at
     }
     this.used.set(key, performance.now())
     return el
