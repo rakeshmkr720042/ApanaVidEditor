@@ -82,7 +82,7 @@ async function probeFFmpeg(file: File): Promise<VideoInfo> {
 }
 
 /** Makes the file readable by ffmpeg as /in/source.<ext> without copying it into memory, runs fn, then cleans up. */
-async function withInput<T>(file: File, fn: (input: string) => Promise<T>): Promise<T> {
+export async function withInput<T>(file: File, fn: (input: string) => Promise<T>): Promise<T> {
   const ff = await getFFmpeg()
   const input = `/in/source.${(file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4'}`
   let mounted = false

@@ -58,10 +58,15 @@ export async function deleteProject(id: string) {
 }
 
 export async function saveMedia(src: MediaSource) {
-  const { url: _url, file, ...meta } = src // eslint-disable-line @typescript-eslint/no-unused-vars
-  void _url
+  const { url: _url, file, proxy: _proxy, ...meta } = src // eslint-disable-line @typescript-eslint/no-unused-vars
+  void _url; void _proxy
   await run('media', 'readwrite', (s) => s.put({ id: src.id, blob: file, meta } satisfies MediaRecord))
 }
+
+/** Preview copies (proxies) of videos, kept next to the media under `proxy:<id>`. */
+export const saveProxy = (id: string, blob: Blob) => run('media', 'readwrite', (s) => s.put({ id: `proxy:${id}`, blob, meta: {} }))
+export const getProxy = (id: string) => run<{ blob: Blob } | undefined>('media', 'readonly', (s) => s.get(`proxy:${id}`)).then((r) => r?.blob ?? null)
+export const deleteProxy = (id: string) => run('media', 'readwrite', (s) => s.delete(`proxy:${id}`))
 
 export const getMedia = (id: string) => run<MediaRecord | undefined>('media', 'readonly', (s) => s.get(id))
 

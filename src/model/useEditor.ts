@@ -875,6 +875,52 @@ export function useEditor(initial: Project) {
     setSel({ type: 'clip', id: right.id })
   }, [h, sel])
 
+  /**
+   * Compound clip: main-video clips `from`..`to` (indexes) become one clip of `src`, a video made from them (same
+   * length). The originals are kept inside it, so Break apart brings them back.
+   */
+  const joinClips = useCallback((from: number, to: number, src: MediaSource) => {
+    const p = ref.current
+    if (p.main?.locked || from < 0 || to >= p.clips.length || from >= to) return
+    const parts = p.clips.slice(from, to + 1)
+    const c: Clip = { ...newClip(src, uid()), gap: parts[0].gap, transition: parts[parts.length - 1].transition, compound: { clips: parts } }
+    h.set({ ...p, clips: [...p.clips.slice(0, from), c, ...p.clips.slice(to + 1)] })
+    setSel({ type: 'clip', id: c.id })
+  }, [h])
+
+  /** Puts a joined clip's original clips back in its place. */
+  const breakApart = useCallback((id: string) => {
+    const p = ref.current
+    const c = p.clips.find((x) => x.id === id)
+    if (!c?.compound?.clips.length || p.main?.locked) return
+    const parts = c.compound.clips.map((x, i, a) => ({ ...x, ...(i === 0 ? { gap: c.gap } : {}), ...(i === a.length - 1 ? { transition: c.transition } : {}) }))
+    h.set({ ...p, clips: p.clips.flatMap((x) => (x.id === id ? parts : [x])) })
+    setSel({ type: 'clip', id: parts[0].id })
+  }, [h])
+
+  /** Splits a main-video clip at these source times (scene detection). Returns how many cuts were made. */
+  const splitClipAt = useCallback((id: string, srcTimes: number[]): number => {
+    const p = ref.current
+    const c = p.clips.find((x) => x.id === id)
+    if (!c || p.main?.locked) return 0
+    const cuts = [...new Set(srcTimes)].filter((x) => x - c.in >= MIN_CLIP && c.out - x >= MIN_CLIP).sort((a, b) => a - b)
+    if (!cuts.length) return 0
+    // a ramped clip loses its ramp, as with a normal split
+    const base = c.ramp ? { ramp: null, speed: (c.out - c.in) / clipSegments(c).reduce((s, g) => s + g.tEnd - g.tStart, 0) } : {}
+    const edges = [c.in, ...cuts, c.out]
+    const pieces: Clip[] = edges.slice(0, -1).map((from, k) => {
+      const last = k === edges.length - 2
+      return {
+        ...c, ...base, id: k === 0 ? c.id : uid(), in: from, out: edges[k + 1],
+        ...(k > 0 ? { fadeIn: 0, gap: undefined } : {}),
+        ...(!last ? { transition: null, fadeOut: 0 } : {}),
+      }
+    })
+    h.set({ ...p, clips: p.clips.flatMap((x) => (x.id === c.id ? pieces : [x])) })
+    setSel({ type: 'clip', id: c.id })
+    return cuts.length
+  }, [h])
+
   /** Moves a main-video clip to position `to` (counted after taking it out). Returns its new start time. */
   const moveClip = useCallback((id: string, to: number): number | null => {
     const p = ref.current
@@ -949,7 +995,7 @@ export function useEditor(initial: Project) {
     project, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter, addMarker, updateMarker, removeMarker,
+    addSource, splitClipAt, joinClips, breakApart, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter, addMarker, updateMarker, removeMarker,
     addText, addSticker, addBlur, addAdjustment, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
     track, setTrack, addTrack, pasteTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
