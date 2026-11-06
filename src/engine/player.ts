@@ -7,6 +7,7 @@ import { duckCurve, duckGain, onDuckChange } from './duck'
 import { reversedIn } from './soundfx'
 import { Meter } from './meter'
 import { volAt } from '../model/clipKeys'
+import { originalOf } from './original'
 
 interface Need { key: string; source: MediaSource; time: number; rate: number; volume: number; preload?: boolean }
 
@@ -135,6 +136,7 @@ export class Player {
     void duckCurve(project, sources)
     const { w, h } = outputSize(project, sources, this.previewShort)
     this.renderer.resize(w, h)
+    this.before?.resize(w, h)
     if (this.t > total) this.t = total
     if (!this.playing && !this.renderOverride) this.sync()
     this.requestRender()
@@ -195,6 +197,16 @@ export class Player {
     const el = this.element(clipKey(clip), this.sources[clip.sourceId])
     if (el && Math.abs(el.currentTime - sourceTime) > 0.01) el.currentTime = sourceTime
     this.renderOverride = clip.id
+    this.requestRender()
+  }
+
+  /** Before / after: a second picture of the same moment with every edit taken off (null = off). */
+  private before: Renderer | null = null
+  private beforeKept: Renderer | null = null // kept for the same canvas, so switching on and off makes no new GL contexts
+  setCompare(canvas: HTMLCanvasElement | null) {
+    if (canvas && this.beforeKept?.canvas !== canvas) this.beforeKept = new Renderer(canvas)
+    this.before = canvas ? this.beforeKept : null
+    this.before?.resize(this.renderer.W, this.renderer.H)
     this.requestRender()
   }
 
@@ -313,6 +325,10 @@ export class Player {
       t: this.t, project: this.project, items: this.items, sources: this.sources,
       frame: this.frame, watermark: this.watermark,
     })
+    if (this.before) {
+      const o = originalOf(this.project, this.items)
+      this.before.render({ t: this.t, project: o.project, items: o.items, sources: this.sources, frame: this.frame, watermark: null })
+    }
   }
 
   destroy() {
