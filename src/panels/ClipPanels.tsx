@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Adjust, AspectRatio, AudioLayer, Clip, Denoise, MediaLayer, VolKey } from '../types'
+import type { Adjust, AdjustmentLayer, AspectRatio, AudioLayer, Clip, Denoise, MediaLayer, VolKey } from '../types'
 import type { Editor } from '../model/useEditor'
 import { defaultAdjust, rampPoints, SPEED_RAMPS } from '../model/timeline'
 import { volAt, volKeyAt, withVolKey } from '../model/clipKeys'
@@ -113,7 +113,11 @@ export function VolumePanel({ ed, target, src, onClose }: P & {
   )
 }
 
-type Gradable = { kind: 'clip'; clip: Clip } | { kind: 'layer'; layer: MediaLayer }
+/** The file whose picture stands for an item in previews (an adjustment layer: the clip under its start). */
+const sourceOf = (ed: Editor, x: Clip | MediaLayer | AdjustmentLayer) =>
+  'sourceId' in x ? x.sourceId : ed.layout.items.find((it) => x.start >= it.start && x.start < it.start + it.dur)?.clip.sourceId ?? ''
+
+type Gradable = { kind: 'clip'; clip: Clip } | { kind: 'layer'; layer: MediaLayer | AdjustmentLayer }
 
 const thumbCache = new Map<string, string>()
 
@@ -150,7 +154,7 @@ function useFilterThumbs(src: string | undefined) {
 
 export function FilterPanel({ ed, target, onClose }: P & { target: Gradable }) {
   const cur = target.kind === 'clip' ? target.clip : target.layer
-  const src = ed.sources[cur.sourceId]
+  const src = ed.sources[sourceOf(ed, cur)]
   const thumbSrc = src?.thumbs[Math.floor(src.thumbs.length / 2)]
   const thumb = useFilterThumbs(thumbSrc)
   const [group, setGroup] = useState(() => (cur.filter ? FILTERS.find((f) => f.id === cur.filter)?.group : null) ?? FILTER_GROUPS[0])
@@ -212,7 +216,7 @@ function useEffectThumbs(src: string | undefined) {
 /** Moving video effects (glow, light leak, sparkles, old film, cinema bars…) on a clip or an overlay. */
 export function EffectsPanel({ ed, target, onClose }: P & { target: Gradable }) {
   const cur = target.kind === 'clip' ? target.clip : target.layer
-  const src = ed.sources[cur.sourceId]
+  const src = ed.sources[sourceOf(ed, cur)]
   const thumbSrc = src?.thumbs[Math.floor(src.thumbs.length / 2)]
   const thumb = useEffectThumbs(thumbSrc)
   const on = effectById(cur.effect?.id)

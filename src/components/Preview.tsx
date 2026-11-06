@@ -70,7 +70,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   // in drawing order (top track row last); hidden and locked rows can't be picked
   // keyframed layers are shown (and handled) where they are at the playhead
   const layers = playable(ed.project).layers
-    .filter((l): l is VisualLayer => l.type !== 'audio' && visible(l) && !isLocked(ed.project, l)).map((l) => atTime(l, t))
+    .filter((l): l is VisualLayer => l.type !== 'audio' && l.type !== 'adjustment' && visible(l) && !isLocked(ed.project, l)).map((l) => atTime(l, t))
   const selected = ed.sel?.type === 'layer' ? layers.find((l) => l.id === ed.sel!.id) : undefined
   const rect = selected && player && !(selected.type === 'sticker' && selected.shower) ? player.renderer.layerRect(selected, ed.sources) : null
   const wmRect = wmEdit && player ? player.renderer.watermarkRect(ed.project, ed.sources, t) : null
@@ -220,7 +220,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
     if (g.kind === 'pinch') {
       if (pts.current.size < 2) return
       const l0 = ed.project.layers.find((x) => x.id === g.id)
-      if (!l0 || l0.type === 'audio') return
+      if (!l0 || l0.type === 'audio' || l0.type === 'adjustment') return
       const sp = spread()
       setScaleRot(atTime(l0, t), g.s0 * (sp.d / g.d0), g.r0 + ((sp.a - g.a0) * 180) / Math.PI)
       return
@@ -231,7 +231,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
       return
     }
     const l0 = ed.project.layers.find((x) => x.id === g.id)
-    if (!l0 || l0.type === 'audio') return
+    if (!l0 || l0.type === 'audio' || l0.type === 'adjustment') return
     const l = atTime(l0, t)
     const lr = rectOf(l)
     const setRect = (r: Rect) => {

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AudioLayer, BeatFx, BlurLayer, Marker, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AdjustmentLayer, AudioLayer, BeatFx, BlurLayer, Marker, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -734,6 +734,14 @@ export function useEditor(initial: Project) {
     addLayer(l)
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** An adjustment layer from the playhead: 5 seconds, or to the end of the video when that is nearer. */
+  const addAdjustment = useCallback((t: number) => {
+    const n = ref.current.layers.filter((x) => x.type === 'adjustment').length + 1
+    const l: AdjustmentLayer = { id: uid(), type: 'adjustment', name: `Adjustment ${n}`, ...span(t, 5), adjust: defaultAdjust(), filter: null, filterAmount: 1, amount: 1 }
+    addLayer(l)
+    return l
+  }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const addOverlay = useCallback((t: number, src: MediaSource) => {
     const dur = src.kind === 'image' ? 3 : src.duration
     const l: MediaLayer = {
@@ -942,7 +950,7 @@ export function useEditor(initial: Project) {
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
     addSource, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter, addMarker, updateMarker, removeMarker,
-    addText, addSticker, addBlur, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
+    addText, addSticker, addBlur, addAdjustment, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
     track, setTrack, addTrack, pasteTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
     remove, duplicate, split, moveClip, moveClipAt, closeGap, swapClips, swapLayers, replaceProject,

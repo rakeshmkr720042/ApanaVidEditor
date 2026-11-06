@@ -43,8 +43,12 @@ export function withTracks(p: Project, prune = false): Project {
     const kind = trackKind(l)
     const free = (t: Track) => t.kind === kind && !t.locked && !(busy.get(t.id) ?? []).some((x) => overlaps(x, l))
     // a new video/photo goes in front of the videos/photos it plays over (like KineMaster), still under text
-    const under = l.type === 'media' ? tracks.findIndex((t) => (busy.get(t.id) ?? []).some((x) => x.type === 'media' && overlaps(x, l))) : -1
-    let tr = under >= 0 ? tracks.slice(0, under).reverse().find(free) : tracks.find(free)
+    const under = l.type === 'media' ? tracks.findIndex((t) => (busy.get(t.id) ?? []).some((x) => x.type === 'media' && overlaps(x, l)))
+      // an adjustment layer goes above every video/photo row (so it changes them all), still under text
+      : l.type === 'adjustment' ? tracks.findIndex((t) => (busy.get(t.id) ?? []).some((x) => x.type === 'media')) : -1
+    let tr = l.type === 'adjustment'
+      ? tracks.find((t) => free(t) && (busy.get(t.id) ?? []).length > 0 && (busy.get(t.id) ?? []).every((x) => x.type === 'adjustment'))
+      : under >= 0 ? tracks.slice(0, under).reverse().find(free) : tracks.find(free)
     if (!tr) {
       tr = newTrack(kind)
       tracks.splice(under >= 0 ? under : insertAt(tracks, kind, FRONT.includes(l.type)), 0, tr)

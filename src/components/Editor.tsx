@@ -25,7 +25,7 @@ import { AdjustPanel, FilterPanel, EffectsPanel, FormatPanel, LayerSpeedPanel, N
 import { hasSound } from '../engine/denoise'
 import { isNeutralFx } from '../engine/soundfx'
 import { AudioFxPanel } from '../panels/AudioFxPanel'
-import { BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, TextPanel, WavePanel } from '../panels/LayerPanels'
+import { AdjustmentPanel, BlurPanel, OverlayPanel, StickerPanel, SubtitlePanel, TextPanel, WavePanel } from '../panels/LayerPanels'
 import { AudioPanel } from '../panels/AudioPanel'
 import { AIPanel } from '../panels/AIPanel'
 import { WatermarkPanel } from '../panels/WatermarkPanel'
@@ -42,6 +42,7 @@ import { PasteTrackSheet } from './PasteTrackSheet'
 import { KeysSheet } from './KeysSheet'
 import { MarkerSheet } from './MarkerSheet'
 import { RelinkSheet } from './RelinkSheet'
+import { Scopes } from './Scopes'
 import { mediaInfoOf, missingSources, unreadable, usedSources, type MediaInfo } from '../lib/relink'
 import { TrimPanel, LayerTrimPanel } from '../panels/TrimPanel'
 import { ZoomMovePanel } from '../panels/ClipKeysPanel'
@@ -76,6 +77,16 @@ const PREMIUM_TOOLS: Record<string, Feature> = {
   'Quiz to video': 'scenes', 'Data to video': 'scenes', 'Article to video': 'scenes',
 }
 
+type Tool = { icon: IconName; label: string; on: () => void; disabled?: boolean; active?: boolean }
+
+/** Look tools of an adjustment layer (they change everything under it). */
+const ADJ_LOOKS = (setPanel: (p: PanelName) => void) => [
+  { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') },
+  { icon: 'filter', label: 'Filters', on: () => setPanel('filters') },
+  { icon: 'color', label: 'Color', on: () => setPanel('color') },
+  { icon: 'effects', label: 'Effects', on: () => setPanel('effects') },
+] as Tool[]
+
 const SKIP = 5 // seconds jumped by fast backward / forward
 const RATES = [1, 1.5, 2, 4, 0.5]
 
@@ -108,7 +119,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'adjlayer' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -125,6 +136,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [playing, setPlaying] = useState(false)
   const [pps, setPps] = useState(40)
   const [snap, setSnap] = useState(() => { try { return localStorage.getItem('snap') !== 'off' } catch { return true } })
+  // video scopes over the preview (waveform, parade, histogram, vectorscope); remembered on this device
+  const [scopes, setScopes] = useState(() => { try { return localStorage.getItem('scopes') === 'on' } catch { return false } })
+  const getCanvas = useCallback(() => canvasRef.current, [])
+  const toggleScopes = () => setScopes((v) => { try { localStorage.setItem('scopes', v ? 'off' : 'on') } catch { /* private mode */ } return !v })
   const toggleSnap = () => setSnap((v) => { try { localStorage.setItem('snap', v ? 'off' : 'on') } catch { /* private mode */ } return !v })
   const [panel, showPanel] = useState<PanelName>(null)
   // a locked Premium tool opens the plans instead
@@ -309,7 +324,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const c = ed.project.clips.find((x) => x.id === id)
     if (c) return `${t('Clip')} ${ed.project.clips.indexOf(c) + 1}`
     const l = ed.project.layers.find((x) => x.id === id)
-    return l ? (l.type === 'text' ? `"${l.text.slice(0, 20)}"` : t({ sticker: 'Sticker', media: 'Overlay', blur: 'Blur', audio: 'Audio', wave: 'Waveform', text: 'Text' }[l.type])) : ''
+    return l ? (l.type === 'text' ? `"${l.text.slice(0, 20)}"` : t({ sticker: 'Sticker', media: 'Overlay', blur: 'Blur', audio: 'Audio', wave: 'Waveform', text: 'Text', adjustment: 'Adjustment layer' }[l.type])) : ''
   }
   const copyStyleOf = (id: string) => {
     const x = itemOf(id)
@@ -589,7 +604,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     if (s.type === 'clip') { setPanel('adjust'); return }
     const l = ed.project.layers.find((x) => x.id === s.id)
     if (!l) return
-    const p: Record<typeof l.type, PanelName> = { text: 'text', sticker: 'stickers', media: 'overlay', blur: 'blur', audio: 'volume', wave: 'wave' }
+    const p: Record<typeof l.type, PanelName> = { text: 'text', sticker: 'stickers', media: 'overlay', blur: 'blur', audio: 'volume', wave: 'wave', adjustment: 'adjlayer' }
     setPanel(p[l.type])
   }
   /** A copy of the whole track on a new row at the same time (the main video: as a video track). */
@@ -751,7 +766,6 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   }
 
   // ---- toolbar for the current selection
-  type Tool = { icon: IconName; label: string; on: () => void; disabled?: boolean; active?: boolean }
   let tools: Tool[]
   if (selClip && group) {
     // the same change for every clip: look and sound tools only
@@ -842,6 +856,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'audiofx', label: 'Audio effects', on: () => setPanel('audiofx') } as Tool,
       ],
       wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
+      adjustment: ADJ_LOOKS(setPanel),
     }[selLayer.type]
     tools = [
       { icon: 'selectAll', label: 'One item', on: selectOne, active: true },
@@ -921,6 +936,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         { icon: 'music', label: 'Beats', on: () => setPanel('beat'), active: selLayer.type === 'audio' && !!selLayer.beats } as Tool,
       ],
       wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
+      adjustment: [{ icon: 'layers', label: 'Strength', on: () => setPanel('adjlayer') } as Tool, ...ADJ_LOOKS(setPanel)],
     }[selLayer.type]
     // an overlay's own tools come first, then where it sits (order, keyframes), then the rest
     tools = selLayer.type === 'media'
@@ -952,6 +968,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'effects', label: 'Effects', on: () => openClipPanel('effects'), disabled: !targetClip },
       { icon: 'adjust', label: 'Adjust', on: () => openClipPanel('adjust'), disabled: !targetClip },
       { icon: 'color', label: 'Color', on: () => openClipPanel('color'), disabled: !targetClip },
+      { icon: 'layers', label: 'Adjustment layer', on: () => { ed.addAdjustment(time); setPanel('adjlayer') }, disabled: empty },
+      { icon: 'chart', label: 'Scopes', on: toggleScopes, disabled: empty, active: scopes },
       { icon: 'blur', label: 'Blur', on: () => ed.addBlur(time), disabled: empty },
       { icon: 'ai', label: 'AI Dub', on: () => { player?.pause(); setPanel('ai') }, disabled: empty },
       { icon: 'watermark', label: 'Watermark', on: () => setPanel('watermark'), disabled: empty },
@@ -1071,13 +1089,13 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'noise' && selClip) panelView = <NoisePanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
   else if (panel === 'audiofx' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <AudioFxPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'audiofx' && selClip) panelView = <AudioFxPanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
-  else if (panel === 'filters' && selLayer?.type === 'media') panelView = <FilterPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
+  else if (panel === 'filters' && (selLayer?.type === 'media' || selLayer?.type === 'adjustment')) panelView = <FilterPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'filters' && tclip) panelView = <FilterPanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} />
-  else if (panel === 'color' && selLayer?.type === 'media') panelView = <ColorPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} onToast={setToast} />
+  else if (panel === 'color' && (selLayer?.type === 'media' || selLayer?.type === 'adjustment')) panelView = <ColorPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} onToast={setToast} />
   else if (panel === 'color' && tclip) panelView = <ColorPanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} onToast={setToast} />
-  else if (panel === 'effects' && selLayer?.type === 'media') panelView = <EffectsPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
+  else if (panel === 'effects' && (selLayer?.type === 'media' || selLayer?.type === 'adjustment')) panelView = <EffectsPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'effects' && tclip) panelView = <EffectsPanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} />
-  else if (panel === 'adjust' && selLayer?.type === 'media') panelView = <AdjustPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
+  else if (panel === 'adjust' && (selLayer?.type === 'media' || selLayer?.type === 'adjustment')) panelView = <AdjustPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'adjust' && tclip) panelView = <AdjustPanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} />
   else if (panel === 'transition') {
     const c = ed.project.clips.find((x) => x.id === transitionFor)
@@ -1088,7 +1106,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'stickers') panelView = <StickerPanel ed={ed} layer={selLayer?.type === 'sticker' ? (selLayer as StickerLayer) : null} t={time} onClose={closePanel} />
   else if (panel === 'split') panelView = <SplitPanel onClose={closePanel} onPick={addSplit} />
   else if (panel === 'showers') panelView = <StickerPanel key="showers" ed={ed} layer={null} t={time} onClose={closePanel} showers />
-  else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
+  else if (panel === 'adjlayer' && selLayer?.type === 'adjustment') panelView = <AdjustmentPanel ed={ed} layer={selLayer} onClose={closePanel} />
+    else if (panel === 'overlay' && selLayer?.type === 'media') panelView = <OverlayPanel ed={ed} layer={selLayer as MediaLayer} onClose={closePanel} />
   else if (panel === 'chroma' && selStored?.type === 'media') panelView = <GreenScreenPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'smartcut') panelView = <SmartCutPanel ed={ed} onToast={setToast} onClose={closePanel} onShort={makeShort}
       onSeek={(tt) => { player?.seek(tt); player?.play() }} />
@@ -1156,6 +1175,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       <div className="stage-wrap">
         <Preview ed={ed} player={player} canvasRef={canvasRef} t={time} onTogglePlay={togglePlay}
           onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} />
+        {scopes && !empty && <Scopes source={getCanvas} onClose={toggleScopes} />}
         {empty && (
           <div className="empty">
             <button className="import-big" onClick={() => mainInput.current?.click()}>

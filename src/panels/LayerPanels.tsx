@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BlurLayer, MediaLayer, StickerLayer, TextAnim, TextLayer, WaveLayer } from '../types'
+import type { AdjustmentLayer, BlurLayer, MediaLayer, StickerLayer, TextAnim, TextLayer, WaveLayer } from '../types'
 import type { Editor } from '../model/useEditor'
 import { isSub, subtitleLook } from '../model/useEditor'
 import { CaptionFrameEditor } from './CaptionFramePanel'
@@ -352,6 +352,23 @@ export function SubtitlePanel({ ed, name, t: time, onClose, onSeek, onSelectAll 
             <input value={s.text} onChange={(e) => ed.updateLayer<TextLayer>(s.id, { text: e.target.value })} />
           </div>
         ))}
+      </div>
+    </Panel>
+  )
+}
+
+/** An adjustment layer: its name, how strongly it shows, and how long it lasts. The look comes from Adjust, Filters, Color, Effects. */
+export function AdjustmentPanel({ ed, layer, onClose }: P & { layer: AdjustmentLayer }) {
+  const set = (patch: Partial<AdjustmentLayer>) => ed.updateLayer<AdjustmentLayer>(layer.id, patch)
+  const total = ed.layout.total
+  return (
+    <Panel title="Adjustment layer" onClose={onClose}>
+      <p className="muted small">{t('Everything under this layer (main video and lower tracks) gets its look for as long as it lasts. Text and stickers above it stay the same. Use Adjust, Filters, Color and Effects to set the look.')}</p>
+      <label className="field-label">{t('Name')}</label>
+      <input value={layer.name} onChange={(e) => set({ name: e.target.value })} />
+      <Slider label="Strength" min={0} max={1} value={layer.amount} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end} onChange={(v) => set({ amount: v })} />
+      <div className="row">
+        <button className="btn small" onClick={() => set({ start: 0, end: Math.max(0.5, total) })}>{t('Cover the whole video')}</button>
       </div>
     </Panel>
   )

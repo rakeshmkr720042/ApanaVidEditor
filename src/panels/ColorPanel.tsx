@@ -1,12 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
-import type { Clip, CurvePoints, Grade, MediaLayer } from '../types'
+import type { AdjustmentLayer, Clip, CurvePoints, Grade, MediaLayer } from '../types'
 import type { Editor } from '../model/useEditor'
 import { CURVE_PRESETS, HSL_BANDS, LINE, parseCube, sampleCurve } from '../engine/grade'
+import { histOf, matchCurves, thumbsOf, type Hist } from '../engine/colorMatch'
 import { Chips, Panel, Slider } from '../ui/kit'
 import { uid } from '../lib/format'
 import { t } from '../lib/i18n'
 
-type Target = { kind: 'clip'; clip: Clip } | { kind: 'layer'; layer: MediaLayer }
+type Target = { kind: 'clip'; clip: Clip } | { kind: 'layer'; layer: MediaLayer | AdjustmentLayer }
 type Channel = 'all' | 'r' | 'g' | 'b'
 const CH_COLOR: Record<Channel, string> = { all: '#ffffff', r: '#ff5c5c', g: '#4cdb6b', b: '#5c9bff' }
 const ZERO: [number, number, number] = [0, 0, 0]
@@ -15,11 +16,12 @@ const ZERO: [number, number, number] = [0, 0, 0]
 export function ColorPanel({ ed, target, onClose, onToast }: { ed: Editor; target: Target; onClose: () => void; onToast: (s: string) => void }) {
   const item = target.kind === 'clip' ? target.clip : target.layer
   const grade: Grade = item.grade ?? {}
-  const [tab, setTab] = useState<'curves' | 'hsl' | 'lut'>('curves')
+  const isAdj = 'type' in item && item.type === 'adjustment'
+  const [tab, setTab] = useState<'curves' | 'hsl' | 'lut' | 'match'>('curves')
   const [ch, setCh] = useState<Channel>('all')
   const [band, setBand] = useState(0)
   const file = useRef<HTMLInputElement>(null)
-  const set = (g: Grade) => (target.kind === 'clip' ? ed.updateClip(target.clip.id, { grade: g }) : ed.updateLayer<MediaLayer>(target.layer.id, { grade: g }))
+  const set = (g: Grade) => (target.kind === 'clip' ? ed.updateClip(target.clip.id, { grade: g }) : ed.updateLayer<MediaLayer | AdjustmentLayer>(target.layer.id, { grade: g }))
   const curves = grade.curves ?? {}
   const pts = curves[ch] ?? LINE
   const setPts = (p: CurvePoints) => set({ ...grade, curves: { ...curves, [ch]: p } })
@@ -43,7 +45,7 @@ export function ColorPanel({ ed, target, onClose, onToast }: { ed: Editor; targe
         {target.kind === 'clip' && <button className="btn small" onClick={() => ed.updateAllClips(() => ({ grade: item.grade ? structuredClone(item.grade) : null }))}>{t('Apply to all')}</button>}
       </>}
     >
-      <Chips options={[{ value: 'curves', label: 'Curves' }, { value: 'hsl', label: 'HSL' }, { value: 'lut', label: 'LUT' }]} value={tab} onChange={setTab} />
+      <Chips options={[{ value: 'curves', label: 'Curves' }, { value: 'hsl', label: 'HSL' }, { value: 'lut', label: 'LUT' }, ...(!isAdj ? [{ value: 'match' as const, label: 'Match' }] : [])]} value={tab} onChange={setTab} />
       {tab === 'curves' && (
         <>
           <Chips options={[{ value: 'all', label: 'All' }, { value: 'r', label: 'Red' }, { value: 'g', label: 'Green' }, { value: 'b', label: 'Blue' }]} value={ch} onChange={setCh} />
@@ -82,7 +84,68 @@ export function ColorPanel({ ed, target, onClose, onToast }: { ed: Editor; targe
           <p className="muted small">{t('A LUT is a ready colour look (.cube file) from a camera maker or a colourist. It is saved in this project.')}</p>
         </>
       )}
+      {tab === 'match' && !isAdj && <MatchTab ed={ed} item={item as Clip | MediaLayer} grade={grade} set={set} onToast={onToast} />}
     </Panel>
+  )
+}
+
+/** Color match: pick another clip (or a photo) whose colours this one should get. */
+function MatchTab({ ed, item, grade, set, onToast }: { ed: Editor; item: Clip | MediaLayer; grade: Grade; set: (g: Grade) => void; onToast: (s: string) => void }) {
+  const [ref, setRef] = useState<{ id: string; hist: Hist } | null>(null)
+  const [amount, setAmount] = useState(0.8)
+  const [busy, setBusy] = useState(false)
+  const photo = useRef<HTMLInputElement>(null)
+  const own = useRef<Promise<Hist> | null>(null)
+  const mine = () => {
+    const src = ed.sources[item.sourceId]
+    const urls = 'type' in item ? thumbsOf({ in: item.in, dur: (item.end - item.start) * (item.speed ?? 1) }, src) : thumbsOf(item, src)
+    own.current ??= histOf(urls)
+    return own.current
+  }
+  const apply = (h: Hist, a: number, base: Hist) => set({ ...grade, curves: { ...(grade.curves ?? {}), ...matchCurves(base, h, a) } })
+  const pick = async (id: string, urls: string[]) => {
+    if (!urls.length) { onToast(t('This clip has no picture to match.')); return }
+    setBusy(true)
+    try {
+      const [base, h] = await Promise.all([mine(), histOf(urls)])
+      setRef({ id, hist: h })
+      apply(h, amount, base)
+      onToast(t('Colours matched. Fine-tune them in Curves.'))
+    } catch (e) { onToast(t((e as Error).message)) } finally { setBusy(false) }
+  }
+  const readPhoto = (f: File) => {
+    const r = new FileReader()
+    r.onload = () => void pick('photo', [String(r.result)])
+    r.readAsDataURL(f)
+  }
+  const others = ed.project.clips.filter((c) => c.id !== item.id && ed.sources[c.sourceId]?.thumbs.length)
+  return (
+    <>
+      <p className="muted small">{t('Pick the shot whose colours this one should get, e.g. the main camera. Red, green and blue curves are made; you can change them in Curves.')}</p>
+      <div className="match-list">
+        {others.map((c) => {
+          const urls = thumbsOf(c, ed.sources[c.sourceId])
+          return (
+            <button key={c.id} className={ref?.id === c.id ? 'on' : ''} disabled={busy} onClick={() => pick(c.id, urls)} title={`${t('Clip')} ${ed.project.clips.indexOf(c) + 1}`}>
+              <img src={urls[Math.floor(urls.length / 2)] ?? ed.sources[c.sourceId].thumbs[0]} alt="" />
+              <span>{t('Clip')} {ed.project.clips.indexOf(c) + 1}</span>
+            </button>
+          )
+        })}
+        <button className={ref?.id === 'photo' ? 'on' : ''} disabled={busy} onClick={() => photo.current?.click()}>
+          <span className="match-photo">🖼</span><span>{t('A photo')}</span>
+        </button>
+      </div>
+      <input ref={photo} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readPhoto(f); e.target.value = '' }} />
+      {ref && (
+        <Slider label="Strength" min={0} max={1} value={amount} format={(v) => `${Math.round(v * 100)}%`} onStart={ed.begin} onEnd={ed.end}
+          onChange={(v) => { setAmount(v); void mine().then((base) => apply(ref.hist, v, base)) }} />
+      )}
+      {busy && <p className="muted small">{t('Matching…')}</p>}
+      {(grade.curves?.r || grade.curves?.g || grade.curves?.b) && (
+        <button className="btn small" onClick={() => { setRef(null); set({ ...grade, curves: grade.curves?.all ? { all: grade.curves.all } : null }) }}>{t('Remove the match')}</button>
+      )}
+    </>
   )
 }
 
