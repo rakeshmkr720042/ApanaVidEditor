@@ -1090,3 +1090,86 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 /* with the edit panel open the video is narrower: icons only */
 .app.editor.fs-edit .fs-btn span, .app.editor.fs-edit .fs-row .skip, .app.editor.fs-edit .fs-row .rate-btn { display: none; }
 .app.editor.fs-edit .fs-btn { padding: 0 9px; }
+/* ---------- toolbar: groups, side docks, hover magnify (components/ToolBar.tsx) */
+.stage-row { flex: 1; min-height: 0; display: flex; }
+.stage-row > .stage-wrap { flex: 1; min-width: 0; }
+.toolbar { display: flex; flex-direction: column; min-width: 0; flex-shrink: 0; }
+.tools { position: relative; }
+.tool-groups { display: flex; gap: 4px; padding: 6px 6px 0; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.tool-groups::-webkit-scrollbar { display: none; }
+.tg-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line);
+  background: var(--panel-2); font-size: 12px; white-space: nowrap; flex: 0 0 auto; color: var(--muted);
+}
+.tg-chip.on { border-color: var(--accent); background: rgba(79, 140, 255, 0.18); color: #fff; }
+.tg-chip.on svg { color: var(--accent); }
+.tg-chip[data-group="fav"] svg { color: #ffcc00; }
+.tg-settings { padding: 4px 8px; margin-left: auto; }
+.pin-badge { position: absolute; top: 3px; left: 8px; color: #ffcc00; display: grid; }
+.tool-menu-list { display: grid; gap: 8px; margin-top: 6px; }
+.tool-menu-list .btn { justify-content: flex-start; }
+.tool-menu h2 svg { align-self: center; }
+.flip { display: inline-grid; transform: rotate(180deg); }
+.tool.dragging { opacity: .35; }
+.tool.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
+.tool.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
+.preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 6px; }
+.preset-card { display: grid; justify-items: start; gap: 2px; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); text-align: left; color: var(--text); }
+.preset-card small { font-size: 11px; color: var(--muted); line-height: 1.25; }
+.preset-card.on { border-color: var(--accent); background: rgba(79, 140, 255, 0.14); }
+.dock-pic { color: var(--muted); margin-bottom: 4px; }
+
+/* side docks: a column of tools in the empty space beside the video */
+.toolbar.dock-left, .toolbar.dock-right { width: 92px; background: var(--bg, #0d0d12); }
+.toolbar.dock-left { border-right: 1px solid var(--line); }
+.toolbar.dock-right { border-left: 1px solid var(--line); }
+.dock-left .tool-groups, .dock-right .tool-groups { flex-wrap: wrap; justify-content: center; padding: 6px 4px; border-bottom: 1px solid var(--line); overflow: visible; }
+.dock-left .tg-chip, .dock-right .tg-chip { padding: 5px 7px; }
+.dock-left .tg-chip span, .dock-right .tg-chip span { display: none; }
+.dock-left .tg-settings, .dock-right .tg-settings { margin-left: 0; }
+.dock-left .tools, .dock-right .tools { flex-direction: column; overflow-x: hidden; overflow-y: auto; flex: 1; min-height: 0; padding: 6px 4px; align-items: stretch; }
+.dock-left .tool, .dock-right .tool { min-width: 0; width: 100%; padding: 7px 2px; }
+.dock-left .tool span, .dock-right .tool span { text-align: center; line-height: 1.15; }
+.dock-left .tool.back, .dock-right .tool.back { border-right: 0; border-bottom: 1px solid var(--line); margin: 0 0 4px; }
+@media (min-width: 1200px) {
+  .toolbar.dock-left, .toolbar.dock-right { width: 168px; }
+  .dock-left .tools, .dock-right .tools { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+  .dock-left .tool-groups .tg-chip span, .dock-right .tool-groups .tg-chip span { display: inline; }
+}
+
+/* hover magnify (mouse only): the button under the cursor grows most, its neighbours less; JS sets --mag and the transform */
+@media (hover: hover) and (pointer: fine) {
+  .toolbar.mag .tool { transition: transform .09s ease-out, background-color .09s; transform-origin: 50% 100%; will-change: transform; }
+  .toolbar.mag .tool:not(:disabled) { background-color: rgba(79, 140, 255, calc(var(--mag, 0) * .26)); }
+  .toolbar.mag .tool:not(:disabled) svg { color: color-mix(in srgb, var(--accent) calc(var(--mag, 0) * 100%), currentColor); }
+  .toolbar.mag.dock-bottom .tools { padding-top: 18px; }
+  .toolbar.mag.dock-left .tool { transform-origin: 0 50%; }
+  .toolbar.mag.dock-right .tool { transform-origin: 100% 50%; }
+  .toolbar.mag.dock-left .tools { padding-right: 26px; }
+  .toolbar.mag.dock-right .tools { padding-left: 26px; }
+  .toolbar.mag.dock-left, .toolbar.mag.dock-right { width: 112px; }
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 1200px) {
+  .toolbar.mag.dock-left, .toolbar.mag.dock-right { width: 190px; }
+  .toolbar.mag.dock-left .tool, .toolbar.mag.dock-right .tool { transform-origin: 50% 50%; }
+  .toolbar.mag.dock-left .tools, .toolbar.mag.dock-right .tools { padding: 10px 12px; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .tool-groups { padding-top: 2px; }
+  .tg-chip { padding: 2px 8px; font-size: 11px; }
+  .dock-bottom .tg-chip span { display: none; }
+}
+.preset-card, .preset-card small { white-space: normal; overflow-wrap: anywhere; }
+/* phone turned sideways: groups as a thin strip of icons beside the tool column, so the tools keep the height */
+@media (orientation: landscape) and (max-height: 500px) {
+  .toolbar.dock-left, .toolbar.dock-right { flex-direction: row; width: 124px; }
+  .toolbar.dock-right { flex-direction: row-reverse; }
+  .dock-left .tool-groups, .dock-right .tool-groups {
+    flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; width: 40px; padding: 4px 3px; gap: 3px;
+    border-bottom: 0; overflow-y: auto; overflow-x: hidden;
+  }
+  .dock-left .tool-groups { border-right: 1px solid var(--line); }
+  .dock-right .tool-groups { border-left: 1px solid var(--line); }
+  .dock-left .tg-chip, .dock-right .tg-chip { padding: 5px 0; justify-content: center; }
+  .dock-left .tools, .dock-right .tools { padding: 4px 2px; }
+}

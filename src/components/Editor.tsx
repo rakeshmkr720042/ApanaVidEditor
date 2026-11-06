@@ -20,7 +20,7 @@ import { Preview } from './Preview'
 import { ExportSheet } from './ExportSheet'
 import { SceneBuilder } from './SceneBuilder'
 import { CropEditor } from './CropEditor'
-import { Icon, type IconName } from './Icon'
+import { Icon } from './Icon'
 import { AdjustPanel, FilterPanel, EffectsPanel, FormatPanel, LayerSpeedPanel, NoisePanel, SpeedPanel, TransitionPanel, VolumePanel } from '../panels/ClipPanels'
 import { hasSound } from '../engine/denoise'
 import { isNeutralFx } from '../engine/soundfx'
@@ -72,6 +72,7 @@ import { FullScreenBar } from './FullScreen'
 import { enterNativeFullScreen, leaveNativeFullScreen, useIdle } from '../lib/fullscreen'
 import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
 import { HabitBar, HabitsSheet } from './HabitsSheet'
+import { ToolBar, useDock, type Tool } from './ToolBar'
 import { PremiumSheet } from './PremiumSheet'
 import { isAllowed, usePremium, type Feature } from '../lib/premium'
 
@@ -83,7 +84,6 @@ const PREMIUM_TOOLS: Record<string, Feature> = {
   'Quiz to video': 'scenes', 'Data to video': 'scenes', 'Article to video': 'scenes',
 }
 
-type Tool = { icon: IconName; label: string; on: () => void; disabled?: boolean; active?: boolean }
 
 /** Look tools of an adjustment layer (they change everything under it). */
 const ADJ_LOOKS = (setPanel: (p: PanelName) => void) => [
@@ -813,10 +813,10 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   }
 
   const empty = ed.project.clips.length === 0
-  // a mouse wheel scrolls the tool row sideways (desktop has no swipe)
-  const toolsWheel = (e: React.WheelEvent<HTMLElement>) => {
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY
-  }
+  // where the tool row sits: under the video, or beside it (Toolbar settings)
+  // (full screen keeps the tools in its slide-in edit panel, so they sit at the bottom there)
+  const sideDock = useDock()
+  const dock = fs ? 'bottom' : sideDock
 
   // ---- toolbar for the current selection
   let tools: Tool[]
@@ -834,7 +834,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'adjust', label: 'Adjust', on: () => setPanel('adjust') },
       { icon: 'color', label: 'Color', on: () => setPanel('color') },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') } },
-      { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateAllClips(() => ({ fit: selClip.fit === 'fit' ? 'fill' : 'fit' })) },
+      { key: 'fit', icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateAllClips(() => ({ fit: selClip.fit === 'fit' ? 'fill' : 'fit' })) },
       ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
       { icon: 'trash', label: 'Delete', on: removeSel },
     ]
@@ -858,9 +858,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'layers', label: selClip.compound ? 'Break apart' : 'Join clips', on: () => setPanel('join'), active: !!selClip.compound },
       { icon: 'keyframe', label: 'Zoom & move', on: () => setPanel('zoommove'), active: !!(selClip.keys?.length || selClip.pos) },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
-      { icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
+      { key: 'motion', icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
       { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !!selClip.ramp },
-      ...(!photo ? [{ icon: 'reverse', label: reversing !== null ? `${Math.round(reversing * 100)}%` : 'Reverse', on: reverse, disabled: reversing !== null } as Tool] : []),
+      ...(!photo ? [{ key: 'reverse', icon: 'reverse', label: reversing !== null ? `${Math.round(reversing * 100)}%` : 'Reverse', on: reverse, disabled: reversing !== null } as Tool] : []),
       { icon: 'volume', label: 'Volume', on: () => setPanel('volume') },
       // the clip's sound as its own item on an audio row (the clip goes silent)
       ...(hasSound(ed.sources[selClip.sourceId]) ? [{ icon: 'detach', label: 'Detach audio', on: () => detach([selClip.id]) } as Tool] : []),
@@ -875,7 +875,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'crop', label: 'Crop', on: () => setPanel('crop') },
       { icon: 'mask', label: 'Mask', on: () => setPanel('mask'), active: !!selClip.shapeMask },
       { icon: 'transition', label: 'Transition', on: () => { setTransitionFor(selClip.id); setPanel('transition') }, disabled: ed.project.clips.at(-1)?.id === selClip.id },
-      { icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
+      { key: 'fit', icon: 'fit', label: selClip.fit === 'fit' ? 'Fill' : 'Fit', on: () => ed.updateClip(selClip.id, { fit: selClip.fit === 'fit' ? 'fill' : 'fit' }) },
       { icon: 'copy', label: 'Duplicate', on: ed.duplicate },
       { icon: 'brush', label: 'Copy style', on: () => copyStyleOf(selClip.id) },
       ...(styleCopied ? [{ icon: 'paste', label: 'Paste style', on: () => setStyleSheet(true) } as Tool] : []),
@@ -938,7 +938,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     ]
     const capsAll = selLayer.type === 'text' && selLayer.subtitle
       ? [
-          { icon: 'subtitles', label: sel?.type === 'layer' && sel.all ? 'One caption' : 'All captions', on: () => ed.setSel({ type: 'layer', id: selLayer.id, all: !(sel?.type === 'layer' && sel.all) }) } as Tool,
+          { key: 'captions', icon: 'subtitles', label: sel?.type === 'layer' && sel.all ? 'One caption' : 'All captions', on: () => ed.setSel({ type: 'layer', id: selLayer.id, all: !(sel?.type === 'layer' && sel.all) }) } as Tool,
           { icon: 'ai', label: 'Listen again', on: () => { player?.pause(); ed.setSel({ type: 'layer', id: selLayer.id }); setPanel('ai') } } as Tool,
         ]
       : []
@@ -1008,7 +1008,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'title', label: 'Titles', on: () => { ed.addText(time); setPanel('text-titles') }, disabled: empty },
       { icon: 'move', label: 'Move / swap', on: () => { setOrderMode('move'); openClipPanel('order') }, disabled: !targetClip || ed.project.clips.length < 2 },
       { icon: 'selectAll', label: 'Select all', on: selectAllClips, disabled: empty || !!ed.project.main?.locked },
-      { icon: 'marker', label: markers.length ? `${t('Markers')} (${markers.length})` : 'Add marker', on: () => (markers.length ? setMarkerSheet({ focus: null }) : addMarkerHere(true)), disabled: empty },
+      { key: 'marker', icon: 'marker', label: markers.length ? `${t('Markers')} (${markers.length})` : 'Add marker', on: () => (markers.length ? setMarkerSheet({ focus: null }) : addMarkerHere(true)), disabled: empty },
       { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
       { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
       { icon: 'smartcut', label: 'Smart cut', on: () => setPanel('smartcut'), disabled: empty },
@@ -1200,8 +1200,14 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       onRecordPause={(paused) => { if (paused) player?.pause(); else player?.play() }} />
   )
 
+  const toolbar = (
+    <ToolBar tools={tools} dock={dock} run={runTool} still={fs}
+      onBack={selClip || selStored ? () => { ed.setSel(null); setPanel(null) } : undefined}
+      locked={(tl) => !!PREMIUM_TOOLS[tl.label] && !isAllowed(PREMIUM_TOOLS[tl.label])} />
+  )
+
   return (
-    <div className={`app editor${fs ? ' fs' : ''}${fs && fsEdit ? ' fs-edit' : ''}${fs && fsIdle && playing && !fsEdit ? ' fs-idle' : ''}`}>
+    <div className={`app editor dock-${dock}${fs ? ' fs' : ''}${fs && fsEdit ? ' fs-edit' : ''}${fs && fsIdle && playing && !fsEdit ? ' fs-idle' : ''}`}>
       <header className="top">
         <button className="icon-btn" onClick={onBack} aria-label="Back"><Icon name="back" /></button>
         <button className="title" onClick={rename}>{name}</button>
@@ -1230,6 +1236,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           ⚠ {missing.length === 1 ? t('1 file is missing') : `${missing.length} ${t('files are missing')}`} · <b>{t('Find files')}</b>
         </button>
       )}
+      <div className="stage-row">
+      {dock === 'left' && toolbar}
       <div className="stage-wrap">
         <Preview ed={ed} player={player} canvasRef={canvasRef} t={time} onTogglePlay={togglePlay}
           onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} compare={compare} onCompare={setCompare} />
@@ -1269,6 +1277,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         )}
         {importing > 0 && <div className="toast">{t('Opening')}… ({importing})</div>}
         {toast && <div className="toast error" onClick={() => setToast(null)}>{toast}</div>}
+      </div>
+      {dock === 'right' && toolbar}
       </div>
 
       <div className="transport">
@@ -1337,16 +1347,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       )}
 
       {habitBar && <HabitBar key={habitBar.key} text={habitBar.text} action={habitBar.action} onApply={habitBar.apply} onNotNow={habitBar.notNow} onSettings={() => setHabitsSheet(true)} />}
-      <nav className="tools" onWheel={toolsWheel}>
-        {(selClip || selStored) && <button className="tool back" onClick={() => { ed.setSel(null); setPanel(null) }}><Icon name="back" /><span>{t('Back')}</span></button>}
-        {tools.map((tl) => (
-          <button key={tl.label} className={`tool${tl.active ? ' on' : ''}${tl.icon === 'habit' ? ' habit' : ''}`} disabled={tl.disabled} onClick={() => runTool(tl)}>
-            <Icon name={tl.icon} />
-            {PREMIUM_TOOLS[tl.label] && !isAllowed(PREMIUM_TOOLS[tl.label]) && <i className="crown-badge" aria-label={t('Premium')}><Icon name="crown" size={11} /></i>}
-            <span>{t(tl.label)}</span>
-          </button>
-        ))}
-      </nav>
+      {dock === 'bottom' && toolbar}
 
       {panelView && <div className="panel-wrap">{panelView}</div>}
       {panel === 'crop' && targetClip && ed.sources[targetClip.sourceId] && (
