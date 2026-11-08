@@ -7,6 +7,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { basename, dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { cancelSetup, checkComputer, runSetup } from './aisetup.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const distDir = join(here, '..', 'dist')
@@ -348,6 +349,19 @@ ipcMain.handle('desktop:google-fetch', async (e, { url, method, headers, body })
   const res = await net.fetch(url, { method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(10 * 60_000) })
   return { status: res.status, location: res.headers.get('location'), range: res.headers.get('range'), text: await res.text() }
 })
+
+// Local AI setup: checks this computer and, after the user agrees in the app, installs Ollama
+// and a Gemma 4 model that fits (see aisetup.js)
+ipcMain.handle('desktop:ai-check', async (e) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  return checkComputer()
+})
+ipcMain.handle('desktop:ai-setup', async (e, model) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  const to = e.sender
+  return runSetup(model, (p) => { if (!to.isDestroyed()) to.send('desktop:ai-progress', p) })
+})
+ipcMain.on('desktop:ai-cancel', (e) => { if (e.sender === win?.webContents) cancelSetup() })
 
 // Keeps the computer awake (the screen may still turn off) while an export runs.
 let awakeId = null
