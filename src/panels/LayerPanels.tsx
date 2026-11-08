@@ -15,6 +15,7 @@ import { subtitleStyle } from '../engine/text'
 import { WAVE_STYLES } from '../engine/visualizer'
 import { t } from '../lib/i18n'
 import { outputSize } from '../engine/renderer'
+import { useTrending } from '../lib/useTrending'
 import { CARD_LOOKS, FESTIVAL_TITLES, SHAYARI, SHAYARI_KINDS, cardFrame, pickShayari, type ShayariKind, type TitlePreset } from '../lib/desi'
 
 interface P { ed: Editor; onClose: () => void }
@@ -362,7 +363,8 @@ export function AdjustmentPanel({ ed, layer, onClose }: P & { layer: AdjustmentL
 
 /** Titles tab: wedding & event titles, festival greetings and shayari / quote cards (Desi creator pack). */
 function TitlesTab({ ed, layer }: { ed: Editor; layer: TextLayer }) {
-  const [group, setGroup] = useState<'events' | 'festivals' | 'shayari'>('events')
+  const trending = useTrending()?.titles ?? []
+  const [group, setGroup] = useState<'trending' | 'events' | 'festivals' | 'shayari'>('events')
   const [kind, setKind] = useState<ShayariKind>('motivation')
   const [look, setLook] = useState(0)
   const apply = (p: TitlePreset) => {
@@ -391,8 +393,9 @@ function TitlesTab({ ed, layer }: { ed: Editor; layer: TextLayer }) {
   )
   return (
     <>
-      <Chips options={[{ value: 'events', label: 'Wedding & events' }, { value: 'festivals', label: 'Festivals' }, ...(layer.subtitle ? [] : [{ value: 'shayari' as const, label: 'Shayari & quotes' }])]} value={group} onChange={setGroup} />
+      <Chips options={[...(trending.length ? [{ value: 'trending' as const, label: '🔥 Trending' }] : []), { value: 'events' as const, label: 'Wedding & events' }, { value: 'festivals', label: 'Festivals' }, ...(layer.subtitle ? [] : [{ value: 'shayari' as const, label: 'Shayari & quotes' }])]} value={group} onChange={setGroup} />
       {group !== 'shayari' && <p className="muted small">{t('Tap a title, then change the words in Edit.')}</p>}
+      {group === 'trending' && grid(trending)}
       {group === 'events' && grid(TITLE_PRESETS)}
       {group === 'festivals' && grid(FESTIVAL_TITLES)}
       {group === 'shayari' && (
