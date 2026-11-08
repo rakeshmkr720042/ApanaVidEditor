@@ -1,5 +1,8 @@
 import type { AudioFx, Denoise, MediaSource, Project } from '../types'
 import { decodeAudio } from '../lib/media'
+import { decodeSpan, isLong } from '../lib/longaudio'
+import { TOO_LONG_TO_CLEAN, cleanLimitSecs, deviceGB, isPhone } from '../lib/device'
+import { t } from '../lib/i18n'
 import { encodeWav } from './music'
 import { applyFx, fxKey, liveFx } from './soundfx'
 import type { DenoiseJob, DenoiseReply, SpectralOpts } from './denoise.worker'
@@ -190,7 +193,11 @@ export function cleanSound(src: MediaSource, d: Denoise | null | undefined, fx?:
   entry.done = (queue = queue.catch(() => {}).then(async () => {
     try {
       if (!entry.needed && !wanted.has(key)) { cache.delete(key); return null }
-      const buf = src.kind === 'image' ? null : await decodeAudio(src.file)
+      if (src.kind === 'image') throw new Error('no sound')
+      // the whole sound is held several times while it is cleaned: past the device's limit stop with a clear message
+      const limit = cleanLimitSecs(isPhone, deviceGB())
+      if (src.duration > limit) throw new Error(`${TOO_LONG}${Math.round(limit / 60)}`)
+      const buf = await wholeSound(src)
       if (!buf) throw new Error('no sound')
       const share = d && live ? 0.6 : 1 // part of the progress bar for noise removal
       let out = d ? await cleanBuffer(buf, d, (p) => { entry.progress = p * share; emit() }) : buf
@@ -213,6 +220,39 @@ export function cleanSound(src: MediaSource, d: Denoise | null | undefined, fx?:
   cache.set(key, entry)
   emit()
   return entry.done
+}
+
+const TOO_LONG = 'too-long:'
+/** The message for a sound that was too long to clean on this device (in the app's language), or null for other errors. */
+export function tooLongText(error: string | undefined): string | null {
+  if (!error?.startsWith(TOO_LONG)) return null
+  return t(TOO_LONG_TO_CLEAN).replace('{m}', error.slice(TOO_LONG.length))
+}
+
+/**
+ * The source's sound, unpacked. Big files (a long phone video) are read by ffmpeg two minutes at a time where
+ * they lie, so the file itself is never loaded into memory next to its samples.
+ */
+async function wholeSound(src: MediaSource): Promise<AudioBuffer | null> {
+  if (!isLong(src.duration, src.file.size)) return decodeAudio(src.file)
+  const step = 120
+  const length = Math.ceil((src.duration + 1) * RATE)
+  const out = new AudioBuffer({ length, numberOfChannels: 2, sampleRate: RATE })
+  let filled = 0
+  for (let from = 0; from < src.duration; from += step) {
+    const part = await decodeSpan(src.file, from, step, RATE, 2)
+    if (!part || !part[0].length) break
+    const at = Math.round(from * RATE)
+    const n = Math.min(part[0].length, length - at)
+    part.forEach((ch, c) => out.copyToChannel(ch.subarray(0, n) as Float32Array<ArrayBuffer>, c, at))
+    filled = at + n
+    if (part[0].length < step * RATE * 0.99) break // reached the real end
+  }
+  if (!filled) return null
+  if (filled >= length) return out
+  const trimmed = new AudioBuffer({ length: filled, numberOfChannels: 2, sampleRate: RATE })
+  for (let c = 0; c < 2; c++) trimmed.copyToChannel(out.getChannelData(c).subarray(0, filled), c)
+  return trimmed
 }
 
 /** True when the source has a sound that can be cleaned (videos without sound have an empty waveform). */

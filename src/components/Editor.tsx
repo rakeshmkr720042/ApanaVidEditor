@@ -280,6 +280,15 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     }
   }, [initial.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the app went to the background (home button, a call, screen off): stop the preview, so its sound does not
+  // keep playing and the phone does not decode video for nobody (Android closes busy background apps sooner)
+  useEffect(() => {
+    if (!player) return
+    const hide = () => { if (document.hidden && player.playing) player.pause() }
+    document.addEventListener('visibilitychange', hide)
+    return () => document.removeEventListener('visibilitychange', hide)
+  }, [player])
+
   // Smart shortcuts learn from how the items end up (on this device only)
   useEffect(() => {
     const id = setTimeout(() => observe(initial.id, ed.project, ed.sources), 1500)
@@ -491,13 +500,14 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       try {
         const src = await loadSource(f, f.name)
         if (src.kind === 'audio' && (target === 'main' || target === 'insert')) {
-          ed.addSource(src); await saveMedia(src)
+          await saveMedia(src); ed.addSource(src)
           const a = ed.addAudio(time, src, 'music', f.name.replace(/\.[^.]+$/, ''))
           setToast(`${t('Audio')} ${t('added')} ${t('on a new track at')} ${fmtTime(a.start)}`)
           continue
         }
-        ed.addSource(src)
+        // stored first: when the phone is full nothing half-added is left behind
         await saveMedia(src)
+        ed.addSource(src)
         added.push(src)
       } catch (e) {
         setToast((e as Error).message)

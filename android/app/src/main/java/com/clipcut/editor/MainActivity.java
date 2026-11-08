@@ -1,9 +1,14 @@
 package com.clipcut.editor;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.webkit.RenderProcessGoneDetail;
+import android.view.ViewGroup;
 import android.webkit.WebView;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 
@@ -26,6 +31,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(KeepAlivePlugin.class);
         super.onCreate(savedInstanceState);
         if (bridge == null) return;
+        keepTextBoxesAboveKeyboard(bridge.getWebView());
         bridge.addWebViewListener(new WebViewListener() {
             @Override
             public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
@@ -41,6 +47,33 @@ public class MainActivity extends BridgeActivity {
                 return true;
             }
         });
+    }
+
+    /**
+     * Android 15+ draws every app edge to edge, and then the keyboard no longer makes the app smaller by itself:
+     * it covered the text box being typed in (title text, captions, search). Capacitor only keeps the app clear
+     * of the status and navigation bars, so this does the same and also keeps it above the keyboard.
+     */
+    private void keepTextBoxesAboveKeyboard(WebView web) {
+        if (web == null || Build.VERSION.SDK_INT < 35) return;
+        ViewCompat.setOnApplyWindowInsetsListener(web, (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+            ViewGroup.LayoutParams lp = v.getLayoutParams();
+            if (lp instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams m = (ViewGroup.MarginLayoutParams) lp;
+                int bottom = Math.max(bars.bottom, ime.bottom);
+                if (m.leftMargin != bars.left || m.topMargin != bars.top || m.rightMargin != bars.right || m.bottomMargin != bottom) {
+                    m.leftMargin = bars.left;
+                    m.topMargin = bars.top;
+                    m.rightMargin = bars.right;
+                    m.bottomMargin = bottom;
+                    v.setLayoutParams(m);
+                }
+            }
+            return WindowInsetsCompat.CONSUMED;
+        });
+        ViewCompat.requestApplyInsets(web);
     }
 
     @Override

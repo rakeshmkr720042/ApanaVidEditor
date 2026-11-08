@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AudioFx, AudioLayer, Clip, MediaLayer } from '../types'
 import type { Editor } from '../model/useEditor'
-import { cleanState, hasSound, hearingOriginal, onCleanChange, setHearOriginal } from '../engine/denoise'
+import { cleanState, tooLongText, hasSound, hearingOriginal, onCleanChange, setHearOriginal } from '../engine/denoise'
 import { EQ_PRESETS, fullFx, isNeutralFx, LOUDNESS, VOICES } from '../engine/soundfx'
 import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
@@ -126,7 +126,7 @@ export function AudioFxPanel({ ed, target, onClose }: { ed: Editor; target: Targ
           <div className="progress"><div style={{ width: `${Math.round(st.progress * 100)}%` }} /></div>
         </>
       )}
-      {st?.status === 'error' && <p className="error-text small">{t('Could not apply the effects. The original sound is used.')}</p>}
+      {st?.status === 'error' && <p className="error-text small">{tooLongText(st.error) ?? t('Could not apply the effects. The original sound is used.')}</p>}
       {st?.status === 'ready' && (
         <div className="row noise-row">
           <span className="muted small">{t('Listen')}</span>

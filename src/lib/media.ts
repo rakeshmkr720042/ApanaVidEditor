@@ -2,6 +2,7 @@ import type { MediaKind, MediaSource } from '../types'
 import { IMAGE_DURATION } from '../model/timeline'
 import { uid } from './format'
 import { TOO_BIG, isLong, longPeaks, probeDuration } from './longaudio'
+import { deviceGB, isPhone, maxPhotoSide } from './device'
 
 const LONG_BYTES_HINT = 30 * 1048576
 
@@ -68,16 +69,25 @@ function drawPeaks(peaks: Float32Array, height: number) {
   return c.toDataURL('image/png')
 }
 
-/** Waveform of a video's sound for the timeline, or '' when it has none (or is too long to decode cheaply). */
+/**
+ * Waveform of a video's sound for the timeline, or '' when it has none. Short videos are unpacked in one go;
+ * long or big ones (a 15 minute phone recording is 1 GB) are read lightly by ffmpeg where they lie, because
+ * unpacking them whole needs the file plus ~0.5 GB of samples in memory and used to close the app on phones.
+ */
 export async function videoWave(file: Blob, duration: number): Promise<string> {
-  if (duration > 20 * 60 || file.size > 600 * 1048576) return ''
+  const width = Math.round(Math.min(4000, Math.max(200, duration * 40)))
+  if (isLong(duration, file.size)) {
+    if (duration > 3 * 3600) return ''
+    const peaks = await longPeaks(file, width).catch(() => null)
+    return peaks ? drawPeaks(peaks, 32) : ''
+  }
   const buf = await decodeAudio(file)
   if (!buf) return ''
-  return waveform(buf, Math.round(Math.min(4000, Math.max(200, duration * 40))), 32)
+  return waveform(buf, width, 32)
 }
 
-/** Longest side a photo keeps (4K export is 3840 wide; a little more leaves room for Ken Burns zoom). */
-export const MAX_PHOTO = 4096
+/** Longest side a photo keeps (4K export is 3840 wide; a little more leaves room for Ken Burns zoom). Phones with 4 GB or less keep 3072. */
+export const MAX_PHOTO = maxPhotoSide(isPhone, deviceGB())
 
 /**
  * A smaller copy of a photo bigger than MAX_PHOTO, or null when it is fine as it is (or is a GIF / SVG, whose

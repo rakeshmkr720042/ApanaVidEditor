@@ -9,7 +9,7 @@ import { ADJUST_SLIDERS, colorParams, FILTER_GROUPS, FILTERS } from '../engine/f
 import { Grader } from '../engine/gl'
 import { TRANSITION_GROUPS, TRANSITIONS } from '../engine/transitions'
 import { EFFECT_GROUPS, EFFECTS, effectById } from '../engine/effects'
-import { cleanState, DEFAULT_DENOISE, hasSound, hearingOriginal, onCleanChange, setHearOriginal } from '../engine/denoise'
+import { cleanState, tooLongText, DEFAULT_DENOISE, hasSound, hearingOriginal, onCleanChange, setHearOriginal } from '../engine/denoise'
 import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
 
@@ -385,7 +385,7 @@ export function NoisePanel({ ed, target, onClose }: P & { target: Cleanable }) {
               <div className="progress"><div style={{ width: `${Math.round(st.progress * 100)}%` }} /></div>
             </>
           )}
-          {st?.status === 'error' && <p className="error-text small">{t('Could not clean this sound. The original sound is used.')}</p>}
+          {st?.status === 'error' && <p className="error-text small">{tooLongText(st.error) ?? t('Could not clean this sound. The original sound is used.')}</p>}
           {st?.status === 'ready' && (
             <div className="row noise-row">
               <span className="muted small">{t('Listen')}</span>

@@ -1,5 +1,6 @@
 import type { Clip, Layer, MediaSource, Project } from '../types'
 import type { MediaInfo } from './relink'
+import { t } from './i18n'
 
 /** Projects and their media are kept in IndexedDB so work survives reloads and works offline. */
 export interface ProjectRecord {
@@ -34,12 +35,30 @@ function db() {
   return dbp
 }
 
+/** Shown when the phone's storage is full (a write was refused). */
+export const STORAGE_FULL = 'Phone storage is full, so this could not be saved. Delete old projects or free some space on the phone, then try again.'
+
+/** A friendlier error for a refused write: "storage full" when that is what happened. */
+export function storageError(e: unknown): Error {
+  const name = (e as DOMException | null)?.name ?? ''
+  if (name === 'QuotaExceededError' || /quota|space|disk is full/i.test(String((e as Error | null)?.message ?? ''))) return new Error(t(STORAGE_FULL))
+  return e instanceof Error ? e : new Error(String((e as DOMException | null)?.message ?? e ?? 'Storage error'))
+}
+
 function run<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return db().then((d) => new Promise<T>((resolve, reject) => {
     const tx = d.transaction(store, mode)
     const req = fn(tx.objectStore(store))
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    if (mode === 'readonly') {
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+      return
+    }
+    // a write is only safe once the transaction is committed: a full disk shows up as an abort *after* the
+    // request itself succeeded, which used to be reported as saved (and the work was gone after a restart)
+    tx.oncomplete = () => resolve(req.result)
+    tx.onabort = () => reject(storageError(tx.error ?? req.error))
+    tx.onerror = () => reject(storageError(tx.error ?? req.error))
   }))
 }
 

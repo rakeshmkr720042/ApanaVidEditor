@@ -142,7 +142,7 @@ const section: HelpSection = {
       keywords: ['50 mp', '108 mp', 'big photo', 'photo slideshow', 'crash', 'memory', 'heavy photo', 'badi photo'],
       en: {
         title: 'Very big photos are made lighter',
-        what: 'Photos from 50 MP or 108 MP cameras are made 4096 pixels on the long side when you add them. That is still sharper than a 4K video needs, and it keeps photo slideshows from running out of memory on a phone.',
+        what: 'Photos from 50 MP or 108 MP cameras are made 4096 pixels on the long side when you add them (3072 on phones with 4 GB RAM or less). That is still sharper than the video needs, and it keeps photo slideshows from running out of memory on a phone. While you edit, photos that are not on screen for a while also let go of their memory.',
         steps: [
           'Add photos as usual. Nothing to switch on.',
           'Your original photo in the gallery is not changed; only the copy inside the project is lighter.',
@@ -151,12 +151,51 @@ const section: HelpSection = {
       },
       hi: {
         title: 'बहुत बड़ी फ़ोटो हल्की की जाती हैं',
-        what: '50 MP या 108 MP कैमरे की फ़ोटो जोड़ते समय लंबी तरफ़ से 4096 पिक्सेल की कर दी जाती हैं। यह 4K वीडियो की ज़रूरत से भी ज़्यादा साफ़ है, और इससे फ़ोन पर फ़ोटो स्लाइडशो में मेमोरी ख़त्म नहीं होती।',
+        what: '50 MP या 108 MP कैमरे की फ़ोटो जोड़ते समय लंबी तरफ़ से 4096 पिक्सेल की कर दी जाती हैं (4 GB या कम RAM वाले फ़ोन पर 3072)। यह वीडियो की ज़रूरत से भी ज़्यादा साफ़ है, और इससे फ़ोन पर फ़ोटो स्लाइडशो में मेमोरी ख़त्म नहीं होती। एडिट करते समय जो फ़ोटो कुछ देर स्क्रीन पर नहीं है, उसकी मेमोरी भी खाली कर दी जाती है।',
         steps: [
           'फ़ोटो पहले की तरह जोड़ें। कुछ चालू नहीं करना है।',
           'गैलरी में आपकी असली फ़ोटो नहीं बदलती; सिर्फ़ प्रोजेक्ट के अंदर वाली कॉपी हल्की होती है।',
         ],
         tips: ['GIF और SVG लोगो जैसे हैं वैसे ही रहते हैं।'],
+      },
+    },
+    {
+      id: 'android-limits',
+      isNew: true,
+      platforms: ['android'],
+      keywords: ['android', 'phone', 'keyboard', 'webview', 'storage full', 'memory', 'long video', 'remove noise', 'blank screen', 'safed screen', 'jagah', 'keyboard chhup'],
+      related: ['recover-project', 'safe-export', 'big-photos'],
+      en: {
+        title: 'Android phones: keyboard, long videos, full storage',
+        what: 'The Android app is tuned so it does not close or lose work on smaller phones. Here is what it does by itself and what a message means.',
+        steps: [
+          'Typing: on Android 15 and newer the screen moves up above the keyboard, so the text box you type in stays visible.',
+          'Long videos: the sound picture (waveform) of a long or very big video is read a little at a time, so adding a 30 minute recording no longer runs out of memory.',
+          'Remove noise and Audio effects work on up to 10 minutes of sound at a time on a phone (5 minutes on phones with 4 GB RAM or less; 60 minutes on a computer). For a longer clip you see a message: split the clip into parts first (Split), then switch it on for each part.',
+          'Phone storage full: if a photo, video or the project could not be saved because the phone is full, you now see "Phone storage is full". Delete old projects (Home) or free space on the phone, then try again. Before, the app could say it saved when it had not.',
+          'Going to the Home screen or getting a call stops the preview, so its sound does not keep playing in the background. Your project is saved at that moment too.',
+          'A blank white screen on old phones: if Android System WebView is too old (before version 111), the app now shows how to update it instead of a blank screen. Update "Android System WebView" and "Chrome" from the Play Store.',
+        ],
+        tips: [
+          'If the app ever closes, open it again: Home offers "Continue where you left off", and the Blackbox log shows why.',
+          'A test build from GitHub cannot be installed over an older test build (Android says "App not installed"). Uninstall the old one first; this deletes projects kept inside the app, so save important ones as a project file (.avp) before.',
+        ],
+      },
+      hi: {
+        title: 'Android फ़ोन: कीबोर्ड, लंबी वीडियो, भरी स्टोरेज',
+        what: 'Android ऐप को ऐसा बनाया गया है कि छोटे फ़ोन पर भी बंद न हो और काम न खोए। यहाँ लिखा है कि ऐप ख़ुद क्या करता है और किसी मैसेज का क्या मतलब है।',
+        steps: [
+          'टाइप करना: Android 15 और नए फ़ोन पर स्क्रीन कीबोर्ड के ऊपर खिसक जाती है, ताकि जिस बॉक्स में आप लिख रहे हैं वह दिखता रहे।',
+          'लंबी वीडियो: लंबी या बहुत बड़ी वीडियो की आवाज़ की तस्वीर (वेवफ़ॉर्म) थोड़ा-थोड़ा करके पढ़ी जाती है, इसलिए 30 मिनट की रिकॉर्डिंग जोड़ने पर अब मेमोरी ख़त्म नहीं होती।',
+          '"शोर हटाएँ" और "ऑडियो इफ़ेक्ट" फ़ोन पर एक बार में 10 मिनट तक की आवाज़ पर चलते हैं (4 GB या कम RAM वाले फ़ोन पर 5 मिनट; कंप्यूटर पर 60 मिनट)। इससे लंबी क्लिप पर मैसेज दिखेगा: पहले क्लिप को हिस्सों में काटें ("स्प्लिट"), फिर हर हिस्से के लिए इसे चालू करें।',
+          'फ़ोन की स्टोरेज भरी: अगर फ़ोन भरा होने से फ़ोटो, वीडियो या प्रोजेक्ट सेव नहीं हुआ, तो अब "फ़ोन की स्टोरेज भर गई है" दिखेगा। पुराने प्रोजेक्ट हटाएँ (होम) या फ़ोन में जगह खाली करें, फिर दोबारा कोशिश करें। पहले ऐप सेव न होने पर भी सेव हुआ बता सकता था।',
+          'होम स्क्रीन पर जाने या कॉल आने पर प्रीव्यू रुक जाता है, ताकि उसकी आवाज़ पीछे चलती न रहे। उसी समय आपका प्रोजेक्ट भी सेव हो जाता है।',
+          'पुराने फ़ोन पर सफ़ेद/ख़ाली स्क्रीन: अगर "Android System WebView" बहुत पुराना है (वर्ज़न 111 से पहले), तो अब ख़ाली स्क्रीन की जगह उसे अपडेट करने का तरीका दिखता है। Play Store से "Android System WebView" और "Chrome" अपडेट करें।',
+        ],
+        tips: [
+          'अगर ऐप कभी बंद हो जाए तो फिर से खोलें: होम पर "जहाँ छोड़ा था वहीं से जारी रखें" मिलेगा, और ब्लैकबॉक्स लॉग में कारण दिखेगा।',
+          'GitHub की टेस्ट बिल्ड पुरानी टेस्ट बिल्ड के ऊपर इंस्टॉल नहीं होती (Android "App not installed" बताता है)। पहले पुरानी अनइंस्टॉल करें; इससे ऐप के अंदर के प्रोजेक्ट मिट जाते हैं, इसलिए ज़रूरी प्रोजेक्ट पहले प्रोजेक्ट फ़ाइल (.avp) के रूप में सेव कर लें।',
+        ],
       },
     },
   ],
