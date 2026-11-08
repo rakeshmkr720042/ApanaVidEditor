@@ -255,14 +255,20 @@ export class Player {
   }
 
   private sync() {
-    const needs = mediaNeeds(this.project, this.items, this.sources, this.t, this.playing ? 1.5 : 0)
+    // paused: smooth slow motion shows its in-between picture too (the next frame is needed for it)
+    const needs = mediaNeeds(this.project, this.items, this.sources, this.t, this.playing ? 1.5 : 0, !this.playing)
     const active = new Set<string>()
     for (const n of needs) {
       if (n.source.kind === 'image') { this.image(n.source); continue }
       const el = this.element(n.key, n.source)
       if (!el) continue
       active.add(n.key)
-      if (this.playing && !n.preload) {
+      // ultra slow (below what a <video> can play): stepped through by seeking, without sound
+      const crawl = this.playing && !n.preload && n.rate * this.rate < 0.0625
+      if (crawl) {
+        if (!el.paused) el.pause()
+        if (Math.abs(el.currentTime - n.time) > 1 / 40 && !el.seeking) el.currentTime = n.time
+      } else if (this.playing && !n.preload) {
         if (this.meterOn) this.meter?.attach(el)
         el.playbackRate = clampRate(n.rate * this.rate)
         el.volume = Math.max(0, Math.min(1, n.volume))

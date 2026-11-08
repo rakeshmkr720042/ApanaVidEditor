@@ -151,7 +151,10 @@ class DecoderReader implements FrameReader {
     if (!this.decoder || time < this.lastTime - 1e-3 || time > this.lastTime + 3) this.resetFrom(time)
     this.lastTime = time
     const target = time * 1e6 + 1000 // µs, with a little tolerance
+    const started = performance.now()
     for (let guard = 0; guard < 2000; guard++) {
+      // a phone decoder that takes frames but gives none back: let the export read this video another way
+      if (performance.now() - started > 15000) throw new Error('The video decoder stopped responding')
       // advance through decoded frames while the next one is not past the target
       while (this.queue.length && this.queue[0].timestamp <= target) {
         this.current?.close()

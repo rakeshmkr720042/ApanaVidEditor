@@ -1,4 +1,5 @@
 import type { AdjustmentLayer, Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MainFrame, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
+import { inBetween } from './interp'
 import { activeAt, sourceAt, type LaidClip } from '../model/timeline'
 import { stabAt } from './motion'
 import { drawPhoto3d, photo3dKey } from './photo3d'
@@ -469,13 +470,17 @@ export class Renderer {
     const p = Math.min(1, Math.max(0, progress))
     const srcT = clip.stabilize || clip.smoothSlow || clip.keys?.length ? sourceAt(clip, local).time : 0
     const stab = clip.stabilize ? stabAt(clip.stabilize, srcT) : null
-    if (!(clip.photo3d && this.drawPhoto3d(c, f, clip, p))) this.placeFrame(c, f, clip, W, H, clip.fit, p, stab, srcT)
-    // smooth slow motion: the next source frame shows through by how far the moment is between the two
-    if (clip.smoothSlow) {
-      const f2 = inp.frame(clipKey(clip) + '~next')
+    // smooth slow motion: how far this moment is between two real frames of the video
+    const f2 = clip.smoothSlow ? inp.frame(clipKey(clip) + '~next') : null
+    const pos = clip.smoothSlow ? srcT * clip.smoothSlow : 0
+    const idx = Math.floor(pos + 1e-3)
+    const frac = pos - idx
+    // ultra smooth: a new in-between frame made from the movement between the two
+    const mid = f2 && clip.slowMode === 'flow' && frac > 0.02 ? inBetween(f, f2, frac, `${clip.sourceId}:${idx}`, `${clip.sourceId}:${idx + 1}`) : null
+    if (!(clip.photo3d && this.drawPhoto3d(c, f, clip, p))) this.placeFrame(c, mid ?? f, clip, W, H, clip.fit, p, stab, srcT)
+    // plain smooth: the next source frame shows through by how far the moment is between the two
+    if (clip.smoothSlow && !mid) {
       if (f2) {
-        const pos = srcT * clip.smoothSlow
-        const frac = pos - Math.floor(pos + 1e-3)
         if (frac > 0.02) {
           c.globalAlpha = Math.min(1, frac)
           this.placeFrame(c, f2, clip, W, H, clip.fit, p, stab, srcT)
