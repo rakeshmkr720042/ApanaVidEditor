@@ -291,7 +291,7 @@ const section: HelpSection = {
         where: 'Select a clip → Motion (for a photo: 3D zoom)',
         steps: [
           'Stabilize: takes the shake out of hand-held video (on this device). The picture zooms in a little to hide the edges.',
-          'Smooth slow motion: slowed-down parts glide between frames instead of stuttering. Set a speed below 1x first.',
+          'Smooth slow motion: set a speed below 1x first, then pick Blend frames (light) or Ultra smooth (new in-between frames made from the movement). See "Ultra smooth slow motion".',
           'Motion blur: moving things leave a soft trail; choose Small, Medium or Large.',
           'For a photo, 3D zoom: pick Zoom in, Zoom out, Slide left / right, Rise or Orbit; near things move more than far ones.',
         ],
@@ -302,7 +302,7 @@ const section: HelpSection = {
         where: 'क्लिप चुनें → मोशन (फ़ोटो के लिए: 3D ज़ूम)',
         steps: [
           '"स्थिर करें": हाथ से शूट की वीडियो का हिलना हटाता है (इसी डिवाइस पर)। किनारे छिपाने के लिए तस्वीर थोड़ी ज़ूम होती है।',
-          '"स्मूद स्लो मोशन": धीमे हिस्से अटकने के बजाय आराम से चलते हैं। पहले स्पीड 1x से कम करें।',
+          '"स्मूद स्लो मोशन": पहले स्पीड 1x से कम करें, फिर "फ़्रेम मिलाएँ" (हल्का) या "अल्ट्रा स्मूद" (हलचल से नए बीच के फ़्रेम) चुनें। "अल्ट्रा स्मूद स्लो मोशन" देखें।',
           '"मोशन ब्लर": चलती चीज़ों के पीछे हल्की लकीर; Small, Medium या Large चुनें।',
           'फ़ोटो के लिए "3D ज़ूम": Zoom in, Zoom out, Slide left / right, Rise या Orbit; पास की चीज़ें दूर वाली से ज़्यादा हिलती हैं।',
         ],

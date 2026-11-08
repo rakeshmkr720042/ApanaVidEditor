@@ -6,7 +6,8 @@ import { makeDepth } from '../engine/photo3d'
 import { videoFps } from '../engine/frames'
 import { isTracked, trackLayer } from '../engine/tracker'
 import { hasBox } from '../model/keyframes'
-import { SPEED_RAMPS } from '../model/timeline'
+import { rampPoints } from '../model/timeline'
+import { canInterpolate } from '../engine/interp'
 import { fmtTime } from '../lib/format'
 import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
@@ -16,7 +17,42 @@ const MOTIONS: { value: Photo3D['motion']; label: string }[] = [
   { value: 'right', label: 'Slide right' }, { value: 'up', label: 'Rise' }, { value: 'orbit', label: 'Orbit' },
 ]
 
-const slowSomewhere = (c: Clip) => (c.ramp ? (SPEED_RAMPS.find((r) => r.id === c.ramp)?.points.some((s) => s < 1) ?? false) : c.speed < 1)
+export const slowSomewhere = (c: Clip) => (rampPoints(c) ?? [c.speed]).some((s) => s < 1)
+
+type SlowMode = 'off' | 'blend' | 'flow'
+const slowModeOf = (c: Clip): SlowMode => (!c.smoothSlow ? 'off' : c.slowMode === 'flow' ? 'flow' : 'blend')
+
+/** Turns smooth slow motion on (blend or ultra smooth) or off for a clip; finds the video's frame rate once. */
+export async function setSlowMode(ed: Editor, clip: Clip, mode: SlowMode, extra: Partial<Clip> = {}) {
+  if (mode === 'off') { ed.updateClip(clip.id, { smoothSlow: null, slowMode: undefined, ...extra }); return }
+  const src = ed.sources[clip.sourceId]
+  const fps = clip.smoothSlow ?? Math.max(10, Math.min(120, Math.round((src ? await videoFps(src.file).catch(() => null) : null) ?? 30)))
+  ed.updateClip(clip.id, { smoothSlow: fps, slowMode: mode, ...extra })
+}
+
+/** Off / Blend / Ultra smooth chips for a slowed-down video clip (Speed and Motion tools). */
+export function SlowSmooth({ ed, clip }: { ed: Editor; clip: Clip }) {
+  const mode = slowModeOf(clip)
+  const slow = slowSomewhere(clip)
+  return (
+    <>
+      <span className="field-label">{t('Smooth slow motion')}</span>
+      <Chips options={[{ value: 'off', label: 'Off' }, { value: 'blend', label: 'Blend frames' }, { value: 'flow', label: 'Ultra smooth' }]} value={mode}
+        onChange={(m) => void setSlowMode(ed, clip, m as SlowMode)} />
+      <p className="muted small">
+        {!slow
+          ? t('Set a speed below 1x (Speed tool) to use it.')
+          : mode === 'flow'
+            ? canInterpolate()
+              ? t('New in-between frames are made from the movement, so moving things glide. Shows when paused and in the exported video.')
+              : t('This device cannot make in-between frames, so frames are blended instead.')
+            : mode === 'blend'
+              ? t('Slowed-down parts glide between frames instead of stuttering, in the exported video.')
+              : t('Without it, very slow parts show each frame several times (stutter).')}
+      </p>
+    </>
+  )
+}
 
 /** Motion tools for a main-video clip: stabilize, motion blur, smooth slow motion; for photos the 3D zoom. */
 export function MotionPanel({ ed, clip, onToast, onClose }: { ed: Editor; clip: Clip; onToast: (s: string) => void; onClose: () => void }) {
@@ -33,12 +69,6 @@ export function MotionPanel({ ed, clip, onToast, onClose }: { ed: Editor; clip: 
     if (!path) { onToast(t('Could not read this video')); return }
     set({ stabilize: { strength: clip.stabilize?.strength ?? 0.6, ...path } })
     onToast(t('Shake taken out. The picture is zoomed in a little to hide the edges.'))
-  }
-
-  const smooth = async (on: boolean) => {
-    if (!on) { set({ smoothSlow: null }); return }
-    const fps = (src ? await videoFps(src.file).catch(() => null) : null) ?? 30
-    set({ smoothSlow: Math.max(10, Math.min(120, Math.round(fps))) })
   }
 
   const make3d = async (on: boolean) => {
@@ -90,13 +120,7 @@ export function MotionPanel({ ed, clip, onToast, onClose }: { ed: Editor; clip: 
             onChange={(v) => set({ motionBlur: v > 0.02 ? v : null })} />
           <p className="muted small">{t('Moving things leave a soft trail, like a fast camera. Shows while playing and in the export.')}</p>
 
-          <span className="field-label">{t('Smooth slow motion')}</span>
-          <Toggle label="Blend frames when slowed down" value={!!clip.smoothSlow} onChange={smooth} />
-          <p className="muted small">
-            {slowSomewhere(clip)
-              ? t('Slowed-down parts glide between frames instead of stuttering, in the exported video.')
-              : t('Set a speed below 1x (Speed tool) to use it.')}
-          </p>
+          <SlowSmooth ed={ed} clip={clip} />
         </>
       )}
     </Panel>

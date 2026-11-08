@@ -14,7 +14,9 @@ import { mediaNeeds } from './player'
 import { prepare3d } from './photo3d'
 import { outputSize, Renderer, type FrameImage } from './renderer'
 import { ensureFont } from './text'
-import { info as logInfo } from '../lib/blackbox'
+import { info as logInfo, warn as logWarn } from '../lib/blackbox'
+import { isPhone } from '../lib/exportCheck'
+import { AvcTrack, muxMp4, parseAdts, type AacTrack } from './mp4mux'
 
 export type Format = 'mp4' | 'webm' | 'mov' | 'gif' | 'mp3'
 export type Resolution = '480' | '720' | '1080' | '1440' | '2160'
@@ -29,6 +31,8 @@ export interface ExportJob {
   cover: number | null // timeline time of the cover frame, embedded in MP4/MOV
   aspect?: AspectRatio // overrides the project's frame shape (platform presets)
   size?: SizeMode // defaults to 'high' (the old fixed bitrate)
+  /** last-resort settings after failures: no hardware video decoder, software encoder first */
+  safe?: boolean
 }
 
 export interface ExportOutput { blob: Blob; ext: string; cover: Blob | null; width: number; height: number; encoder: string }
@@ -47,24 +51,31 @@ async function toJpeg(c: HTMLCanvasElement | OffscreenCanvas, q = 0.9): Promise<
   return new Promise((r) => (c as HTMLCanvasElement).toBlob((b) => r(b!), 'image/jpeg', q))
 }
 
-interface VideoTarget { kind: 'h264' | 'vp9' | 'vp8'; codec: string }
+interface VideoTarget { kind: 'h264' | 'vp9' | 'vp8'; codec: string; hw: HardwareAcceleration }
 
-async function pickEncoder(format: Format, w: number, h: number, fps: number, bitrate: number): Promise<VideoTarget | null> {
-  if (typeof VideoEncoder === 'undefined') return null
+/**
+ * Every encoder setting this device says it can do, best first. Phones often say yes to a setting
+ * and then fail on the first frames (or stop responding), so the export goes down this list.
+ */
+async function encoderCandidates(format: Format, w: number, h: number, fps: number, bitrate: number, safe = false): Promise<VideoTarget[]> {
+  if (typeof VideoEncoder === 'undefined') return []
   const wantH264 = format === 'mp4' || format === 'mov'
   // H.264 level: 4.0 up to 1080p, 5.0 up to 2K, 5.1 for 4K (5.2 above 30 fps)
   const big = w * h > 2560 * 1600
   const level = big ? (fps > 30 ? '34' : '33') : w * h > 1920 * 1088 ? '32' : '28'
   const h264 = [`avc1.6400${level}`, `avc1.4d00${level}`, `avc1.4200${level}`].map((codec) => ({ kind: 'h264' as const, codec }))
   const vp = [{ kind: 'vp9' as const, codec: big ? (fps > 30 ? 'vp09.00.51.08' : 'vp09.00.50.08') : 'vp09.00.40.08' }, { kind: 'vp8' as const, codec: 'vp8' }]
+  const accel: HardwareAcceleration[] = safe ? ['prefer-software', 'no-preference', 'prefer-hardware'] : ['prefer-hardware', 'no-preference', 'prefer-software']
+  const out: VideoTarget[] = []
   for (const t of wantH264 ? [...h264, ...vp] : vp) {
-    const cfg: VideoEncoderConfig = { codec: t.codec, width: w, height: h, bitrate, framerate: fps, ...(t.kind === 'h264' ? { avc: { format: 'annexb' } } : {}) }
-    for (const hardwareAcceleration of ['prefer-hardware', 'no-preference'] as const) {
+    const cfg: VideoEncoderConfig = { codec: t.codec, width: w, height: h, bitrate, framerate: fps, ...(t.kind === 'h264' ? { avc: { format: 'avc' } } : {}) }
+    for (const hardwareAcceleration of accel) {
       const r = await VideoEncoder.isConfigSupported({ ...cfg, hardwareAcceleration }).catch(() => null)
-      if (r?.supported) return t
+      if (r?.supported) out.push({ ...t, hw: hardwareAcceleration })
     }
   }
-  return null
+  // the same codec at 'no-preference' usually ends up on the same encoder as one of the others: try it last
+  return out.sort((a, b) => (a.hw === 'no-preference' ? 1 : 0) - (b.hw === 'no-preference' ? 1 : 0)).slice(0, 6)
 }
 
 /** IVF file header (VP8/VP9 frames for ffmpeg). */
@@ -225,7 +236,8 @@ export async function exportProject(
     if (!gif) {
       onProgress(0.01, 'Mixing audio…')
       const mixing = (p: number) => onProgress(0.01 + p * 0.07, 'Mixing audio…')
-      if (longMix(project) && await canEncodeLong()) {
+      // phones mix in pieces sooner: a whole 5-minute mix is ~110 MB, plus a WAV copy of it
+      if ((longMix(project) || (isPhone && total > 150)) && await canEncodeLong()) {
         // an hour of sound as one WAV would need gigabytes on the way; mix and compress it piece by piece instead
         const ogg = await mixToOgg(project, sources, (p) => { check(); mixing(p) })
         check()
@@ -258,14 +270,26 @@ export async function exportProject(
     if (usesCutout(project)) await loadCutout()
     await prepare3d(project, sources)
     const readers = new Map<string, FrameReader>()
+    // sources whose hardware decoder failed or stalled: read them by seeking a <video> instead
+    const slowRead = new Set<string>()
     const renderAt = async (t: number, seed: number) => {
       const needs = mediaNeeds(project, items, sources, t, 0, true)
       const frames = new Map<string, FrameImage | null>()
       for (const n of needs) {
         if (n.source.kind === 'audio') continue
         let r = readers.get(n.key)
-        if (!r) { r = await openReader(n.source); readers.set(n.key, r) }
-        frames.set(n.key, await r.get(n.time))
+        if (!r) { r = await openReader(n.source, !job.safe && !slowRead.has(n.source.id)); readers.set(n.key, r) }
+        let f: FrameImage | null
+        try { f = await r.get(n.time) } catch (e) {
+          if (slowRead.has(n.source.id) || job.safe) throw e
+          logWarn('Video decoder failed, reading this video the slow way', `${n.source.name}: ${(e as Error)?.message ?? e}`)
+          slowRead.add(n.source.id)
+          r.close()
+          r = await openReader(n.source, false)
+          readers.set(n.key, r)
+          f = await r.get(n.time)
+        }
+        frames.set(n.key, f)
       }
       for (const [k, r] of readers) if (!needs.some((n) => n.key === k)) { r.close(); readers.delete(k) }
       renderer.render({ t, project, items, sources, frame: (k) => frames.get(k) ?? null, watermark: job.watermark, seed })
@@ -274,52 +298,88 @@ export async function exportProject(
     const frameCount = Math.max(1, Math.round(total * fps))
     const bitrate = gif ? Math.round(Math.min(16e6, w * h * fps * 0.2)) : videoBitrate(w, h, fps, mode, motionShare(project, sources))
     const keyEvery = Math.max(1, Math.round(fps * size.keySecs))
-    const target = await pickEncoder(job.format, w, h, fps, bitrate)
+    const candidates = await encoderCandidates(job.format, w, h, fps, bitrate, job.safe)
     // the built-in fallback encoder is far too slow (and runs out of memory) at 4K
-    if (!target && !gif && job.resolution === '2160') throw new Error('This device cannot make 4K videos. Please choose 2K or 1080p.')
-    const chunks = new ChunkStore()
-    let encoderName = 'ffmpeg'
-    logInfo('Export video encoder', `${target ? target.codec : 'none (ffmpeg JPEG frames, slow, uses much memory)'} · ${w}x${h} · ${fps} fps · ${(bitrate / 1e6).toFixed(1)} Mbit/s · ${frameCount} frames`, true)
+    if (!candidates.length && !gif && job.resolution === '2160') throw new Error('This device cannot make 4K videos. Please choose 2K or 1080p.')
+    logInfo('Export video encoder', `${candidates.length ? candidates.map((c) => `${c.codec}/${c.hw}`).join(', ') : 'none (ffmpeg JPEG frames, slow, uses much memory)'} · ${w}x${h} · ${fps} fps · ${(bitrate / 1e6).toFixed(1)} Mbit/s · ${frameCount} frames`, true)
 
-    if (target) {
-      encoderName = target.codec
+    /** Renders and encodes every frame with one encoder setting. Throws when that encoder fails. */
+    const encodeWith = async (target: VideoTarget): Promise<AvcTrack | ChunkStore> => {
+      const avc = target.kind === 'h264' ? new AvcTrack() : null
+      const ivf = avc ? null : new ChunkStore()
       let encErr: unknown = null
+      let lastOut = performance.now()
       const enc = new VideoEncoder({
-        output: (chunk) => {
+        output: (chunk, meta) => {
+          lastOut = performance.now()
           const d = new Uint8Array(chunk.byteLength)
           chunk.copyTo(d)
-          chunks.push(target.kind === 'h264' ? d : ivfFrame(d, chunks.count))
+          if (avc) avc.push(d, chunk.type === 'key', chunk.timestamp, meta?.decoderConfig?.description)
+          else ivf!.push(ivfFrame(d, ivf!.count))
         },
         error: (e) => { encErr = e },
       })
-      enc.configure({
-        codec: target.codec, width: w, height: h, bitrate, framerate: fps, latencyMode: 'quality',
-        ...(target.kind === 'h264' ? { avc: { format: 'annexb' } } : {}),
-      })
-      for (let n = 0; n < frameCount; n++) {
-        check()
+      try {
+        enc.configure({
+          codec: target.codec, width: w, height: h, bitrate, framerate: fps, latencyMode: 'quality', hardwareAcceleration: target.hw,
+          ...(avc ? { avc: { format: 'avc' } } : {}),
+        })
+        for (let n = 0; n < frameCount; n++) {
+          check()
+          if (encErr) throw encErr
+          await renderAt(Math.min(total - 1e-3, n / fps + 1e-4), n)
+          const vf = new VideoFrame(renderer.canvas, { timestamp: Math.round((n * 1e6) / fps), duration: Math.round(1e6 / fps) })
+          enc.encode(vf, { keyFrame: n % keyEvery === 0 })
+          vf.close()
+          // wait for the encoder to catch up; 'dequeue' fires as soon as it takes a frame
+          const waitFrom = performance.now()
+          while (enc.encodeQueueSize > 4) {
+            await Promise.race([new Promise((r) => enc.addEventListener('dequeue', r, { once: true })), sleep(20)])
+            if (encErr) throw encErr
+            // some phone encoders stop taking frames without an error
+            if (performance.now() - Math.max(waitFrom, lastOut) > 20000) throw new Error('The video encoder stopped responding')
+          }
+          if (n === 30 && avc && !avc.samples.length && performance.now() - lastOut > 10000) throw new Error('The video encoder gives no output')
+          if (n % 3 === 0) onProgress(0.08 + (n / frameCount) * 0.8, `Rendering ${Math.round((n / frameCount) * 100)}%`)
+        }
+        await Promise.race([enc.flush(), sleep(30000).then(() => { throw new Error('The video encoder did not finish') })])
         if (encErr) throw encErr
-        await renderAt(Math.min(total - 1e-3, n / fps + 1e-4), n)
-        const vf = new VideoFrame(renderer.canvas, { timestamp: Math.round((n * 1e6) / fps), duration: Math.round(1e6 / fps) })
-        enc.encode(vf, { keyFrame: n % keyEvery === 0 })
-        vf.close()
-        // wait for the encoder to catch up; 'dequeue' fires as soon as it takes a frame
-        while (enc.encodeQueueSize > 4) await Promise.race([new Promise((r) => enc.addEventListener('dequeue', r, { once: true })), sleep(20)])
-        if (n % 3 === 0) onProgress(0.08 + (n / frameCount) * 0.8, `Rendering ${Math.round((n / frameCount) * 100)}%`)
+        if (avc && (!avc.samples.length || !avc.description)) throw new Error('The video encoder made no usable video')
+        return avc ?? ivf!
+      } finally {
+        try { enc.close() } catch { /* already closed */ }
       }
-      await enc.flush()
-      enc.close()
-      if (encErr) throw encErr
-    } else {
-      // No WebCodecs encoder: hand JPEG frames to ffmpeg in batches
+    }
+
+    let target: VideoTarget | null = null
+    let encoded: AvcTrack | ChunkStore | null = null
+    let encoderName = 'ffmpeg'
+    for (const c of candidates) {
+      try {
+        encoded = await encodeWith(c)
+        target = c
+        break
+      } catch (e) {
+        if (e instanceof Cancelled || signal?.aborted) throw e
+        logWarn(`Video encoder ${c.codec} (${c.hw}) failed, trying the next one`, (e as Error)?.message ?? String(e))
+        for (const r of readers.values()) r.close()
+        readers.clear()
+        onProgress(0.08, 'Trying another video encoder…')
+      }
+    }
+    if (candidates.length && !target) throw new Error('The video encoder of this device failed. Try a lower resolution.')
+    if (!target) {
+      // No WebCodecs encoder: hand JPEG frames to ffmpeg
+      if (isPhone && frameCount > 30 * 90) throw new Error('This device has no video encoder for long videos. Please update Android System WebView / Chrome.')
       for (let n = 0; n < frameCount; n++) {
         check()
         await renderAt(Math.min(total - 1e-3, n / fps + 1e-4), n)
         await write(`f${String(n).padStart(6, '0')}.jpg`, new Uint8Array(await (await toJpeg(renderer.canvas)).arrayBuffer()))
         if (n % 3 === 0) onProgress(0.08 + (n / frameCount) * 0.6, `Rendering ${Math.round((n / frameCount) * 100)}%`)
       }
-    }
+    } else encoderName = `${target.codec} ${target.hw}`
     for (const r of readers.values()) r.close()
+    readers.clear()
 
     // ---- cover frame
     let cover: Blob | null = null
@@ -330,34 +390,56 @@ export async function exportProject(
       readers.clear()
     }
 
-    // ---- mux / transcode
-    logInfo('Export: video encoded', `${(chunks.bytes / 1048576).toFixed(1)} MB in ${chunks.count} pieces, audio ${audioBlob ? (audioBlob.size / 1048576).toFixed(1) + ' MB' : 'none'}`, true)
-    onProgress(0.9, 'Finishing…')
     const ext = job.format
+    const type = { mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', gif: 'image/gif' }[ext as 'mp4']
+
+    // ---- H.264: the MP4 is written here; ffmpeg only makes the (small) AAC sound
+    if (encoded instanceof AvcTrack && (ext === 'mp4' || ext === 'mov')) {
+      logInfo('Export: video encoded', `${(encoded.bytes / 1048576).toFixed(1)} MB, ${encoded.samples.length} frames, audio ${audioBlob ? (audioBlob.size / 1048576).toFixed(1) + ' MB' : 'none'}`, true)
+      onProgress(0.9, 'Finishing…')
+      let aac: AacTrack | null = null
+      if (hasAudio && audioBlob) {
+        cleanup.push('a.aac')
+        aac = await withBlobs(ff, [{ name: audioFile, data: audioBlob }], async (at) => {
+          const { code } = await runFFmpeg(['-i', at(audioFile), '-c:a', 'aac', '-b:a', `${size.audioK}k`, '-ac', '2', '-f', 'adts', 'a.aac'], (p) => onProgress(0.9 + Math.max(0, Math.min(1, p)) * 0.08, 'Finishing…'))
+          if (code !== 0) return null
+          const d = (await ff.readFile('a.aac')) as Uint8Array
+          await ff.deleteFile('a.aac').catch(() => {})
+          return parseAdts(d)
+        })
+      }
+      if (!hasAudio || aac) {
+        const blob = muxMp4({ video: encoded, width: w, height: h, fps, audio: aac, cover: cover ? new Uint8Array(await cover.arrayBuffer()) : null, mov: ext === 'mov' })
+        onProgress(1, 'Done')
+        return { blob, ext, cover, width: w, height: h, encoder: `${encoderName} · mp4 writer` }
+      }
+      logWarn('Could not make the AAC sound on its own, joining with ffmpeg instead')
+    }
+
+    // ---- mux / transcode with ffmpeg
+    const vBytes = encoded instanceof AvcTrack ? encoded.bytes : encoded?.bytes ?? 0
+    logInfo('Export: video encoded', `${(vBytes / 1048576).toFixed(1)} MB, audio ${audioBlob ? (audioBlob.size / 1048576).toFixed(1) + ' MB' : 'none'}`, true)
+    onProgress(0.9, 'Finishing…')
     const out = `out.${ext}`
     cleanup.push(out)
     // ffmpeg reads the video, sound and cover from Blobs in place (see withBlobs)
     const inputs: { name: string; data: Blob }[] = []
     if (hasAudio && audioBlob) inputs.push({ name: audioFile, data: audioBlob })
-    const vfile = target?.kind === 'h264' ? 'v.h264' : 'v.ivf'
-    if (target) {
-      const head = target.kind === 'h264' ? undefined : ivfHeader(target.kind === 'vp9' ? 'VP90' : 'VP80', w, h, fps, chunks.count)
-      inputs.push({ name: vfile, data: chunks.blob(head) })
-    }
-    // MP4/MOV with a cover: put it in on the same pass when the video is copied (no second full-size file)
-    const coverNow = !!cover && (ext === 'mp4' || ext === 'mov') && target?.kind === 'h264'
+    const vfile = target?.kind === 'h264' ? 'v.mp4' : 'v.ivf'
+    if (encoded instanceof AvcTrack) inputs.push({ name: vfile, data: muxMp4({ video: encoded, width: w, height: h, fps }) })
+    else if (encoded && target) inputs.push({ name: vfile, data: encoded.blob(ivfHeader(target.kind === 'vp9' ? 'VP90' : 'VP80', w, h, fps, encoded.count)) })
     if (cover && (ext === 'mp4' || ext === 'mov')) inputs.push({ name: 'cover.jpg', data: cover })
-    const type = { mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', gif: 'image/gif' }[ext as 'mp4']
+    const coverNow = !!cover && (ext === 'mp4' || ext === 'mov') && target?.kind === 'h264'
     const blob = await withBlobs(ff, inputs, async (at) => {
       const audioIn = hasAudio ? ['-i', at(audioFile)] : []
       const audioMap = hasAudio ? ['-map', '1:a:0'] : []
       let args: string[]
       if (target) {
-        const vin = target.kind === 'h264' ? ['-r', String(fps), '-i', at(vfile)] : ['-i', at(vfile)]
+        const vin = ['-i', at(vfile)]
         if (gif) {
           args = [...vin, '-vf', `fps=${fps},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0', out]
         } else if (ext === 'webm') {
-          args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', 'copy', ...vorbis, out]
+          args = [...vin, ...audioIn, '-map', '0:v:0', ...audioMap, '-c:v', target.kind === 'h264' ? 'libvpx' : 'copy', ...vorbis, out]
         } else if (target.kind === 'h264') {
           const coverIn = coverNow ? ['-i', at('cover.jpg')] : []
           const coverMap = coverNow ? ['-map', `${hasAudio ? 2 : 1}:v:0`, '-disposition:v:1', 'attached_pic'] : []

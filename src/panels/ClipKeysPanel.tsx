@@ -58,7 +58,7 @@ export function ZoomMovePanel({ ed, clip, src, start, onSeek, onClose }: {
   )
 }
 
-const LO = -2, HI = 2 // log2 speed range of the curve: 0.25x … 4x
+const LO = Math.log2(0.05), HI = 2 // log2 speed range of the curve: 0.05x … 4x
 
 /**
  * The user's own speed curve: 8 points over the clip, dragged up (faster) or down (slower). The clip's length
@@ -77,7 +77,7 @@ export function SpeedCurve({ ed, clip }: { ed: Editor; clip: Clip }) {
     const v = HI - ((((py - r.top) / r.height) * H - 10) / (H - 20)) * (HI - LO)
     const s = Math.pow(2, Math.max(LO, Math.min(HI, v)))
     // gentle snap to the usual speeds
-    for (const k of [0.25, 0.5, 1, 2, 4]) if (Math.abs(Math.log2(s / k)) < 0.08) return k
+    for (const k of [0.05, 0.1, 0.25, 0.5, 1, 2, 4]) if (Math.abs(Math.log2(s / k)) < 0.08) return k
     return Math.round(s * 100) / 100
   }
   const setPoint = (i: number, s: number) => ed.updateClip(clip.id, { ramp: 'custom', rampPts: vals.map((v, j) => (j === i ? s : v)) })
@@ -88,7 +88,7 @@ export function SpeedCurve({ ed, clip }: { ed: Editor; clip: Clip }) {
   return (
     <div className="speed-curve">
       <svg ref={box} viewBox={`0 0 ${W} ${H}`} onPointerMove={move} onPointerUp={up} onPointerCancel={up} data-testid="speed-curve">
-        {[4, 2, 1, 0.5, 0.25].map((s) => (
+        {[4, 1, 0.25, 0.05].map((s) => (
           <g key={s}>
             <line x1={0} x2={W} y1={y(s)} y2={y(s)} className={s === 1 ? 'mid' : ''} />
             <text x={2} y={y(s) - 2}>{s}x</text>

@@ -17,7 +17,7 @@ import { ProAd } from './ProAd'
 import { afterExportAd } from '../lib/ads'
 import { Icon } from './Icon'
 import { canExportHeight, isAllowed, usePremium, type Feature } from '../lib/premium'
-import { checkExport, crashedExport, isPhone, markExportRunning, saferJob, type ExportCheck } from '../lib/exportCheck'
+import { checkExport, crashedExport, isPhone, lastResortJob, markExportRunning, saferJob, type ExportCheck } from '../lib/exportCheck'
 import { error as logError, info as logInfo, openBlackbox, warn as logWarn, watchMemory } from '../lib/blackbox'
 
 interface Props {
@@ -52,7 +52,7 @@ const PRESETS: { id: string; label: string; aspect: AspectRatio; resolution: Res
   { id: 'square', label: 'Square (1:1 1080x1080)', aspect: '1:1', resolution: '1080', fps: 30 },
 ]
 
-const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3' ? '' : ` · ${RES.find((r) => r.value === j.resolution)?.label}${j.aspect ? ` ${j.aspect}` : ''} · ${j.format === 'gif' ? Math.min(15, j.fps) : j.fps}fps`}${j.format === 'gif' || !j.size ? '' : ` · ${t(SIZES.find((x) => x.value === j.size)!.label)}`}`
+const describe = (j: ExportJob) => `${j.format.toUpperCase()}${j.format === 'mp3' ? '' : ` · ${RES.find((r) => r.value === j.resolution)?.label}${j.aspect ? ` ${j.aspect}` : ''} · ${j.format === 'gif' ? Math.min(15, j.fps) : j.fps}fps`}${j.format === 'gif' || !j.size ? '' : ` · ${t(SIZES.find((x) => x.value === j.size)!.label)}`}${j.safe ? ` · ${t('careful mode')}` : ''}`
 
 export function ExportSheet({ project, sources, name, snapshot, onClose }: Props) {
   const total = layoutClips(project.clips).total
@@ -144,13 +144,25 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
     } catch (e) {
       if (e instanceof Cancelled) throw e
       logError(`Export failed (${describe(j)})`, e)
-      const next = saferJob(j)
+      const next = saferJob(j) ?? (j.safe || j.format === 'gif' || j.format === 'mp3' ? null : lastResortJob(j))
       if (!next || signal.aborted) throw e
       logWarn('Trying the export again with safer settings', describe(next))
       onP(0, 'Trying again with safer settings…')
       await resetFFmpeg() // a fresh ffmpeg gives back all the memory the failed run took
       markExportRunning(next)
-      return { out: await exportProject(project, sources, next, tracked, signal), job: next, safer: true }
+      try {
+        return { out: await exportProject(project, sources, next, tracked, signal), job: next, safer: true }
+      } catch (e2) {
+        if (e2 instanceof Cancelled || signal.aborted || next.safe) throw e2
+        logError(`Export failed again (${describe(next)})`, e2)
+        // last try: the most careful way (no hardware video decoder, software encoder first, 720p or less)
+        const last = lastResortJob(next)
+        logWarn('Trying the export a last time, the most careful way', describe(last))
+        onP(0, 'Trying a last time, the most careful way…')
+        await resetFFmpeg()
+        markExportRunning(last)
+        return { out: await exportProject(project, sources, last, tracked, signal), job: last, safer: true }
+      }
     }
   }
 
