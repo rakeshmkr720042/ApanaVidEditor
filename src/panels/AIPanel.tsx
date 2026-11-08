@@ -10,6 +10,7 @@ import { encodeWav } from '../engine/music'
 import { decodeAudio, loadSource, sharedAudioContext } from '../lib/media'
 import { deleteVoiceSample, getVoiceSample, saveMedia, saveVoiceSample } from '../lib/db'
 import { getLocalAI, localAI, setLocalAI } from '../lib/localai'
+import { offerAISetup } from '../lib/aisetup'
 import { CLONE_LANGS, referenceWav, voiceCloneSpace } from '../engine/voiceclone'
 import {
   ASR_MODELS, LANGUAGES, SPOKEN, VOICES, buildVoiceOver, getEmail, hasVoice, langName, modelChosen, sampleVoice, saveModel, savedModel, setEmail, transcribe, translateCues, LISTEN_SLOW,
@@ -74,6 +75,8 @@ export function AIPanel({ ed, name, onClose }: P) {
     setStates(st)
   })
   useEffect(() => { refreshStates() }, [])
+  // first AI tool on the Windows app: offer to install a free Gemma 4 once
+  useEffect(() => { void offerAISetup() }, [])
   const [route, setRoute] = useState<'local' | 'offline' | 'online'>('online')
 
   // ---- the user's own voice sample, for cloning

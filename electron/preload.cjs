@@ -21,6 +21,14 @@ contextBridge.exposeInMainWorld('desktop', {
   googleLogin: () => ipcRenderer.invoke('desktop:google-login'),
   googleRefresh: (opts) => ipcRenderer.invoke('desktop:google-refresh', opts),
   googleFetch: (req) => ipcRenderer.invoke('desktop:google-fetch', req),
+  aiCheck: () => ipcRenderer.invoke('desktop:ai-check'),
+  aiSetup: (model) => ipcRenderer.invoke('desktop:ai-setup', model),
+  aiCancel: () => ipcRenderer.send('desktop:ai-cancel'),
+  onAIProgress(cb) {
+    const listener = (_e, p) => cb(p)
+    ipcRenderer.on('desktop:ai-progress', listener)
+    return () => ipcRenderer.removeListener('desktop:ai-progress', listener)
+  },
   keepAwake: (on) => ipcRenderer.send('desktop:keep-awake', !!on),
   onHelp(cb) {
     const listener = (_e, topic) => cb(topic ?? null)

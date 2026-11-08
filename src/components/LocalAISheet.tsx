@@ -5,6 +5,7 @@ import { isDesktop } from '../lib/desktop'
 import { getVoiceClone, setVoiceClone, testSpace } from '../engine/voiceclone'
 import { Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
+import { canSetUp, openAISetup } from '../lib/aisetup'
 
 /** Settings for Local AI: the address of the user's Ollama server and which model to use. */
 export function LocalAISheet({ onClose }: { onClose: () => void }) {
@@ -50,6 +51,12 @@ export function LocalAISheet({ onClose }: { onClose: () => void }) {
         <SheetClose onClose={onClose} disabled={!!busy} />
         <h2>{t('Local AI')}</h2>
         <p className="muted small">{t('Use an AI model running on your own computer with Ollama (for example Gemma). It can shorten text into key points, write quiz questions, and translate subtitles. Nothing is sent to the internet.')}</p>
+        {canSetUp() && (
+          <div className="ai-auto">
+            <button className="btn primary" disabled={busy} onClick={() => { onClose(); openAISetup() }}>{t('Set up automatically (free Gemma 4)')}</button>
+            <p className="muted small">{t('Checks this computer, picks a Gemma 4 model that fits, and installs Ollama and the model after you allow it.')}</p>
+          </div>
+        )}
         <Toggle label="Use Local AI" value={c.on} onChange={(on) => save({ on })} />
         <label className="field-label" htmlFor="ai-url">{t('Local AI server URL')}</label>
         <input id="ai-url" className="text-input" inputMode="url" value={c.url} placeholder={DEFAULT_URL} spellCheck={false}

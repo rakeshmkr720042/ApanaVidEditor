@@ -34,6 +34,7 @@ import type { WaveStyle } from '../types'
 import { encodeWav } from '../engine/music'
 import { Chips, Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
+import { offerAISetup } from '../lib/aisetup'
 import { articleKeyPoints, chapterPoints, findLocalAI, keyPoints, localAI, makeQuiz } from '../lib/localai'
 
 // remembered while the app is open, so the next deck starts with the same choices
@@ -221,6 +222,8 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const set = (patch: Partial<SceneOptions>) => setO((v) => (memo = { ...v, ...patch }))
 
   useEffect(() => { if (start === 'files') fileInput.current?.click() }, [start])
+  // the text, article, quiz and talk makers can use Local AI: offer the free setup once (Windows app)
+  useEffect(() => { if (start !== 'files' && start !== 'data') void offerAISetup() }, [start])
 
   // ---- Local AI (the user's own Ollama model): shorten text, write quiz questions
   const ai = localAI()

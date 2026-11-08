@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { MediaSource, Project, TextLayer } from '../types'
 import type { Editor } from '../model/useEditor'
 import { DEFAULT_CUT, findCuts, findMoments, pickWithAI, soundMap, type CutSettings, type FoundCut, type Moment, type SoundMap } from '../engine/smartcut'
 import { findSpots } from '../engine/spots'
 import { allPieces, applyCuts, cutShort, punchIn } from '../model/smartcut'
 import { localAI } from '../lib/localai'
+import { offerAISetup } from '../lib/aisetup'
 import { fmtTime } from '../lib/format'
 import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
@@ -53,6 +54,7 @@ export function SmartCutPanel({ ed, onToast, onSeek, onShort, onClose }: {
   const main = useMemo(() => mainSources(ed.project, ed.sources), [ed.project, ed.sources])
   const hasSubs = ed.project.layers.some((l): l is TextLayer => l.type === 'text' && l.subtitle)
   const ai = !!localAI()
+  useEffect(() => { void offerAISetup() }, [])
 
   const listen = async () => {
     if (maps) return maps

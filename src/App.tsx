@@ -10,6 +10,7 @@ import { requestPersistence } from './lib/db'
 import { hasPendingFiles, listenForOpenedFiles } from './lib/desktop'
 import { createProject } from './lib/newProject'
 import { HelpHost } from './help/HelpHost'
+import { AISetupHost } from './components/AISetupHost'
 
 /** Set when the Windows app opened the website to sign in with Google (read once, before anything else). */
 const desktopSignIn = desktopSignInRequest()
@@ -66,6 +67,7 @@ function Workspace() {
         ? <Editor key={projectId + langKey} projectId={projectId} onBack={back} />
         : <Home key={langKey} onOpen={open} onLang={() => setLangKey((k) => k + 1)} />}
       <HelpHost />
+      <AISetupHost />
     </>
   )
 }

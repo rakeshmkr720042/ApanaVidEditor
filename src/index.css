@@ -542,6 +542,12 @@ input, textarea { font: inherit; color: inherit; }
 /* Local AI */
 .local-ai .help { white-space: pre-line; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
 .local-ai code { user-select: all; font-size: 12px; }
+.ai-setup .help { white-space: pre-line; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+.ai-setup code { user-select: all; font-size: 12px; }
+.ai-pc { display: grid; gap: 3px; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+.ai-consent { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.ai-consent ol { margin: 6px 0; padding-left: 20px; }
+.ai-auto { display: grid; gap: 4px; margin-bottom: 8px; }
 .ai-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .progress.waiting div { width: 30%; animation: progress-wait 1.2s ease-in-out infinite alternate; }
 @keyframes progress-wait { from { margin-left: 0; } to { margin-left: 70%; } }

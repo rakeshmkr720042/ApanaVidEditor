@@ -15,12 +15,24 @@ interface DesktopBridge {
   googleLogin?(): Promise<{ idToken: string }>
   googleRefresh?(o: { clientId: string; clientSecret: string; refresh: string }): Promise<{ access: string; expiresIn: number }>
   /** A request to www.googleapis.com from the main process. */
+  /** Local AI setup (Windows): what this computer has, and installing Ollama + a Gemma 4 model. */
+  aiCheck?(): Promise<ComputerInfo>
+  aiSetup?(model: string): Promise<{ ok: boolean; model: string }>
+  aiCancel?(): void
+  onAIProgress?(cb: (p: AISetupProgress) => void): () => void
   /** Stops Windows from sleeping while an export runs. */
   keepAwake?(on: boolean): void
   /** Help → User guide / Keyboard shortcuts in the menu bar (topic id, or null for the contents). */
   onHelp?(cb: (topic: string | null) => void): () => void
   googleFetch?(r: { url: string; method: string; headers: Record<string, string>; body?: Uint8Array | string }): Promise<{ status: number; location: string | null; range: string | null; text: string }>
 }
+
+export interface ComputerInfo {
+  windows: boolean; ram: number; cores: number; cpu: string
+  gpus: { name: string; vram: number }[]; vram: number; freeDisk: number | null
+  ollamaInstalled: boolean; ollamaRunning: boolean; models: string[]
+}
+export interface AISetupProgress { step: string; text: string; status?: string; p?: number; done?: number; total?: number }
 
 export interface ScreenSource { id: string; name: string; thumb: string; screen: boolean }
 
