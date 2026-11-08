@@ -7,8 +7,9 @@ android {
         applicationId "com.clipcut.editor"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        // Play Store builds (android-release.yml) pass a new number every time; local builds stay 1.
+        versionCode((System.getenv('VERSION_CODE') ?: '1').toInteger())
+        versionName(System.getenv('VERSION_NAME') ?: "1.0.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // AdMob app id (not secret). Google's test id until ADMOB_APP_ID is set for the build.
         manifestPlaceholders = [admobAppId: (System.getenv('ADMOB_APP_ID') ?: 'ca-app-pub-3940256099942544~3347511713')]
@@ -18,8 +19,21 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Upload key for Google Play. Only the release workflow sets these; the key never lives in the repo.
+    def uploadKey = System.getenv('ANDROID_KEYSTORE_FILE')
+    signingConfigs {
+        if (uploadKey) {
+            release {
+                storeFile file(uploadKey)
+                storePassword System.getenv('ANDROID_KEY_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS') ?: 'upload'
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (uploadKey) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
