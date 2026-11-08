@@ -3,11 +3,14 @@ import type { Editor } from '../model/useEditor'
 import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { defaultShapeMask } from '../engine/shapeMask'
+import { RevealControls } from './RevealPanel'
+import { REVEAL_SHAPE_OPTIONS, defaultReveal } from '../model/reveal'
 
 type Shape = ShapeMask['shape'] | 'none'
 const SHAPES: { value: Shape; label: string }[] = [
   { value: 'none', label: 'None' }, { value: 'rect', label: 'Rectangle' }, { value: 'ellipse', label: 'Circle' },
-  { value: 'linear', label: 'Line' }, { value: 'mirror', label: 'Band' }, { value: 'heart', label: 'Heart' }, { value: 'star', label: 'Star' },
+  { value: 'linear', label: 'Line' }, { value: 'mirror', label: 'Band' },
+  ...REVEAL_SHAPE_OPTIONS.filter((o) => o.value !== 'ellipse' && o.value !== 'rect'),
 ]
 const pct = (v: number) => `${Math.round(v * 100)}%`
 
@@ -37,6 +40,12 @@ export function MaskPanel({ ed, target, onClose }: { ed: Editor; target: { kind:
           {sl('Up / down', 'y', 0, 1, (v) => `${Math.round((v - 0.5) * 200)}`)}
           {sl('Turn', 'rotation', -180, 180, (v) => `${Math.round(v)}°`, true)}
           {m.shape === 'rect' && sl('Round corners', 'round', 0, 1)}
+          {m.shape !== 'linear' && m.shape !== 'mirror' && (
+            <>
+              <Toggle label="Opening animation (shape reveal)" value={!!m.reveal} onChange={(v) => set({ reveal: v ? defaultReveal(m.shape) : null })} />
+              {m.reveal && <RevealControls begin={ed.begin} end={ed.end} value={m.reveal} onChange={(r) => set({ reveal: r })} />}
+            </>
+          )}
           <button className="btn small" onClick={() => put(defaultShapeMask(m.shape))}>{t('Reset')}</button>
         </>
       )}

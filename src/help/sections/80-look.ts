@@ -199,10 +199,11 @@ const section: HelpSection = {
     {
       id: 'transitions',
       find: { tool: 'Transition', needs: 'clip' },
-      keywords: ['transition', 'fade', 'whip', 'wipe', 'slide', 'zoom transition', 'between clips'],
+      keywords: ['transition', 'fade', 'whip', 'wipe', 'slide', 'zoom transition', 'between clips', 'heart opening', 'reveal', 'curtain', 'doors'],
+      related: ['shape-reveal'],
       en: {
         title: 'Transitions between clips',
-        what: 'A smooth change from one clip to the next: Trending (whip pan, film burn, light leak, page turn, paper rip, cube, ink spread), Basic fades, Wipes, Slides, Shapes, Zooms and Effects.',
+        what: 'A smooth change from one clip to the next: Trending (whip pan, film burn, light leak, page turn, paper rip, cube, ink spread), Reveal (a heart, star, flower, keyhole or other shape opens with the next clip inside; curtain, doors, film strip, camera shutter, many hearts), Basic fades, Wipes, Slides, Shapes, Zooms and Effects.',
         where: 'Tap the small square between two clips on the timeline, or select a clip → Transition',
         steps: [
           'Tap the small button between two clips (or select the first clip and tap Transition).',
@@ -212,7 +213,7 @@ const section: HelpSection = {
       },
       hi: {
         title: 'क्लिप के बीच ट्रांज़िशन',
-        what: 'एक क्लिप से अगली में आराम से बदलाव: Trending (व्हिप पैन, फ़िल्म बर्न, लाइट लीक, पन्ना पलटना, कागज़ फटना, क्यूब, स्याही फैलना), Basic फ़ेड, Wipe, Slide, Shape, Zoom और Effect।',
+        what: 'एक क्लिप से अगली में आराम से बदलाव: Trending (व्हिप पैन, फ़िल्म बर्न, लाइट लीक, पन्ना पलटना, कागज़ फटना, क्यूब, स्याही फैलना), Reveal (दिल, तारा, फूल, चाबी का छेद या कोई और आकार खुलता है और अंदर अगली क्लिप; पर्दा, दरवाज़े, फ़िल्म रील, कैमरा शटर, बहुत सारे दिल), Basic फ़ेड, Wipe, Slide, Shape, Zoom और Effect।',
         where: 'टाइमलाइन पर दो क्लिप के बीच छोटे बटन पर दबाएँ, या क्लिप चुनें → ट्रांज़िशन',
         steps: [
           'दो क्लिप के बीच छोटा बटन दबाएँ (या पहली क्लिप चुनकर "ट्रांज़िशन" दबाएँ)।',

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AdjustmentLayer, AudioLayer, BeatFx, BlurLayer, Marker, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AdjustmentLayer, AudioLayer, BeatFx, BlurLayer, Marker, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, ShapeMask, ShapeReveal, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -753,6 +753,30 @@ export function useEditor(initial: Project) {
     return l
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Shape reveal: `src` fills the whole frame from the playhead, seen through a shape that opens (a heart opening
+   * with that scene inside). The shape is kept even (not stretched) on the picture.
+   */
+  const addReveal = useCallback((t: number, src: MediaSource, shape: ShapeMask['shape'], reveal: ShapeReveal, size = 0.6) => {
+    const p = ref.current
+    const ar = src.width && src.height ? src.width / src.height : 16 / 9
+    const { w: W, h: H } = outputSize(p, sourcesRef.current, 1000)
+    const base = ar >= 1 ? Math.max(W / ar, H) : Math.max(W, H * ar) // covers the frame
+    const scale = (base / (Math.min(W, H) * 0.5)) * 1.001
+    // the shape is `size` of the frame's short side, square in pixels on the picture
+    const fw = ar >= 1 ? base * ar : base, fh = ar >= 1 ? base : base / ar
+    const side = size * Math.min(W, H)
+    const dur = src.kind === 'image' ? 4 : src.duration
+    const l: MediaLayer = {
+      id: uid(), type: 'media', sourceId: src.id, in: 0, ...span(t, dur), box: { ...centerBox(), scale },
+      volume: src.kind === 'video' ? 1 : 0, chroma: defaultChroma(), mask: 'none', border: 0,
+      adjust: defaultAdjust(), filter: null, filterAmount: 1,
+      shapeMask: { shape, x: 0.5, y: 0.5, w: side / fw, h: side / fh, rotation: 0, feather: 0.04, round: 0.2, invert: false, reveal: { ...reveal } },
+    }
+    addLayer(l)
+    return l
+  }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const addAudio = useCallback((t: number, src: MediaSource, kind: AudioLayer['kind'], label: string, extra?: Partial<AudioLayer>) => {
     const tot = total()
     const start = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
@@ -996,7 +1020,7 @@ export function useEditor(initial: Project) {
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
     addSource, splitClipAt, joinClips, breakApart, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter, addMarker, updateMarker, removeMarker,
-    addText, addSticker, addBlur, addAdjustment, addOverlay, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
+    addText, addSticker, addBlur, addAdjustment, addOverlay, addReveal, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
     track, setTrack, addTrack, pasteTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
     remove, duplicate, split, moveClip, moveClipAt, closeGap, swapClips, swapLayers, replaceProject,
