@@ -56,6 +56,119 @@ const flip = (vertical: boolean) => {
     vec4 col = back ? to(q) : from(q); return vec4(col.rgb*(0.6 + 0.4*c), 1.0);`
 }
 
+/*
+ * Shape reveal: a shape opens in the middle with the next clip inside it and grows until that clip fills the
+ * frame, with a soft glowing edge. Each `sdf` reads q (the point, the shape about 1 across, y up) and leaves
+ * the signed distance in d (below 0 = inside). `inner` = how far its edge is from the centre at least, so it
+ * knows how big to grow. GLSL bodies only use block comments: a line comment would swallow the rest.
+ */
+const SDF: Record<string, [string, number]> = {
+  heart: [`vec2 h = vec2(abs(q.x), q.y + 0.55); float d;
+    if (h.y + h.x > 1.0) d = length(h - vec2(0.25, 0.75)) - 0.35355;
+    else { vec2 a = h - vec2(0.0, 1.0); vec2 b = h - 0.5*max(h.x + h.y, 0.0); d = sqrt(min(dot(a, a), dot(b, b)))*sign(h.x - h.y); }`, 0.42],
+  star: [`vec2 k1 = vec2(0.809016994, -0.587785252); vec2 k2 = vec2(-k1.x, k1.y); vec2 h = vec2(abs(q.x), q.y);
+    h -= 2.0*max(dot(k1, h), 0.0)*k1; h -= 2.0*max(dot(k2, h), 0.0)*k2; h.x = abs(h.x); h.y -= 0.6;
+    vec2 ba = 0.45*vec2(-k1.y, k1.x) - vec2(0.0, 1.0); float t = clamp(dot(h, ba)/dot(ba, ba), 0.0, 0.6);
+    float d = length(h - ba*t)*sign(h.y*ba.x - h.x*ba.y);`, 0.2],
+  circle: ['float d = length(q) - 0.5;', 0.5],
+  diamond: ['vec2 h = abs(q); float d = (h.x + h.y - 0.55)*0.7071;', 0.39],
+  hexagon: [`vec3 k = vec3(-0.866025404, 0.5, 0.577350269); vec2 h = abs(q); h -= 2.0*min(dot(k.xy, h), 0.0)*k.xy;
+    h -= vec2(clamp(h.x, -k.z*0.45, k.z*0.45), 0.45); float d = length(h)*sign(h.y);`, 0.45],
+  triangle: [`float k = 1.7320508; vec2 h = vec2(abs(q.x) - 0.55, q.y + 0.55/k + 0.1);
+    if (h.x + k*h.y > 0.0) h = vec2(h.x - k*h.y, -k*h.x - h.y)/2.0; h.x -= clamp(h.x, -1.1, 0.0); float d = -length(h)*sign(h.y);`, 0.22],
+  flower: ['float r = length(q); float a = atan(q.y, q.x); float d = (r - 0.25 - 0.3*pow(abs(cos(a*2.5 + 1.5708)), 0.7))*0.6;', 0.15],
+  keyhole: [`float c = length(q - vec2(0.0, 0.18)) - 0.26;
+    float w = mix(0.24, 0.1, clamp((q.y + 0.6)/0.7, 0.0, 1.0)); float t = max(abs(q.x) - w, max(q.y - 0.1, -0.6 - q.y));
+    float d = min(c, t*0.9);`, 0.1],
+  cross: ['vec2 h = abs(q); float d = min(max(h.x - 0.18, h.y - 0.55), max(h.y - 0.18, h.x - 0.55));', 0.18],
+  sparkle: ['vec2 h = abs(q); float d = (pow(h.x, 0.5) + pow(h.y, 0.5) - 0.75)*0.35;', 0.07],
+  octagon: [`vec3 k = vec3(-0.9238795325, 0.3826834323, 0.4142135623); vec2 h = abs(q); h -= 2.0*min(dot(vec2(k.x, k.y), h), 0.0)*vec2(k.x, k.y);
+    h -= 2.0*min(dot(vec2(-k.x, k.y), h), 0.0)*vec2(-k.x, k.y); h -= vec2(clamp(h.x, -k.z*0.48, k.z*0.48), 0.48); float d = length(h)*sign(h.y);`, 0.48],
+}
+
+/** The shape opens with the next clip inside (or, `close`, the clip shrinks into it). `glow` = edge colour. */
+const shapeOpen = (shape: string, glow: string, close = false, spin = 0) => {
+  const [sdf, inner] = SDF[shape]
+  // the shape's own code may use any short name, so the names out here start with z
+  return `float zE = p*p*(3.0-2.0*p); float zK = ${close ? '1.0 - zE' : 'zE'};
+    float zR = length(vec2(ratio, 1.0))*0.5/${inner.toFixed(3)}*1.08; float zS = max(pow(zK, 1.5)*zR*1.1, 0.0001);
+    vec2 q = (uv - 0.5)*vec2(ratio, 1.0)/zS; float zA = ${spin.toFixed(3)}*(1.0 - zK); q = mat2(cos(zA), -sin(zA), sin(zA), cos(zA))*q;
+    ${sdf}
+    float zD = d*zS; float zM = smoothstep(0.004, -0.004, zD);
+    vec4 zC = ${close ? 'mix(to(uv), from(uv), zM)' : 'mix(from(uv), to(uv), zM)'};
+    float zG = (exp(-abs(zD)*90.0) + 0.5*exp(-abs(zD)*25.0))*sin(p*3.14159)*step(0.002, zK);
+    vec3 zCol = zC.rgb + vec3(${glow})*zG*0.9; zCol = mix(zCol, vec3(1.0), exp(-abs(zD)*400.0)*step(0.002, zK)*sin(p*3.14159)*0.8);
+    return vec4(min(zCol, 1.0), 1.0);`
+}
+
+const REVEAL: [string, string, string, string][] = [
+  ['heartopen', 'Heart opening', 'Reveal', shapeOpen('heart', '1.0, 0.25, 0.45')],
+  ['heartspin', 'Heart spin open', 'Reveal', shapeOpen('heart', '1.0, 0.35, 0.55', false, 3.14159)],
+  ['heartclose', 'Heart closing', 'Reveal', shapeOpen('heart', '1.0, 0.25, 0.45', true)],
+  ['staropen', 'Star opening', 'Reveal', shapeOpen('star', '1.0, 0.8, 0.3')],
+  ['starspin', 'Star spin open', 'Reveal', shapeOpen('star', '1.0, 0.85, 0.35', false, 2.5)],
+  ['circleglow', 'Circle opening', 'Reveal', shapeOpen('circle', '0.6, 0.85, 1.0')],
+  ['diamondopen', 'Diamond opening', 'Reveal', shapeOpen('diamond', '0.7, 0.9, 1.0')],
+  ['floweropen', 'Flower opening', 'Reveal', shapeOpen('flower', '1.0, 0.5, 0.8', false, 1.2)],
+  ['keyhole', 'Keyhole', 'Reveal', shapeOpen('keyhole', '1.0, 0.8, 0.4')],
+  ['hexopen', 'Hexagon opening', 'Reveal', shapeOpen('hexagon', '0.5, 1.0, 0.9')],
+  ['triopen', 'Triangle opening', 'Reveal', shapeOpen('triangle', '1.0, 0.6, 0.2')],
+  ['crossopen', 'Plus opening', 'Reveal', shapeOpen('cross', '0.8, 0.8, 1.0', false, 1.5708)],
+  ['sparkleopen', 'Sparkle opening', 'Reveal', shapeOpen('sparkle', '1.0, 0.95, 0.7', false, 0.785)],
+  ['octopen', 'Octagon opening', 'Reveal', shapeOpen('octagon', '0.8, 0.9, 1.0')],
+  ['starclose', 'Star closing', 'Reveal', shapeOpen('star', '1.0, 0.8, 0.3', true)],
+  ['hearts', 'Many hearts', 'Reveal', `vec2 g = uv*vec2(ratio, 1.0)*4.0; vec2 cell = floor(g); vec2 f = fract(g) - 0.5;
+    float delay = rnd(cell)*0.45; float k = clamp((p - delay)/0.5, 0.0, 1.0); k = k*k*(3.0-2.0*k); float s = max(k*0.9, 0.0001);
+    vec2 q = f/s; vec2 h = vec2(abs(q.x), q.y + 0.55); float d;
+    if (h.y + h.x > 1.0) d = length(h - vec2(0.25, 0.75)) - 0.35355;
+    else { vec2 a = h - vec2(0.0, 1.0); vec2 b = h - 0.5*max(h.x + h.y, 0.0); d = sqrt(min(dot(a, a), dot(b, b)))*sign(h.x - h.y); }
+    float full = smoothstep(0.7, 1.0, p); float m = max(smoothstep(0.01, -0.01, d*s), full);
+    vec4 c = mix(from(uv), to(uv), m); float ring = exp(-abs(d*s)*60.0)*sin(p*3.14159)*step(0.001, k)*(1.0 - full);
+    return vec4(min(c.rgb + vec3(1.0, 0.3, 0.5)*ring, 1.0), 1.0);`],
+  ['iris', 'Camera shutter', 'Reveal', `vec2 q = (uv - 0.5)*vec2(ratio, 1.0); float R = length(vec2(ratio, 1.0))*0.5*1.2;
+    float h = p < 0.5 ? 1.0 - p*2.0 : p*2.0 - 1.0; h = h*h*(3.0-2.0*h); float r = h*R;
+    float a = atan(q.y, q.x) + (1.0 - h)*1.2; float seg = 1.0471976; float b = mod(a, seg) - seg*0.5;
+    float d = length(q)*cos(b) - r*cos(seg*0.5);
+    if (d < 0.0) return p < 0.5 ? from(uv) : to(uv);
+    float line = smoothstep(0.006, 0.0, abs(b)*length(q)*0.2 + abs(mod(a + 0.5, seg) - seg*0.5)*0.0);
+    float sh = 0.5 + 0.5*sin((a - b)*6.0 + 1.0);
+    vec3 metal = vec3(0.1, 0.1, 0.12) + vec3(0.16)*sh + vec3(0.2)*smoothstep(0.02, 0.0, d);
+    return vec4(metal + line*0.15, 1.0);`],
+  ['curtain', 'Curtain open', 'Reveal', `float e = p*p*(3.0-2.0*p); float hw = 0.5*(1.0 - e);
+    vec2 q = uv; bool left = q.x < 0.5; float x = left ? q.x : 1.0 - q.x;
+    if (p < 0.02 || x > hw) { vec4 n = p < 0.02 ? from(uv) : to(uv); float sh = smoothstep(0.0, 0.08, x - hw); return vec4(n.rgb*mix(0.55, 1.0, sh), 1.0); }
+    float u = x/max(hw, 0.001); float bunch = mix(1.0, 2.6, e);
+    float folds = sin(u*bunch*30.0 + (left ? 0.0 : 1.3)); float lit = 0.55 + 0.35*folds + 0.1*(1.0 - q.y);
+    float sag = smoothstep(0.85, 1.0, u)*e*0.15; if (q.y < sag*(1.0 - q.y)) return to(uv);
+    vec3 cloth = vec3(0.62, 0.04, 0.08)*lit; float fringe = step(0.96, q.y)*0.4;
+    vec3 gold = vec3(0.9, 0.7, 0.25);
+    vec3 col = mix(cloth, gold*(0.7 + 0.3*folds), fringe);
+    float startFade = smoothstep(0.0, 0.12, p); vec4 f = from(uv);
+    return vec4(mix(f.rgb, col, startFade), 1.0);`],
+  ['doors3d', 'Doors open', 'Reveal', `float e = p*p*(3.0-2.0*p); float a = e*1.45; float c = cos(a);
+    bool left = uv.x < 0.5; float x = left ? uv.x : 1.0 - uv.x;
+    float w = 0.5*c; if (x > w) { vec4 n = to((uv - 0.5)*(0.9 + 0.1*e) + 0.5); return vec4(n.rgb*(0.75 + 0.25*e), 1.0); }
+    float u = x/max(w, 0.0001)*0.5; float persp = 1.0 + sin(a)*u*1.2; float y = (uv.y - 0.5)*persp + 0.5;
+    if (y < 0.0 || y > 1.0) { vec4 n = to(uv); return vec4(n.rgb*0.75, 1.0); }
+    vec2 src = vec2(left ? u : 1.0 - u, y); vec4 f = from(src);
+    return vec4(f.rgb*(1.0 - 0.6*sin(a)*u*2.0), 1.0);`],
+  ['filmstrip', 'Film strip', 'Reveal', `float e = p*p*(3.0-2.0*p); float off = e*1.25;
+    float y = uv.y + off; float frameH = 1.0; float fy = fract(y/frameH);
+    float sideW = 0.08; bool side = uv.x < sideW || uv.x > 1.0 - sideW;
+    float shrink = sin(p*3.14159)*0.18; vec2 c = (uv - 0.5)/(1.0 - shrink) + 0.5;
+    if (shrink > 0.002 && (c.x < 0.0 || c.x > 1.0)) {
+      float hole = step(0.25, fract(y*8.0))*step(fract(y*8.0), 0.75)*step(0.3, fract(uv.x < 0.5 ? uv.x/sideW : (1.0 - uv.x)/sideW))*step(fract(uv.x < 0.5 ? uv.x/sideW : (1.0 - uv.x)/sideW), 0.7);
+      return vec4(mix(vec3(0.06), vec3(0.85), hole), 1.0); }
+    vec2 cc = vec2(c.x, fract(c.y + off)); bool next = c.y + off >= 1.0;
+    float gap = smoothstep(0.0, 0.015, cc.y)*smoothstep(1.0, 0.985, cc.y);
+    vec4 col = next ? to(cc) : from(cc);
+    return vec4(mix(vec3(0.06), col.rgb, shrink > 0.002 ? gap : 1.0), 1.0);`],
+  ['window4', 'Window open', 'Reveal', `float e = p*p*(3.0-2.0*p); vec2 d = uv - 0.5; vec2 s = sign(d);
+    vec2 moved = d - s*e*0.5; if (moved.x*s.x < 0.0 || moved.y*s.y < 0.0) return to(uv);
+    vec2 q = uv - s*e*0.5; vec4 f = from(q); float edge = smoothstep(0.0, 0.01, min(abs(moved.x), abs(moved.y)));
+    return vec4(f.rgb*mix(0.4, 1.0, edge), 1.0);`],
+]
+
 const TRENDING: [string, string, string, string][] = [
   ['whipleft', 'Whip pan left', 'Trending', whip(1, 0)],
   ['whipright', 'Whip pan right', 'Trending', whip(-1, 0)],
@@ -127,6 +240,7 @@ const TRENDING: [string, string, string, string][] = [
 const T: [string, string, string, string][] = [
   // id, name, group, glsl
   ...TRENDING,
+  ...REVEAL,
 
   ['fade', 'Fade', 'Basic', 'return mix(from(uv), to(uv), p);'],
   ['fadeblack', 'Dip to black', 'Basic', 'return p < 0.5 ? mix(from(uv), vec4(0,0,0,1), p*2.0) : mix(vec4(0,0,0,1), to(uv), p*2.0-1.0);'],

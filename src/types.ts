@@ -166,13 +166,27 @@ export interface Clip {
  * edges. Position and size are fractions of the item's picture (the whole video frame for the main video).
  */
 export interface ShapeMask {
-  shape: 'rect' | 'ellipse' | 'linear' | 'mirror' | 'heart' | 'star'
+  shape: 'rect' | 'ellipse' | 'linear' | 'mirror' | 'heart' | 'star' | 'diamond' | 'hexagon' | 'triangle' | 'flower' | 'keyhole' | 'cross' | 'cloud' | 'drop' | 'sparkle' | 'octagon'
   x: number; y: number // centre, 0..1
   w: number; h: number // size, 0..1 (linear: unused; mirror: h = band height)
   rotation: number // degrees
   feather: number // 0..1 soft edge
   round: number // 0..1 rounded corners (rect)
   invert: boolean
+  reveal?: ShapeReveal | null // the shape opens (and closes) over time, missing = it stays as it is
+}
+
+/**
+ * Shape reveal: the mask opens from nothing at the start of the clip / overlay (a heart opening with the
+ * chosen scene inside), and can keep growing until the scene fills the frame, and close again at the end.
+ */
+export interface ShapeReveal {
+  open: number // seconds the opening takes, 0 = it is open from the start
+  close: number // seconds the closing takes at the end, 0 = it does not close
+  fill: boolean // after opening it keeps growing until the scene fills the whole picture
+  spin: number // degrees it turns while opening (0 = none)
+  pulse: boolean // beats softly like a heart while open
+  edge: string | null // colour of a glowing outline round the shape, null = none
 }
 
 /** Zoom & move of a main-video clip's picture: offset (fraction of the frame), zoom and turn. */

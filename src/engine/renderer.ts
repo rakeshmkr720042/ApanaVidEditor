@@ -6,7 +6,7 @@ import { atTime } from '../model/keyframes'
 import { kenBurnsAt } from '../model/slideshow'
 import { posAt } from '../model/clipKeys'
 import { contentRect, mainFrameOn } from '../model/mainFrame'
-import { applyMask } from './shapeMask'
+import { applyMask, drawEdge, revealAt } from './shapeMask'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
@@ -486,7 +486,9 @@ export class Renderer {
     if (clip.motionBlur) this.smear(i, clip, out, inp.t)
     if (clip.shapeMask) {
       // pro mask: outside the shape the project background shows (or nothing, when this frame goes on a backdrop)
-      applyMask(c, clip.shapeMask, W, H)
+      const rv = revealAt(clip.shapeMask, local, progress > 1e-6 ? local / progress : Infinity, W, H)
+      applyMask(c, rv.mask, W, H)
+      if (rv.edge > 0 && clip.shapeMask.reveal?.edge) drawEdge(c, rv.mask, W, H, clip.shapeMask.reveal.edge, rv.edge)
       if (!clear) {
         c.save()
         c.setTransform(1, 0, 0, 1, 0, 0)
@@ -701,7 +703,9 @@ export class Renderer {
       mc.globalCompositeOperation = 'copy'
       mc.drawImage(img, sx, sy, sw, sh, 0, 0, mw, mh)
       mc.globalCompositeOperation = 'source-over'
-      applyMask(mc, l.shapeMask, mw, mh)
+      const rv = revealAt(l.shapeMask, inp.t - l.start, l.end - l.start, mw, mh)
+      applyMask(mc, rv.mask, mw, mh)
+      if (rv.edge > 0 && l.shapeMask.reveal?.edge) drawEdge(mc, rv.mask, mw, mh, l.shapeMask.reveal.edge, rv.edge)
       img = ms; sx = 0; sy = 0; sw = mw; sh = mh
     }
     const a = animState({ start: l.start, end: l.end, animIn: l.animIn ?? 'none', animOut: l.animOut ?? 'none' }, inp.t)
