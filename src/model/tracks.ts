@@ -4,7 +4,7 @@ import { uid } from '../lib/format'
 export const trackKind = (l: Layer): Track['kind'] => (l.type === 'audio' ? 'audio' : 'visual')
 
 /** Text, stickers, blur and waves get a new row at the top (in front); videos and photos one under the other rows (but over other videos/photos). */
-const FRONT: Layer['type'][] = ['text', 'sticker', 'blur', 'wave']
+const FRONT: Layer['type'][] = ['text', 'sticker', 'blur', 'wave', 'annotate']
 
 export const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) => a.start < b.end - 1e-6 && b.start < a.end - 1e-6
 

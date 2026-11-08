@@ -426,8 +426,58 @@ export interface WaveLayer extends LayerBase, Keyed {
   box: Box
 }
 
-export type Layer = TextLayer | StickerLayer | MediaLayer | BlurLayer | AudioLayer | WaveLayer | AdjustmentLayer
-export type VisualLayer = Exclude<Layer, AudioLayer | AdjustmentLayer>
+/**
+ * Smart Screen Annotate: what happened on the screen while recording (cursor, clicks, keys pressed) plus what
+ * the presenter drew (a circle that became a box, an underline, arrows, numbered steps), drawn as effects over
+ * the video (src/engine/annotate.ts). Everything stays editable: shift it in time, change the look, delete marks.
+ */
+export type AnnoKind = 'click' | 'key' | 'box' | 'underline' | 'pen' | 'highlight' | 'arrow' | 'badge'
+
+export interface AnnoMark {
+  id: string
+  kind: AnnoKind
+  t: number // seconds: source seconds of the recording when the layer follows one, else from the layer's start
+  x?: number; y?: number // click and badge spot, 0..1 of the picture
+  pts?: number[] // drawn shapes: x, y, x, y… (0..1); box: [left, top, right, bottom]; underline / arrow: [x1, y1, x2, y2]
+  text?: string // key: what was pressed ("Ctrl+C"); badge: its number
+  right?: boolean // click: right button
+  color?: string | null // own colour, missing = the layer's
+}
+
+/** A stretch of time where a mode was switched on while recording (with a hotkey). */
+export interface AnnoSpan { mode: 'laser' | 'spotlight' | 'zoom' | 'hide'; from: number; to: number }
+
+export interface AnnotateStyle {
+  color: string // drawings
+  cursor: 'none' | 'glow' | 'ring' | 'big' // highlight at the cursor tip
+  cursorColor: string
+  clicks: 'none' | 'ripple' | 'burst' | 'pulse' // what a click looks like
+  clickColor: string
+  keys: boolean // show shortcuts pressed (Ctrl+C…)
+  trail: 'off' | 'laser' | 'always' // glowing trail behind the cursor: off, only in laser mode, all the time
+  spotlight: 'off' | 'marked' | 'always' // dim all but the cursor's area: off, only when switched on, all the time
+  zoom: 'off' | 'marked' | 'clicks' | 'follow' // zoom in on the cursor: off, when switched on, at every click, all the time
+  zoomAmount: number // 1.2..3
+  fade: number // seconds a drawing stays before fading away, 0 = until the layer ends
+  smooth: boolean // glide the cursor smoothly instead of jumping between samples
+  sound: boolean // a soft click sound with every click (preview and export)
+}
+
+export interface AnnotateLayer extends LayerBase {
+  type: 'annotate'
+  name?: string
+  /** The recording it follows: mark times are that video's own seconds and points sit on its picture. */
+  sourceId?: string | null
+  shift?: number // seconds added to every mark (to fix sync), missing = 0
+  /** Cursor path, sampled fps times a second from second 0; x, y in 0..10000 of the picture, -1 = unknown. */
+  cursor?: { fps: number; x: number[]; y: number[] } | null
+  marks: AnnoMark[]
+  spans?: AnnoSpan[]
+  style: AnnotateStyle
+}
+
+export type Layer = TextLayer | StickerLayer | MediaLayer | BlurLayer | AudioLayer | WaveLayer | AdjustmentLayer | AnnotateLayer
+export type VisualLayer = Exclude<Layer, AudioLayer | AdjustmentLayer | AnnotateLayer>
 
 export type AspectRatio = 'original' | '16:9' | '9:16' | '1:1' | '4:5' | '4:3' | '3:4' | '21:9'
 

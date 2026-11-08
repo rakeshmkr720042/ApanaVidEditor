@@ -1,3 +1,4 @@
+import type { AnnoDraw } from '../panels/AnnotatePanel'
 import { useEffect, useRef, useState } from 'react'
 import type { Player } from '../engine/player'
 import type { Editor } from '../model/useEditor'
@@ -37,6 +38,8 @@ interface Props {
   /** Before / after: where the line between the original (left) and the edit (right) is, 0..1; null = off. */
   compare?: number | null
   onCompare?: (x: number) => void
+  /** Annotate panel: draw on the video with this tool (finger or mouse). */
+  draw?: AnnoDraw | null
 }
 
 type Gesture =
@@ -50,7 +53,7 @@ type Gesture =
   | { kind: 'frame-pinch'; d0: number; f0: MainFrame }
 
 /** The video canvas plus handles to move, scale and rotate text, stickers, overlays and blur areas. */
-export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit, frameEdit, compare = null, onCompare }: Props) {
+export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wmEdit, frameEdit, compare = null, onCompare, draw }: Props) {
   const wrap = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ w: 0, h: 0, left: 0, top: 0 })
   const gesture = useRef<Gesture | null>(null)
@@ -99,7 +102,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
   // in drawing order (top track row last); hidden and locked rows can't be picked
   // keyframed layers are shown (and handled) where they are at the playhead
   const layers = playable(ed.project).layers
-    .filter((l): l is VisualLayer => l.type !== 'audio' && l.type !== 'adjustment' && visible(l) && !isLocked(ed.project, l)).map((l) => atTime(l, t))
+    .filter((l): l is VisualLayer => l.type !== 'audio' && l.type !== 'adjustment' && l.type !== 'annotate' && visible(l) && !isLocked(ed.project, l)).map((l) => atTime(l, t))
   const selected = ed.sel?.type === 'layer' ? layers.find((l) => l.id === ed.sel!.id) : undefined
   const rect = selected && player && !(selected.type === 'sticker' && selected.shower) ? player.renderer.layerRect(selected, ed.sources) : null
   const wmRect = wmEdit && player ? player.renderer.watermarkRect(ed.project, ed.sources, t) : null
@@ -324,7 +327,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
     if (g.kind === 'pinch') {
       if (pts.current.size < 2) return
       const l0 = ed.project.layers.find((x) => x.id === g.id)
-      if (!l0 || l0.type === 'audio' || l0.type === 'adjustment') return
+      if (!l0 || l0.type === 'audio' || l0.type === 'adjustment' || l0.type === 'annotate') return
       const sp = spread()
       setScaleRot(atTime(l0, t), g.s0 * (sp.d / g.d0), g.r0 + ((sp.a - g.a0) * 180) / Math.PI)
       return
@@ -335,7 +338,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
       return
     }
     const l0 = ed.project.layers.find((x) => x.id === g.id)
-    if (!l0 || l0.type === 'audio' || l0.type === 'adjustment') return
+    if (!l0 || l0.type === 'audio' || l0.type === 'adjustment' || l0.type === 'annotate') return
     const l = atTime(l0, t)
     const lr = rectOf(l)
     const setRect = (r: Rect) => {
@@ -438,6 +441,7 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
           <span className="split-tag r">{tr('After')}</span>
         </div>
       )}
+      {draw && <DrawPad draw={draw} box={box} />}
       {wmRect && (
         <div className="sel-box wm" style={{ left: box.left + wmRect.cx * scale, top: box.top + wmRect.cy * scale, width: wmRect.w * scale, height: wmRect.h * scale, transform: 'translate(-50%, -50%)' }} />
       )}
@@ -486,6 +490,52 @@ export function Preview({ ed, player, canvasRef, t, onEditText, onTogglePlay, wm
           <button onClick={() => quick('right')}>◨ {tr('Right half')}</button>
         </div>
       )}
+    </div>
+  )
+}
+
+/** A see-through pad over the video for drawing annotations; shows the stroke while it is drawn. */
+function DrawPad({ draw, box }: { draw: AnnoDraw; box: { w: number; h: number; left: number; top: number } }) {
+  const [pts, setPts] = useState<number[]>([])
+  const live = useRef<number[] | null>(null)
+  const at = (e: React.PointerEvent) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]
+  }
+  const down = (e: React.PointerEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    live.current = at(e)
+    setPts(live.current)
+  }
+  const move = (e: React.PointerEvent) => {
+    e.stopPropagation()
+    if (!live.current) return
+    const [x, y] = at(e)
+    const n = live.current.length
+    if (Math.hypot(x - live.current[n - 2], y - live.current[n - 1]) < 0.002) return
+    live.current = [...live.current, x, y]
+    setPts(live.current)
+  }
+  const up = (e: React.PointerEvent) => {
+    e.stopPropagation()
+    const done = live.current
+    live.current = null
+    setPts([])
+    if (done) draw.onStroke(done)
+  }
+  const line = []
+  for (let i = 0; i + 1 < pts.length; i += 2) line.push(`${(pts[i] * box.w).toFixed(1)},${(pts[i + 1] * box.h).toFixed(1)}`)
+  return (
+    <div className={`draw-pad tool-${draw.tool}`} data-testid="draw-pad" style={{ left: box.left, top: box.top, width: box.w, height: box.h }}
+      onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+      <svg width={box.w} height={box.h}>
+        {line.length > 0 && (
+          <polyline points={line.join(' ')} fill="none" stroke={draw.tool === 'highlight' ? '#ffe600' : draw.color}
+            strokeOpacity={draw.tool === 'highlight' ? 0.45 : 0.9} strokeWidth={draw.tool === 'highlight' ? 14 : 4} strokeLinecap="round" strokeLinejoin="round" />
+        )}
+      </svg>
     </div>
   )
 }
