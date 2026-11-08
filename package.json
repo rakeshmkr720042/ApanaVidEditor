@@ -104,6 +104,9 @@
       "!node_modules/**/*"
     ],
     "asar": true,
+    "asarUnpack": [
+      "electron/bin/**"
+    ],
     "fileAssociations": [
       {
         "ext": "mp4",

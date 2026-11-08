@@ -66,7 +66,7 @@ type Drag =
   // free (snap off): the clip lands at time `at` instead, leaving empty time behind; off = where it was grabbed
   | { kind: 'reorder'; id: string; x0: number; x: number; y: number; slot: number; to: number; moved: boolean; free?: { off: number; at: number } }
 
-const LAYER_COLORS: Record<Layer['type'], string> = { text: '#8b5cf6', sticker: '#f59e0b', media: '#14b8a6', blur: '#64748b', audio: '#22c55e', wave: '#0ea5e9', adjustment: '#e11d48' }
+const LAYER_COLORS: Record<Layer['type'], string> = { text: '#8b5cf6', sticker: '#f59e0b', media: '#14b8a6', blur: '#64748b', audio: '#22c55e', wave: '#0ea5e9', adjustment: '#e11d48', annotate: '#f43f5e' }
 
 function layerLabel(l: Layer) {
   switch (l.type) {
@@ -76,6 +76,7 @@ function layerLabel(l: Layer) {
     case 'adjustment': return `◐ ${l.name || 'Adjustment'}`
     case 'blur': return l.mode === 'pixelate' ? '▦ Pixelate' : '◌ Blur'
     case 'wave': return `〰 ${l.style === 'circle' ? 'Circle' : l.style === 'line' ? 'Line' : 'Bars'}`
+    case 'annotate': return `✨ ${l.name || 'Annotate'} · ${l.marks.length}`
     case 'audio': return (l.kind === 'voice' ? '🎙 ' : l.kind === 'sound' ? '🔔 ' : '♪ ') + l.label
   }
 }

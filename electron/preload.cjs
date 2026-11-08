@@ -30,6 +30,20 @@ contextBridge.exposeInMainWorld('desktop', {
     return () => ipcRenderer.removeListener('desktop:ai-progress', listener)
   },
   keepAwake: (on) => ipcRenderer.send('desktop:keep-awake', !!on),
+  // Smart annotate while screen recording (electron/annotate.js)
+  annoStart: (opts) => ipcRenderer.invoke('desktop:anno-start', opts),
+  annoStop: () => ipcRenderer.send('desktop:anno-stop'),
+  annoMode: (mode, on) => ipcRenderer.send('desktop:anno-mode', mode, on),
+  onAnno(cb) {
+    const listener = (_e, events) => cb(events)
+    ipcRenderer.on('desktop:anno', listener)
+    return () => ipcRenderer.removeListener('desktop:anno', listener)
+  },
+  onAnnoState(cb) {
+    const listener = (_e, s) => cb(s)
+    ipcRenderer.on('desktop:anno-state', listener)
+    return () => ipcRenderer.removeListener('desktop:anno-state', listener)
+  },
   onHelp(cb) {
     const listener = (_e, topic) => cb(topic ?? null)
     ipcRenderer.on('desktop:help', listener)

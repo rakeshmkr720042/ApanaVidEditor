@@ -1,3 +1,5 @@
+import { clickSounds } from '../model/annotate'
+import { clickSound } from './annotate'
 import type { MediaLayer, MediaSource, Project } from '../types'
 import { activeAt, layerSpeed, layoutClips, sourceAt, type LaidClip } from '../model/timeline'
 import { backdropKey, clipKey, layerKey, outputSize, Renderer, type FrameImage } from './renderer'
@@ -132,6 +134,7 @@ export class Player {
     const { items, total } = layoutClips(project.clips)
     this.items = items
     this.total = total
+    this.ticks = project.layers.some((l) => l.type === 'annotate' && l.style.sound) ? clickSounds(project) : []
     prepareCleanSounds(project, sources)
     void duckCurve(project, sources)
     const { w, h } = outputSize(project, sources, this.previewShort)
@@ -152,12 +155,14 @@ export class Player {
     this.sync()
     const loop = () => {
       if (!this.playing) return
+      const prev = this.t
       this.t = this.clockT + ((performance.now() - this.clockStart) / 1000) * this.rate
       if (this.t >= this.total) {
         this.t = this.total
         this.pause()
         return
       }
+      this.playTicks(prev, this.t)
       this.sync()
       this.draw()
       this.onTick?.(this.t, true)
@@ -165,6 +170,27 @@ export class Player {
     }
     this.raf = requestAnimationFrame(loop)
     this.onTick?.(this.t, true)
+  }
+
+  /** Smart annotate click sounds (timeline times), played as the playhead passes them. */
+  private ticks: number[] = []
+  private tickCtx: AudioContext | null = null
+  private tickBuf: AudioBuffer | null = null
+  private playTicks(from: number, to: number) {
+    if (!this.ticks.length || this.muted || to <= from || to - from > 0.5) return
+    const due = this.ticks.filter((x) => x > from && x <= to)
+    if (!due.length) return
+    try {
+      this.tickCtx ??= new AudioContext()
+      this.tickBuf ??= clickSound(this.tickCtx.sampleRate)
+      const g = this.tickCtx.createGain()
+      g.gain.value = 0.7
+      g.connect(this.tickCtx.destination)
+      const n = this.tickCtx.createBufferSource()
+      n.buffer = this.tickBuf
+      n.connect(g)
+      n.start()
+    } catch { /* no sound device */ }
   }
 
   pause() {
@@ -338,6 +364,7 @@ export class Player {
   }
 
   destroy() {
+    this.tickCtx?.close().catch(() => {})
     this.offClean()
     this.offDuck()
     this.pause()

@@ -5,7 +5,8 @@ import { Icon } from './Icon'
 import { t } from '../lib/i18n'
 import { useBack } from '../lib/back'
 import { fmtTime } from '../lib/format'
-import { desktop, type ScreenSource } from '../lib/desktop'
+import { desktop, type AnnoAbility, type AnnoModeName, type AnnoState, type ScreenSource } from '../lib/desktop'
+import { AnnoRecorder, type AnnoTake } from '../lib/annorec'
 import {
   canRecordCamera, canRecordScreen, captureScreen, finishRecording, listCameras, micStream, mixStreams, openCamera, recorderMime, type Surface,
 } from '../lib/screenrec'
@@ -18,7 +19,7 @@ interface Props {
   mode: 'screen' | 'camera'
   onClose: () => void
   /** The finished recording, the area to keep when "Custom area" was chosen, and the camera bubble if one was on. */
-  onDone: (file: File, crop: Crop | null, cam: CamTake | null) => Promise<void>
+  onDone: (file: File, crop: Crop | null, cam: CamTake | null, anno: AnnoTake | null) => Promise<void>
 }
 
 type Phase = 'setup' | 'pick' | 'ready' | 'countdown' | 'recording' | 'saving'
@@ -77,6 +78,13 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
   const [elapsed, setElapsed] = useState(0)
   const [paused, setPaused] = useState(false)
   const [size, setSize] = useState({ w: 16, h: 9 })
+  // Smart annotate (Windows app): cursor, clicks, keys and drawing on the screen while recording
+  const annoAvailable = !cameraOnly && !!desktop?.annoStart
+  const [annoOn, setAnnoOn] = useState(() => { try { return localStorage.getItem('anno-rec') !== 'off' } catch { return true } })
+  const [annoAbility, setAnnoAbility] = useState<AnnoAbility | null>(null)
+  const [annoState, setAnnoState] = useState<AnnoState | null>(null)
+  const [annoCount, setAnnoCount] = useState(0)
+  const annoRec = useRef<AnnoRecorder | null>(null)
 
   const video = useRef<HTMLVideoElement>(null)
   const camVideo = useRef<HTMLVideoElement>(null)
@@ -106,11 +114,23 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
     mixer.current = null
   }
   useEffect(() => () => {
+    if (annoRec.current) desktop?.annoStop?.()
     recs.current?.main.cancel()
     recs.current?.cam?.cancel()
     release()
     desktop?.pickScreen?.(null)
   }, [])
+
+  useEffect(() => {
+    if (!annoAvailable) return
+    const offA = desktop?.onAnno?.((ev) => { const r = annoRec.current; if (r) { r.add(ev); setAnnoCount(r.count) } })
+    const offS = desktop?.onAnnoState?.((s) => setAnnoState(s))
+    return () => { offA?.(); offS?.() }
+  }, [annoAvailable])
+  const setAnno = (on: boolean) => {
+    setAnnoOn(on)
+    try { localStorage.setItem('anno-rec', on ? 'on' : 'off') } catch { /* private mode */ }
+  }
 
   // the Windows app asks us to show its list of screens and windows
   useEffect(() => (cameraOnly ? undefined : desktop?.onPickScreen?.((list) => { setSources(list); setPhase('pick') })), [cameraOnly])
@@ -239,11 +259,17 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
     }
     // in camera mode the camera stream is the picture; its tracks are stopped by release(), not by the mixer
     mixer.current = mixStreams(new MediaStream(screen.current.getTracks()), mic)
+    // Smart annotate starts listening during the countdown (the helper needs a moment), counting from the recording's start
+    if (annoAvailable && annoOn) {
+      annoRec.current = new AnnoRecorder()
+      setAnnoCount(0)
+      desktop!.annoStart!().then((a) => setAnnoAbility(a)).catch(() => setAnnoAbility(null))
+    }
     setPhase('countdown')
     for (let n = 3; n > 0; n--) {
       setCount(n)
       await new Promise((r) => setTimeout(r, 1000))
-      if (phaseRef.current !== 'countdown') return
+      if (phaseRef.current !== 'countdown') { if (annoRec.current) { desktop?.annoStop?.(); annoRec.current = null } return }
     }
     // the bubble is its own video (no sound), started at the same moment so the two stay in step
     const bubbleCam = !cameraOnly && cam.current ? cam.current : null
@@ -252,6 +278,7 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
       cam: bubbleCam ? startRecorder(new MediaStream(bubbleCam.getVideoTracks()), 3_000_000) : null,
     }
     clock.current = { start: performance.now(), pausedAt: 0, pausedFor: 0 }
+    annoRec.current?.begin()
     setElapsed(0)
     setPaused(false)
     setPhase('recording')
@@ -262,8 +289,8 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
     if (!r) return
     const c = clock.current
     const all = [r.main.mr, ...(r.cam ? [r.cam.mr] : [])]
-    if (r.main.mr.state === 'recording') { all.forEach((m) => m.state === 'recording' && m.pause()); c.pausedAt = performance.now(); setPaused(true) }
-    else if (r.main.mr.state === 'paused') { all.forEach((m) => m.state === 'paused' && m.resume()); c.pausedFor += performance.now() - c.pausedAt; c.pausedAt = 0; setPaused(false) }
+    if (r.main.mr.state === 'recording') { all.forEach((m) => m.state === 'recording' && m.pause()); c.pausedAt = performance.now(); annoRec.current?.pause(); setPaused(true) }
+    else if (r.main.mr.state === 'paused') { all.forEach((m) => m.state === 'paused' && m.resume()); c.pausedFor += performance.now() - c.pausedAt; c.pausedAt = 0; annoRec.current?.resume(); setPaused(false) }
   }
 
   /** Where the bubble sits on the recorded picture (after "Custom area"), as an overlay box. */
@@ -284,8 +311,18 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
     if (!r) return
     recs.current = null
     setPhase('saving')
+    const cl = clock.current
+    const secs = ((cl.pausedAt || performance.now()) - cl.start - cl.pausedFor) / 1000
+    const ar = annoRec.current
+    if (ar) {
+      ar.pause()
+      desktop?.annoStop?.()
+    }
     const [main, camRec] = await Promise.all([r.main.stop(), r.cam?.stop() ?? null])
     release()
+    // the last events arrive just after stopping
+    const anno = ar ? (await new Promise((res) => setTimeout(res, 150)), ar.finish(secs)) : null
+    annoRec.current = null
     try {
       const blob = await finishRecording(main.blob)
       const file = new File([blob], stampName(cameraOnly ? 'Camera' : 'Screen', main.type), { type: blob.type || main.type })
@@ -296,7 +333,7 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
       }
       const { area: a, crop: cr } = picks.current
       const c = !cameraOnly && a === 'custom' && !(cr.w > 0.99 && cr.h > 0.99) ? cr : null
-      await onDone(file, c, take)
+      await onDone(file, c, take, anno)
       onClose()
     } catch (e) {
       setError((e as Error).message)
@@ -305,6 +342,7 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
   }
 
   const cancel = () => {
+    if (annoRec.current) { desktop?.annoStop?.(); annoRec.current = null }
     recs.current?.main.cancel()
     recs.current?.cam?.cancel()
     recs.current = null
@@ -426,6 +464,9 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
             <Toggle label="Computer sound" value={sysAudio} onChange={setSysAudio} />
             <Toggle label="Microphone" value={micOn} onChange={setMicOn} />
             {canRecordCamera() && <Toggle label="Camera bubble (your face over the screen)" value={camOn} onChange={(v) => bubbleOn(v)} />}
+            {annoAvailable
+              ? <Toggle label="Smart annotate (cursor glow, click effects, keys, drawing)" value={annoOn} onChange={setAnno} />
+              : <p className="muted small">{t('Cursor, click and key effects are recorded in the Windows app. Here you can add click effects and drawings later with Annotate in the editor.')}</p>}
             <button className="btn primary wide" onClick={share}>{t('Choose screen')}</button>
           </>
         )}
@@ -456,6 +497,9 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
             <button className="btn primary grow" onClick={begin}>● {t('Start recording')}</button>
           </div>
         )}
+        {(phase === 'ready' || phase === 'recording') && annoAvailable && annoOn && (
+          <AnnoBar state={annoState} ability={annoAbility} count={annoCount} recording={phase === 'recording'} />
+        )}
         {phase === 'recording' && (
           <div className="row">
             <button className="btn" onClick={togglePause}>{paused ? `▶ ${t('Resume')}` : `❚❚ ${t('Pause')}`}</button>
@@ -463,6 +507,38 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+const MODE_BUTTONS: { mode: AnnoModeName; label: string }[] = [
+  { mode: 'draw', label: '✎ Draw' }, { mode: 'laser', label: '🔴 Laser' }, { mode: 'spotlight', label: '🔦 Spotlight' },
+  { mode: 'zoom', label: '🔍 Zoom' }, { mode: 'hide', label: '🙈 Hide effects' },
+]
+const DEFAULT_KEYS: Record<AnnoModeName, string> = { draw: 'Alt+Shift+D', laser: 'Alt+Shift+L', spotlight: 'Alt+Shift+S', zoom: 'Alt+Shift+Z', hide: 'Alt+Shift+H' }
+
+/** Smart annotate while recording: the hotkeys, buttons for the modes, and what is being caught. */
+function AnnoBar({ state, ability, count, recording }: { state: AnnoState | null; ability: AnnoAbility | null; count: number; recording: boolean }) {
+  const keys = state?.hotkeys ?? ability?.hotkeys ?? DEFAULT_KEYS
+  return (
+    <div className="rec-anno" data-testid="rec-anno">
+      <b>✨ {t('Smart annotate')}</b>
+      {recording && (
+        <div className="rec-modes">
+          {MODE_BUTTONS.map((b) => (
+            <button key={b.mode} className={`btn small${state?.modes[b.mode] ? ' primary' : ''}`} onClick={() => desktop?.annoMode?.(b.mode)}>{t(b.label)}</button>
+          ))}
+        </div>
+      )}
+      <div className="keys">
+        <kbd>{keys.draw}</kbd><span>{t('Draw on the screen: circle a word → box, line under text → underline. Esc to stop drawing.')}</span>
+        <kbd>{keys.laser}</kbd><span>{t('Laser pointer trail')}</span>
+        <kbd>{keys.spotlight}</kbd><span>{t('Spotlight: dim everything except the cursor')}</span>
+        <kbd>{keys.zoom}</kbd><span>{t('Zoom in on the cursor')}</span>
+        <kbd>{keys.hide}</kbd><span>{t('Hide / show all effects')}</span>
+      </div>
+      {recording && ability && !ability.clicks && <p className="muted small">{t('Only the cursor is followed on this computer (clicks and keys could not be read).')}</p>}
+      {recording && <p className="muted small">{t('Caught so far')}: {count}. {t('Everything stays editable in the editor (Annotate).')}</p>}
     </div>
   )
 }
