@@ -14,6 +14,8 @@ import { fmtTime, uid } from '../lib/format'
 import { subtitleStyle } from '../engine/text'
 import { WAVE_STYLES } from '../engine/visualizer'
 import { t } from '../lib/i18n'
+import { outputSize } from '../engine/renderer'
+import { CARD_LOOKS, FESTIVAL_TITLES, SHAYARI, SHAYARI_KINDS, cardFrame, pickShayari, type ShayariKind, type TitlePreset } from '../lib/desi'
 
 interface P { ed: Editor; onClose: () => void }
 
@@ -83,25 +85,7 @@ export function TextPanel({ ed, layer, onClose, startTab = 'edit' }: P & { layer
           </div>
         </>
       )}
-      {tab === 'titles' && (
-        <>
-          <p className="muted small">{t('Tap a title, then change the words in Edit.')}</p>
-          <div className="preset-grid title-grid">
-            {TITLE_PRESETS.map((p) => (
-              <button
-                key={p.name}
-                onClick={() => {
-                  if (p.style.font) ensureFont(p.style.font)
-                  ed.updateLayer<TextLayer>(layer.id, (l) => ({ text: p.text, style: { ...l.style, bold: false, italic: false, letterSpacing: 0, ...p.style }, animIn: p.animIn, animOut: p.animOut, loop: p.loop, ...(p.at ? { box: { ...l.box, rotation: 0, ...p.at }, keys: [] } : {}) }))
-                }}
-                style={{ fontFamily: `"${p.style.font ?? 'Poppins'}"`, color: p.style.color ?? '#fff', textShadow: p.style.glow ? `0 0 8px ${p.style.glow}` : undefined }}
-              >
-                {t(p.name)}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {tab === 'titles' && <TitlesTab ed={ed} layer={layer} />}
       {tab === 'font' && (
         <FontPicker value={layer.style.font} text={layer.text} onPick={(f) => { if (isDevanagari(layer.text)) rememberHindiFont(f); style({ font: f }) }} />
       )}
@@ -373,5 +357,58 @@ export function AdjustmentPanel({ ed, layer, onClose }: P & { layer: AdjustmentL
         <button className="btn small" onClick={() => set({ start: 0, end: Math.max(0.5, total) })}>{t('Cover the whole video')}</button>
       </div>
     </Panel>
+  )
+}
+
+/** Titles tab: wedding & event titles, festival greetings and shayari / quote cards (Desi creator pack). */
+function TitlesTab({ ed, layer }: { ed: Editor; layer: TextLayer }) {
+  const [group, setGroup] = useState<'events' | 'festivals' | 'shayari'>('events')
+  const [kind, setKind] = useState<ShayariKind>('motivation')
+  const [look, setLook] = useState(0)
+  const apply = (p: TitlePreset) => {
+    if (p.style.font) ensureFont(p.style.font)
+    ed.updateLayer<TextLayer>(layer.id, (l) => ({ text: p.text, ...(l.subtitle ? {} : { frame: null }), style: { ...l.style, bold: false, italic: false, letterSpacing: 0, ...p.style }, animIn: p.animIn, animOut: p.animOut, loop: p.loop, ...(p.at ? { box: { ...l.box, rotation: 0, ...p.at }, keys: [] } : {}) }))
+  }
+  const card = (text: string, li = look) => {
+    const lk = CARD_LOOKS[li] ?? CARD_LOOKS[0]
+    if (lk.style.font) ensureFont(lk.style.font)
+    let aspect = 16 / 9
+    try { const o = outputSize(ed.project, ed.sources, 720); if (o.w > 0 && o.h > 0) aspect = o.w / o.h } catch { /* keep 16:9 */ }
+    ed.updateLayer<TextLayer>(layer.id, (l) => ({
+      text, frame: cardFrame(lk, aspect), animIn: 'fade', animOut: 'fade', loop: 'none',
+      style: { ...l.style, bold: false, italic: false, letterSpacing: 0, strokeWidth: 0, ...lk.style },
+      box: { ...l.box, x: 0.5, y: 0.5, rotation: 0 }, keys: [],
+    }))
+  }
+  const grid = (list: TitlePreset[]) => (
+    <div className="preset-grid title-grid">
+      {list.map((p) => (
+        <button key={p.name} onClick={() => apply(p)} style={{ fontFamily: `"${p.style.font ?? 'Poppins'}"`, color: p.style.color ?? '#fff', textShadow: p.style.glow ? `0 0 8px ${p.style.glow}` : undefined }}>
+          {t(p.name)}
+        </button>
+      ))}
+    </div>
+  )
+  return (
+    <>
+      <Chips options={[{ value: 'events', label: 'Wedding & events' }, { value: 'festivals', label: 'Festivals' }, ...(layer.subtitle ? [] : [{ value: 'shayari' as const, label: 'Shayari & quotes' }])]} value={group} onChange={setGroup} />
+      {group !== 'shayari' && <p className="muted small">{t('Tap a title, then change the words in Edit.')}</p>}
+      {group === 'events' && grid(TITLE_PRESETS)}
+      {group === 'festivals' && grid(FESTIVAL_TITLES)}
+      {group === 'shayari' && (
+        <>
+          <p className="muted small">{t('Tap a line to put it on a card in the middle of the video. Change the words in Edit.')}</p>
+          <span className="field-label">{t('Card look')}</span>
+          <Chips options={CARD_LOOKS.map((c, i) => ({ value: String(i), label: c.name }))} value={String(look)} onChange={(v) => { const i = Number(v); setLook(i); if (layer.frame && layer.text) card(layer.text, i) }} />
+          <Chips options={SHAYARI_KINDS} value={kind} onChange={setKind} wrap />
+          <div className="shayari-list">
+            {SHAYARI[kind].map((s) => (
+              <button key={s} className="btn small shayari-line" onClick={() => card(s)}>{s.replace(/\n/g, ' / ')}</button>
+            ))}
+          </div>
+          <button className="btn small" onClick={() => card(pickShayari(kind, layer.text))}>🎲 {t('Another line')}</button>
+        </>
+      )}
+    </>
   )
 }

@@ -256,7 +256,7 @@ export type TextAnim = 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left
 export type LoopAnim = 'none' | 'pulse' | 'float' | 'swing' | 'shimmer' | 'heartbeat'
 
 /** Paint for text letters instead of a flat colour. */
-export type TextFill = 'gold' | 'rose-gold' | 'silver' | 'royal' | 'sunset' | 'love' | 'rainbow'
+export type TextFill = 'gold' | 'rose-gold' | 'silver' | 'royal' | 'sunset' | 'love' | 'rainbow' | 'tiranga'
 
 /**
  * Word-by-word captions: the word being spoken stands out (Reels/Shorts style). Word times are shared out over
