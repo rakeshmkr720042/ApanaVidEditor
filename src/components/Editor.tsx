@@ -11,7 +11,7 @@ import { REVERSE_MAX, reverseClip as reverseVideo, stillFrame } from '../engine/
 import { loadSource, restoreSource, videoWave } from '../lib/media'
 import { deleteProxy, getMedia, getProject, getProxy, saveMedia, saveProject, saveProxy } from '../lib/db'
 import { fmtTime, fmtTimecode, uid } from '../lib/format'
-import { projectToFile } from '../lib/projectFile'
+import { projectToFile, shareProjectFile } from '../lib/projectFile'
 import { isNative, saveNative } from '../lib/save'
 import { markClosed, markOpen } from '../lib/recover'
 import { info as logInfo, openBlackbox } from '../lib/blackbox'
@@ -299,6 +299,21 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       a.href = URL.createObjectURL(blob); a.download = file; a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 10000)
       setToast(null)
+    } catch (e) { setToast((e as Error).message) }
+  }
+
+  // Share the whole project (with its media) as an .avp file: the other person opens it in Apna Editor and keeps editing
+  const shareProject = async () => {
+    setSaveMenu(false)
+    try {
+      const blob = await projectToFile(name, ed.project, ed.sources)
+      const file = `${name.replace(/[^\w\- ]+/g, '').trim() || 'project'}.avp`
+      if (await shareProjectFile(blob, file, isNative, saveNative)) return
+      // this device can't share files: save it, so it can be sent from the Downloads folder
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob); a.download = file; a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+      setToast(t('Saved the project file. Send it from your Downloads folder.'))
     } catch (e) { setToast((e as Error).message) }
   }
 
@@ -1269,6 +1284,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <div className="menu">
                 <button onClick={saveToApp}><Icon name="save" size={18} /> {t('Save project')}</button>
                 <button onClick={saveToFile}><Icon name="download" size={18} /> {t('Save as .avp file')}</button>
+                <button onClick={shareProject} data-testid="share-project"><Icon name="share" size={18} /> {t('Share project')}</button>
                 <button onClick={() => { setSaveMenu(false); player?.pause(); openBlackbox() }} data-testid="editor-blackbox"><Icon name="blackbox" size={18} /> {t('Blackbox log')}</button>
               </div>
             )}

@@ -16,7 +16,8 @@
     "postinstall": "node scripts/copy-assets.mjs",
     "electron:dev": "concurrently -k \"vite --port 5173 --strictPort\" \"wait-on tcp:5173 && cross-env ELECTRON_DEV_URL=http://localhost:5173 electron .\"",
     "electron:start": "npm run build && electron .",
-    "electron:build": "npm run build && electron-builder --win --x64 --publish never"
+    "electron:build": "npm run build && electron-builder --win --x64 --publish never",
+    "test": "node scripts/unit-tests.mjs"
   },
   "dependencies": {
     "@capacitor-community/admob": "7.2.0",
