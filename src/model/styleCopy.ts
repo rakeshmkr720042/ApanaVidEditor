@@ -71,7 +71,7 @@ const clone = <T>(v: T): T => (v === undefined || v === null || typeof v !== 'ob
 
 /** Does this item have a sound / a moving picture (for the sound and speed parts)? */
 function fits(part: StylePart, x: Item, sources: Record<string, MediaSource>) {
-  const src = 'sourceId' in x ? sources[x.sourceId] : undefined
+  const src = 'sourceId' in x && x.sourceId ? sources[x.sourceId] : undefined
   if (part === 'sound') return kindOf(x) === 'audio' || hasSound(src)
   if (part === 'speed') return kindOf(x) === 'audio' || src?.kind === 'video'
   return true

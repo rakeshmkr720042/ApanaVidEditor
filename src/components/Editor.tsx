@@ -39,6 +39,10 @@ import { PhotoPanel, SlideshowPanel } from '../panels/SlideshowPanel'
 import { defaultSlideshow, type SlideshowOptions } from '../model/slideshow'
 import { TemplatesPanel } from '../panels/TemplatesPanel'
 import { ScreenRecorder, type CamTake } from './ScreenRecorder'
+import { AnnotatePanel, type AnnoDraw } from '../panels/AnnotatePanel'
+import { newAnnotate } from '../model/annotate'
+import type { AnnoTake } from '../lib/annorec'
+import type { AnnotateLayer } from '../types'
 import { PlaceSheet } from './PlaceSheet'
 import { FeedbackSheet } from './FeedbackSheet'
 import { playable, trackName } from '../model/tracks'
@@ -140,7 +144,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'reveal' | 'adjlayer' | 'scenes' | 'join' | 'frame' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'reveal' | 'adjlayer' | 'scenes' | 'join' | 'frame' | 'annotate' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -166,6 +170,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [tlMin, setTlMin] = useState(() => { try { return localStorage.getItem('timeline-min') === '1' } catch { return false } })
   const toggleTlMin = () => setTlMin((v) => { try { localStorage.setItem('timeline-min', v ? '0' : '1') } catch { /* private mode */ } return !v })
   const [panel, showPanel] = useState<PanelName>(null)
+  const [annoDraw, setAnnoDraw] = useState<AnnoDraw | null>(null)
   // a locked Premium tool opens the plans instead
   const setPanel = (p: PanelName) => { const f = p && PREMIUM_PANELS[p]; if (f && !isAllowed(f)) setPaywall(f); else showPanel(p) }
   const [transitionFor, setTransitionFor] = useState<string | null>(null)
@@ -396,7 +401,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     const c = ed.project.clips.find((x) => x.id === id)
     if (c) return `${t('Clip')} ${ed.project.clips.indexOf(c) + 1}`
     const l = ed.project.layers.find((x) => x.id === id)
-    return l ? (l.type === 'text' ? `"${l.text.slice(0, 20)}"` : t({ sticker: 'Sticker', media: 'Overlay', blur: 'Blur', audio: 'Audio', wave: 'Waveform', text: 'Text', adjustment: 'Adjustment layer' }[l.type])) : ''
+    return l ? (l.type === 'text' ? `"${l.text.slice(0, 20)}"` : t({ sticker: 'Sticker', media: 'Overlay', blur: 'Blur', audio: 'Audio', wave: 'Waveform', text: 'Text', adjustment: 'Adjustment layer', annotate: 'Annotate' }[l.type])) : ''
   }
   const copyStyleOf = (id: string) => {
     const x = itemOf(id)
@@ -541,10 +546,12 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
    * A finished screen or camera recording, cropped to the chosen area, goes where the user picks.
    * A camera bubble recorded with the screen follows it on its own row.
    */
-  const addRecording = async (file: File, crop: Crop | null, take: CamTake | null) => {
+  const addRecording = async (file: File, crop: Crop | null, take: CamTake | null, anno: AnnoTake | null = null) => {
     const src = await loadSource(file, file.name)
     ed.addSource(src)
     await saveMedia(src)
+    // Smart annotate: becomes an Annotate item over the recording once it is placed (now, or after "where")
+    if (anno) pendingAnno.current = { sourceId: src.id, take: anno }
     let cam: CamBubble | null = null
     if (take) {
       try {
@@ -583,6 +590,42 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     setPanel(null)
     const empty = layout.cells.length - srcs.length
     setToast(empty > 0 ? `${t('Split screen added')}. ${empty} ${t('cells are empty: add more with Split screen again or move items there.')}` : t('Split screen added'))
+  }
+
+  const pendingAnno = useRef<{ sourceId: string; take: AnnoTake } | null>(null)
+  useEffect(() => {
+    const pa = pendingAnno.current
+    if (!pa) return
+    const p = ed.project
+    const items = ed.layout.items.filter((x) => x.clip.sourceId === pa.sourceId)
+    const media = p.layers.filter((l) => l.type === 'media' && l.sourceId === pa.sourceId)
+    if (!items.length && !media.length) return
+    pendingAnno.current = null
+    if (p.layers.some((l) => l.type === 'annotate' && l.sourceId === pa.sourceId)) return
+    const spans = [...items.map((x) => [x.start, x.start + x.dur]), ...media.map((l) => [l.start, l.end])]
+    const start = Math.min(...spans.map((s) => s[0])), end = Math.max(...spans.map((s) => s[1]))
+    const l: AnnotateLayer = { ...newAnnotate(start, end, pa.sourceId), ...pa.take, name: t('Screen effects') }
+    // added without taking the selection away from the recording
+    ed.replaceProject({ ...p, layers: [...p.layers, l] })
+    setToast(`✨ ${t('Smart annotate added')}: ${pa.take.marks.length} ${t('effects. Select it to change the look or draw more.')}`)
+  }, [ed.project]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Annotate: picks the annotate item under the playhead, or makes one. Over a video it follows that video, so its
+   * marks stay on the right moment and spot through cuts, trims, speed and crop.
+   */
+  const annotateHere = () => {
+    player?.pause()
+    const here = ed.project.layers.find((l): l is AnnotateLayer => l.type === 'annotate' && time >= l.start && time < l.end)
+    if (here) { ed.setSel({ type: 'layer', id: here.id }); setPanel('annotate'); return }
+    const it = ed.layout.items.find((x) => time >= x.start && time < x.start + x.dur)
+    const src = it && ed.sources[it.clip.sourceId]
+    const l = it && src?.kind === 'video'
+      ? newAnnotate(it.start, it.start + it.dur, src.id)
+      : newAnnotate(time, Math.max(time + 1, Math.min(ed.layout.total, time + 10)))
+    ed.addLayer(l)
+    setPanel('annotate')
+    setToast(t('Draw on the video: circle a word to box it, draw under a line to underline it'))
   }
 
   /** Freeze frame: the clip under the playhead holds its picture there for 3 seconds. */
@@ -707,7 +750,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     if (s.type === 'clip') { setPanel('adjust'); return }
     const l = ed.project.layers.find((x) => x.id === s.id)
     if (!l) return
-    const p: Record<typeof l.type, PanelName> = { text: 'text', sticker: 'stickers', media: 'overlay', blur: 'blur', audio: 'volume', wave: 'wave', adjustment: 'adjlayer' }
+    const p: Record<typeof l.type, PanelName> = { text: 'text', sticker: 'stickers', media: 'overlay', blur: 'blur', audio: 'volume', wave: 'wave', adjustment: 'adjlayer', annotate: 'annotate' }
     setPanel(p[l.type])
   }
   /** A copy of the whole track on a new row at the same time (the main video: as a video track). */
@@ -968,6 +1011,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ],
       wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
       adjustment: ADJ_LOOKS(setPanel),
+      annotate: [],
     }[selLayer.type]
     tools = [
       { icon: 'selectAll', label: 'One item', on: selectOne, active: true },
@@ -1048,6 +1092,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ],
       wave: [{ icon: 'wave', label: 'Waveform', on: () => setPanel('wave') } as Tool],
       adjustment: [{ icon: 'layers', label: 'Strength', on: () => setPanel('adjlayer') } as Tool, ...ADJ_LOOKS(setPanel)],
+      annotate: [{ icon: 'brush', label: 'Annotate', on: () => { player?.pause(); setPanel('annotate') } } as Tool],
     }[selLayer.type]
     // an overlay's own tools come first, then where it sits (order, keyframes), then the rest
     tools = selLayer.type === 'media'
@@ -1060,6 +1105,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...(copied ? [{ icon: 'paste', label: 'Paste track', on: () => setPasteSheet(true) } as Tool] : []),
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'mask', label: 'Shape reveal', on: () => { player?.pause(); setPanel('reveal') }, disabled: empty },
+      { icon: 'brush', label: 'Annotate', on: annotateHere, disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'splitscreen', label: 'Split screen', on: () => setPanel('split'), disabled: empty },
       { icon: 'fit', label: 'Main frame', on: () => setPanel('frame'), disabled: empty, active: mainFrameOn(ed.project.main?.frame) },
@@ -1252,6 +1298,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'media-anim' && selLayer?.type === 'media') panelView = <MediaAnimPanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'blend' && selLayer?.type === 'media') panelView = <BlendPanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'blur' && selLayer?.type === 'blur') panelView = <BlurPanel ed={ed} layer={selLayer} onClose={closePanel} />
+  else if (panel === 'annotate' && selLayer?.type === 'annotate') panelView = <AnnotatePanel ed={ed} layer={selLayer} player={player} time={time} onSeek={seek} onDraw={setAnnoDraw} onToast={setToast} onClose={closePanel} />
   else if (panel === 'wave' && selLayer?.type === 'wave') panelView = <WavePanel ed={ed} layer={selLayer} onClose={closePanel} />
   else if (panel === 'frame') panelView = <MainFramePanel ed={ed} W={player?.renderer.W ?? 16} H={player?.renderer.H ?? 9} onClose={closePanel} />
   else if (panel === 'watermark') panelView = <WatermarkPanel ed={ed} time={time} onClose={closePanel} />
@@ -1312,7 +1359,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {dock === 'left' && toolbar}
       <div className="stage-wrap">
         <Preview ed={ed} player={player} canvasRef={canvasRef} t={time} onTogglePlay={togglePlay}
-          onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} frameEdit={panel === 'frame'} compare={compare} onCompare={setCompare} />
+          onEditText={() => setPanel('text')} wmEdit={panel === 'watermark'} frameEdit={panel === 'frame'} draw={panel === 'annotate' && selLayer?.type === 'annotate' ? annoDraw : null} compare={compare} onCompare={setCompare} />
         {!empty && !fs && (
           <div className="stage-corner">
             <button className={compare !== null ? 'on' : ''} onClick={toggleCompare} aria-label="Before / after" aria-pressed={compare !== null} title={t('Before / after (B)')} data-testid="compare-btn"><Icon name="compare" size={18} /></button>

@@ -18,6 +18,13 @@ jobs:
       - run: npm ci
       - name: Download built-in AI models
         run: node scripts/fetch-models.mjs
+      - name: Build the Smart annotate input helper
+        shell: pwsh
+        run: |
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          New-Item -ItemType Directory -Force electron/bin | Out-Null
+          & $csc /nologo /optimize+ /target:exe /platform:anycpu "/out:electron\bin\inputhook.exe" "electron\native\inputhook.cs"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - run: npm run electron:build
       - uses: actions/upload-artifact@v4
         with:

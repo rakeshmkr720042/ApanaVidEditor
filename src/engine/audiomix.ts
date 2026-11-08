@@ -9,6 +9,8 @@ import { duckCurve, duckGainFrom, FPS, isDucked } from './duck'
 import { fadeGain } from './player'
 import { maxVol, volAt } from '../model/clipKeys'
 import { reversedIn } from './soundfx'
+import { clickSounds } from '../model/annotate'
+import { clickSound } from './annotate'
 
 export const MIX_RATE = 48000
 
@@ -192,6 +194,21 @@ export async function mixAudio(
     node.buffer = part
     node.connect(g)
     node.start(t0 - from, 0, Math.min(t1 - t0, part.duration))
+    any = true
+  }
+  // Smart annotate: a soft tick on every click, when its sound is on
+  const ticks = clickSounds(project, from, to)
+  if (ticks.length) {
+    const tick = clickSound(rate)
+    const g = ctx.createGain()
+    g.gain.value = 0.7
+    g.connect(ctx.destination)
+    for (const t of ticks) {
+      const node = ctx.createBufferSource()
+      node.buffer = tick
+      node.connect(g)
+      node.start(Math.max(0, t - from))
+    }
     any = true
   }
   onProgress?.(1)

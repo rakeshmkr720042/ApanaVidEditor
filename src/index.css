@@ -1333,3 +1333,17 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 /* Desi pack: shayari lines in the Titles tab */
 .shayari-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; max-height: 260px; overflow-y: auto; }
 .shayari-line { text-align: left; white-space: normal; line-height: 1.4; font-family: "Noto Sans Devanagari", "Poppins", sans-serif; }
+
+/* Smart Screen Annotate */
+.draw-pad { position: absolute; z-index: 6; touch-action: none; cursor: crosshair; outline: 2px dashed rgba(255, 214, 10, 0.55); outline-offset: -2px; }
+.draw-pad svg { display: block; pointer-events: none; }
+.draw-pad.tool-tap, .draw-pad.tool-badge { cursor: pointer; }
+.anno-list { display: flex; flex-direction: column; gap: 4px; }
+.anno-row { display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.anno-row .link { min-width: 56px; background: none; border: 0; color: var(--accent, #7dd3fc); text-align: left; padding: 0; cursor: pointer; }
+.anno-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-anno { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 214, 10, 0.08); border: 1px solid rgba(255, 214, 10, 0.25); }
+.rec-anno kbd { font: 600 12px system-ui, sans-serif; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); white-space: nowrap; }
+.rec-anno .keys { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; font-size: 13px; }
+.rec-modes { display: flex; gap: 6px; flex-wrap: wrap; }
+.rec-modes span { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(255, 45, 85, 0.25); }

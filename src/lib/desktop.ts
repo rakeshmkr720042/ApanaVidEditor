@@ -20,6 +20,12 @@ interface DesktopBridge {
   aiSetup?(model: string): Promise<{ ok: boolean; model: string }>
   aiCancel?(): void
   onAIProgress?(cb: (p: AISetupProgress) => void): () => void
+  /** Smart annotate while screen recording: cursor, clicks, keys and drawing on the screen (electron/annotate.js). */
+  annoStart?(opts?: { overlay?: boolean; hotkeys?: boolean }): Promise<AnnoAbility | null>
+  annoStop?(): void
+  annoMode?(mode: AnnoModeName, on?: boolean): void
+  onAnno?(cb: (events: AnnoEvent[]) => void): () => void
+  onAnnoState?(cb: (s: AnnoState) => void): () => void
   /** Stops Windows from sleeping while an export runs. */
   keepAwake?(on: boolean): void
   /** Help → User guide / Keyboard shortcuts in the menu bar (topic id, or null for the contents). */
@@ -33,6 +39,18 @@ export interface ComputerInfo {
   ollamaInstalled: boolean; ollamaRunning: boolean; models: string[]
 }
 export interface AISetupProgress { step: string; text: string; status?: string; p?: number; done?: number; total?: number }
+
+export type AnnoModeName = 'draw' | 'laser' | 'spotlight' | 'zoom' | 'hide'
+export interface AnnoAbility { cursor: boolean; clicks: boolean; keys: boolean; window: boolean; hotkeys: Record<AnnoModeName, string> }
+export interface AnnoState { modes: Record<AnnoModeName, boolean>; tool: string; color: string; hotkeys: Record<AnnoModeName, string> }
+/** What happened, with the time (ms since 1970) it happened; x, y are 0..1 of the recorded picture. */
+export type AnnoEvent = { at: number } & (
+  | { k: 'm'; x: number; y: number }
+  | { k: 'click'; x: number; y: number; right: boolean }
+  | { k: 'key'; text: string }
+  | { k: 'mode'; mode: Exclude<AnnoModeName, 'draw'>; on: boolean }
+  | { k: 'stroke'; tool: string; color: string | null; pts: number[]; ar: number }
+)
 
 export interface ScreenSource { id: string; name: string; thumb: string; screen: boolean }
 

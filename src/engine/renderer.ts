@@ -1,4 +1,4 @@
-import type { AdjustmentLayer, Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MainFrame, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
+import type { AdjustmentLayer, AnnotateLayer, Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MainFrame, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
 import { inBetween } from './interp'
 import { activeAt, sourceAt, type LaidClip } from '../model/timeline'
 import { stabAt } from './motion'
@@ -18,6 +18,8 @@ import { beatLayer, beatPulse, layerBeats } from './beats'
 import { defaultAdjust } from '../model/timeline'
 import { DEVA_FALLBACK, animState, drawSticker, drawText, ensureFont, fontLoaded, isDevanagari, frameHeightFor, measureText, STICKER_BASE } from './text'
 import { drawWave, waveData, waveReady, waveSize } from './visualizer'
+import { annoMatrix, drawAnnotate, mul, zoomAt, zoomMatrix } from './annotate'
+import { annoClock } from '../model/annotate'
 import { captionsDuring, drawPresenter, presenterAt } from './presenter'
 import { drawUserWatermark, watermarkCenter, watermarkSize, watermarkVisible } from './watermark'
 
@@ -190,7 +192,7 @@ export class Renderer {
         const src = inp.sources[l.sourceId]
         // until the sound is analysed the bars lie flat; a redraw follows
         drawWave(ctx, l, src ? waveData(src, () => this.onNeedsRedraw?.()) : null, l.in + (inp.t - l.start), W, H)
-      }
+      } else if (l.type === 'annotate') this.drawAnnotateLayer(l, inp)
     }
 
     if (prStart !== null && pr!.style !== 'full') this.drawPresenter(inp, prStart, prTotal)
@@ -203,6 +205,34 @@ export class Renderer {
     }
 
     if (inp.watermark) this.drawWatermark(inp.watermark)
+  }
+
+  /**
+   * Smart Screen Annotate: follows the recording it belongs to (its own second on screen, its place on the
+   * canvas); auto zoom enlarges what is drawn so far around the cursor, then the effects go on top.
+   */
+  private drawAnnotateLayer(l: AnnotateLayer, inp: RenderInput) {
+    const clock = annoClock(l, inp.project, inp.items, inp.t)
+    if (!clock) return
+    const { ctx, W, H } = this
+    let m = annoMatrix(l, clock, inp.project, inp.sources, W, H, (ml) => this.layerRect(ml, inp.sources))
+    const z = zoomAt(l, clock.T)
+    if (z && z.s > 1.001) {
+      const zm = zoomMatrix(z, m, W, H)
+      const bc = ctx2d(this.base)
+      bc.globalCompositeOperation = 'copy'
+      bc.drawImage(this.canvas, 0, 0)
+      bc.globalCompositeOperation = 'source-over'
+      ctx.save()
+      ctx.setTransform(zm[0], zm[1], zm[2], zm[3], zm[4], zm[5])
+      ctx.globalAlpha = 1
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(this.base, 0, 0)
+      ctx.restore()
+      m = mul(zm, m)
+    }
+    drawAnnotate(ctx, l, clock.T, W, H, m, z?.s ?? 1, l.sourceId ? Infinity : l.end - l.start - (l.shift ?? 0))
   }
 
   private frameBg = makeCanvas(48, 48)
