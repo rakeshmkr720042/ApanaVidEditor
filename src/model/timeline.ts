@@ -11,6 +11,8 @@ export const SPEED_RAMPS: { id: string; name: string; points: number[] }[] = [
   { id: 'flash-out', name: 'Flash out', points: [1, 1, 1, 1, 1.5, 2, 3, 4] },
   { id: 'slow-mid', name: 'Slow middle', points: [1.5, 1, 0.5, 0.3, 0.3, 0.5, 1, 1.5] },
   { id: 'build-up', name: 'Build up', points: [0.5, 0.6, 0.8, 1, 1.3, 1.7, 2.2, 3] },
+  { id: 'ultra-hit', name: 'Ultra slow hit', points: [1.5, 1, 0.4, 0.1, 0.1, 0.4, 1, 1.5] },
+  { id: 'slow-moment', name: 'Super slow moment', points: [2, 2, 0.06, 0.06, 0.06, 0.06, 2, 2] },
 ]
 
 export interface Segment { srcStart: number; srcEnd: number; speed: number; tStart: number; tEnd: number }

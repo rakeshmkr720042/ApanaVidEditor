@@ -158,6 +158,7 @@ export interface Clip {
   stabilize?: Stabilize | null // shake taken out (found by src/engine/motion.ts), missing = off
   motionBlur?: number | null // 0..1 smear of movement (frames blend into each other), missing = off
   smoothSlow?: number | null // source frames per second: slow motion blends neighbouring frames, missing = off
+  slowMode?: 'blend' | 'flow' // with smoothSlow: 'flow' makes new in-between frames from the movement (ultra smooth), missing = blend
   photo3d?: Photo3D | null // photos: 3D zoom (near things move more than far ones), missing = off
 }
 

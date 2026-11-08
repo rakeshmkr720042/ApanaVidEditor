@@ -27,6 +27,12 @@ export function saferJob(j: ExportJob): ExportJob | null {
   return next
 }
 
+/** The most careful settings, for a last try after two failures: 720p at most, 30 fps, Small, no hardware video decoder. */
+export function lastResortJob(j: ExportJob): ExportJob {
+  const resolution: Resolution = STEPS.indexOf(j.resolution) > 1 ? '720' : j.resolution
+  return { ...j, resolution, size: 'small', fps: Math.min(30, j.fps), cover: null, safe: true }
+}
+
 /** A job that should fit a phone's memory: 720p on phones with up to 4 GB, 1080p otherwise; Small; 30 fps. */
 function phoneJob(j: ExportJob, deviceGB: number | undefined): ExportJob {
   const top: Resolution = deviceGB != null && deviceGB <= 4 ? '720' : '1080'

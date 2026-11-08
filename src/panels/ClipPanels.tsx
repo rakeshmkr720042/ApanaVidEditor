@@ -4,6 +4,7 @@ import type { Editor } from '../model/useEditor'
 import { defaultAdjust, rampPoints, SPEED_RAMPS } from '../model/timeline'
 import { volAt, volKeyAt, withVolKey } from '../model/clipKeys'
 import { SpeedCurve } from './ClipKeysPanel'
+import { setSlowMode, SlowSmooth } from './MotionPanel'
 import { ADJUST_SLIDERS, colorParams, FILTER_GROUPS, FILTERS } from '../engine/filters'
 import { Grader } from '../engine/gl'
 import { TRANSITION_GROUPS, TRANSITIONS } from '../engine/transitions'
@@ -16,6 +17,7 @@ interface P { ed: Editor; onClose: () => void }
 
 export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
   const [tab, setTab] = useState<'normal' | 'curve'>(clip.ramp ? 'curve' : 'normal')
+  const video = ed.sources[clip.sourceId]?.kind === 'video'
   return (
     <Panel title="Speed" onClose={onClose}>
       <Chips options={[{ value: 'normal', label: 'Normal' }, { value: 'curve', label: 'Speed ramp' }]} value={tab} onChange={setTab} />
@@ -23,10 +25,10 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
       {tab === 'normal' ? (
         <>
           <Slider
-            label="Speed" min={-2} max={2} step={0.01} value={Math.log2(clip.speed)}
+            label="Speed" min={SPEED_LO} max={2} step={0.01} value={Math.log2(clip.speed)}
             format={(v) => `${Math.pow(2, v).toFixed(2)}x`}
             onStart={ed.begin} onEnd={ed.end}
-            onChange={(v) => ed.updateClip(clip.id, { speed: Math.round(Math.pow(2, v) * 100) / 100, ramp: null })}
+            onChange={(v) => ed.updateClip(clip.id, { speed: Math.max(0.05, Math.round(Math.pow(2, v) * 100) / 100), ramp: null })}
           />
           <Chips options={SPEED_CHIPS} value={clip.ramp ? null : clip.speed} onChange={(s) => ed.updateClip(clip.id, { speed: s, ramp: null })} wrap />
         </>
@@ -39,7 +41,7 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
             <svg viewBox="0 0 80 30"><polyline points="0,20 20,8 40,24 60,10 80,16" /></svg>{t('Custom')}
           </button>
           {SPEED_RAMPS.map((r) => {
-            const pts = r.points.map((s, i) => `${(i / (r.points.length - 1)) * 80},${28 - (Math.log2(s) + 2) * 6.5}`).join(' ')
+            const pts = r.points.map((s, i) => `${(i / (r.points.length - 1)) * 80},${28 - ((Math.log2(s) - SPEED_LO) / (2 - SPEED_LO)) * 26}`).join(' ')
             return (
               <button key={r.id} className={clip.ramp === r.id ? 'on' : ''} onClick={() => ed.updateClip(clip.id, { ramp: r.id })}>
                 <svg viewBox="0 0 80 30"><polyline points={pts} /></svg>{r.name}
@@ -47,6 +49,19 @@ export function SpeedPanel({ ed, clip, onClose }: P & { clip: Clip }) {
             )
           })}
         </div>
+      )}
+      {video && (
+        <>
+          <span className="field-label">{t('Ultra slow motion')}</span>
+          <div className="row wrap">
+            {[0.1, 0.2, 0.3].map((sp) => (
+              <button key={sp} className={`btn small${!clip.ramp && clip.speed === sp && clip.slowMode === 'flow' && clip.smoothSlow ? ' primary' : ''}`}
+                onClick={() => { setTab('normal'); void setSlowMode(ed, clip, 'flow', { speed: sp, ramp: null }) }}>🐢 {sp}x</button>
+            ))}
+          </div>
+          <p className="muted small">{t('One tap: slows the clip down and turns on Ultra smooth, so moving things glide. Cut out just the moment first (Split), as the clip gets much longer.')}</p>
+          <SlowSmooth ed={ed} clip={clip} />
+        </>
       )}
     </Panel>
   )
@@ -75,7 +90,9 @@ export function LayerSpeedPanel({ ed, layer, onClose }: P & { layer: MediaLayer 
   )
 }
 
-const SPEED_CHIPS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4].map((s) => ({ value: s, label: `${s}x` }))
+const SPEED_CHIPS = [0.05, 0.1, 0.2, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4].map((s) => ({ value: s, label: `${s}x` }))
+/** Slowest speed: 0.05x (20 times slower), log2 for the sliders */
+const SPEED_LO = Math.log2(0.05)
 
 export function VolumePanel({ ed, target, src, onClose }: P & {
   target: { kind: 'clip'; clip: Clip } | { kind: 'layer'; id: string; volume: number; fadeIn?: number; fadeOut?: number; volKeys?: VolKey[] }
