@@ -50,7 +50,7 @@ const section: HelpSection = {
     {
       id: 'playback',
       find: { selector: '[data-help="play"]', needs: 'project' },
-      keywords: ['play', 'pause', 'speed', 'timecode', 'meter', 'db', 'skip'],
+      keywords: ['play', 'pause', 'speed', 'timecode', 'meter', 'db', 'skip', 'fast forward', 'rewind', 'fast backward', 'aage', 'peeche', 'play button'],
       en: {
         title: 'Play, skip, playback speed and time display',
         what: 'The bar under the preview plays the video and shows the time.',
@@ -58,10 +58,15 @@ const section: HelpSection = {
         steps: [
           'Play / pause with the big button or Space. K also pauses.',
           'The buttons beside it go to the start, 5 seconds back, 5 seconds forward, and to the end (keys: Home, J, L, End).',
+          'Fast backward / fast forward: press and hold the ⏪ or ⏩ button. The video runs quickly through the preview, first at 4x, then 8x and 16x the longer you hold (the speed shows on the button). Let go to stop; if the video was playing it keeps playing from there.',
+          'On a computer you can also hold J (fast backward) or L (fast forward). A short press jumps 5 seconds.',
           '← and → move one frame (with Shift: one second).',
           'Tap 1x to play faster or slower while you check the edit. This does not change the exported video.',
           'Tap the time to switch between minutes and timecode (HH:MM:SS:FF), or press T.',
           'Tap dB to show the sound level meter while playing. Green is fine, red means too loud.',
+        ],
+        tips: [
+          'This bar always stays visible. On a small laptop screen the preview gets smaller instead; for a bigger video, minimize the timeline (Shift+T) or use full screen (F), which has the same Play and fast backward / forward buttons.',
         ],
       },
       hi: {
@@ -71,10 +76,15 @@ const section: HelpSection = {
         steps: [
           'बड़े बटन या Space से चलाएँ / रोकें। K से भी रुकता है।',
           'पास के बटन: शुरू पर जाएँ, 5 सेकंड पीछे, 5 सेकंड आगे, और अंत पर (कीबोर्ड: Home, J, L, End)।',
+          'तेज़ी से पीछे / तेज़ी से आगे (फ़ास्ट बैकवर्ड / फ़ास्ट फ़ॉरवर्ड): ⏪ या ⏩ बटन दबाकर रखें। प्रीव्यू में वीडियो तेज़ी से चलती है, पहले 4x, फिर जितनी देर दबाए रखें 8x और 16x (स्पीड बटन पर दिखती है)। छोड़ते ही रुक जाती है; अगर वीडियो चल रही थी तो वहीं से आगे चलती रहती है।',
+          'कंप्यूटर पर J (तेज़ी से पीछे) या L (तेज़ी से आगे) दबाकर भी रख सकते हैं। एक बार दबाने पर 5 सेकंड कूदता है।',
           '← और → एक फ़्रेम आगे-पीछे करते हैं (Shift के साथ: एक सेकंड)।',
           'एडिटिंग जाँचते समय तेज़ या धीमा चलाने के लिए 1x दबाएँ। इससे एक्सपोर्ट वाली वीडियो नहीं बदलती।',
           'समय पर दबाकर मिनट और टाइमकोड (HH:MM:SS:FF) के बीच बदलें, या T दबाएँ।',
           'चलाते समय आवाज़ का लेवल देखने के लिए dB दबाएँ। हरा ठीक है, लाल मतलब बहुत तेज़।',
+        ],
+        tips: [
+          'यह पट्टी हमेशा दिखती रहती है। छोटी लैपटॉप स्क्रीन पर इसकी जगह प्रीव्यू छोटा हो जाता है; बड़ी वीडियो के लिए टाइमलाइन छोटी करें (Shift+T) या फ़ुल स्क्रीन (F) इस्तेमाल करें, उसमें भी यही चलाएँ और तेज़ी से पीछे / आगे वाले बटन हैं।',
         ],
       },
     },

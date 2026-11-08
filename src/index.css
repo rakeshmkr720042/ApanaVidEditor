@@ -361,7 +361,8 @@ input, textarea { font: inherit; color: inherit; }
 .result-meta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; gap: 8px; }
 
 @media (min-width: 900px) {
-  .stage-wrap { min-height: 300px; }
+  /* on the stage row, not the preview itself: a preview taller than its row spilled over the play bar on short laptop screens */
+  .stage-row { min-height: min(300px, 34dvh); }
   .tl-scroll { max-height: 30dvh; }
 }
 
@@ -1235,8 +1236,13 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 @media (max-width: 380px) { .editor .top-actions .icon-btn { width: 30px; } .editor .top > .icon-btn { width: 32px; } }
 
 /* ---------- toolbar: groups, side docks, hover magnify (components/ToolBar.tsx) */
-.stage-row { flex: 1; min-height: 0; display: flex; }
-.stage-row > .stage-wrap { flex: 1; min-width: 0; }
+.stage-row { flex: 1 1 0; min-height: min(140px, 24dvh); display: flex; }
+.stage-row > .stage-wrap { flex: 1; min-width: 0; min-height: 0; }
+/* the play bar never shrinks and always sits above the preview, so Play and fast backward / forward stay fully visible */
+.transport { flex-shrink: 0; position: relative; z-index: 4; background: var(--bg); }
+.skip-btn { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.skip-btn.scanning { color: var(--accent); }
+.scan-speed { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 700; line-height: 1; padding: 2px 4px; border-radius: 99px; background: var(--accent); color: #fff; pointer-events: none; }
 .toolbar { display: flex; flex-direction: column; min-width: 0; flex-shrink: 0; }
 .tools { position: relative; }
 .tool-groups { display: flex; gap: 4px; padding: 6px 6px 0; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
