@@ -6,6 +6,7 @@ import { CAPTION_LOOKS, splitShort, withEmoji, withoutEmoji } from '../lib/capti
 import { FONT_INFO, ensureFont, isDevanagari, preferredHindiFont, prefetchFonts, rememberHindiFont } from '../engine/text'
 import { Chips, ColorRow, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
+import { useTrending } from '../lib/useTrending'
 
 const WORD_STYLES: { value: WordFxStyle | ''; label: string }[] = [
   { value: '', label: 'Off' },
@@ -27,6 +28,8 @@ export function CaptionStyle({ ed, layer }: { ed: Editor; layer: TextLayer }) {
   useEffect(() => { prefetchFonts().then(() => fontsReady((n) => n + 1)) }, [])
   const match = (l: Layer) => (subs ? isSub(l) : l.id === layer.id)
   const update = (fn: (l: TextLayer) => Partial<TextLayer>) => ed.updateLayers(match, (l) => fn(l as TextLayer))
+  const trending = useTrending()
+  const looks = [...(trending?.captionLooks ?? []).map((l) => ({ ...l, hot: true })), ...CAPTION_LOOKS.filter((l) => !trending?.captionLooks.some((x) => x.name === l.name))]
   const fx = layer.words ?? null
   const setFx = (patch: Partial<WordFx> | null) => update((l) => ({ words: patch === null ? null : { style: 'color', color: '#ffe600', ...l.words, ...patch } }))
   const count = subs ? ed.project.layers.filter(isSub).length : 1
@@ -45,7 +48,7 @@ export function CaptionStyle({ ed, layer }: { ed: Editor; layer: TextLayer }) {
     <>
       <span className="field-label">{t('Trending looks')}</span>
       <div className="preset-grid caption-looks">
-        {CAPTION_LOOKS.map((look) => (
+        {looks.map((look) => (
           <button
             key={look.name}
             className={look.words?.style === fx?.style && look.style.font === layer.style.font ? 'on' : ''}
@@ -64,7 +67,7 @@ export function CaptionStyle({ ed, layer }: { ed: Editor; layer: TextLayer }) {
               WebkitTextStroke: look.style.stroke ? `1px ${look.style.stroke}` : undefined, textShadow: look.style.glow ? `0 0 8px ${look.style.glow}` : undefined,
             }}
           >
-            {look.words?.caps ? t(look.name).toLocaleUpperCase() : t(look.name)}
+            {(look as { hot?: boolean }).hot ? '🔥 ' : ''}{look.words?.caps ? t(look.name).toLocaleUpperCase() : t(look.name)}
             {look.words && <i className="look-dot" style={{ background: look.words.color }} />}
           </button>
         ))}

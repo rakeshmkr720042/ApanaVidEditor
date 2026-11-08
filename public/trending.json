@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "updated": "2026-11-08",
+  "captionLooks": [
+    { "name": "Fire", "words": { "style": "pop", "color": "#ff6a00", "caps": true },
+      "style": { "font": "Bangers", "color": "#ffffff", "stroke": "#3d0000", "strokeWidth": 1, "shadow": true, "background": null, "bold": false, "glow": "#ff3d00", "fill": null } },
+    { "name": "Desi gold", "words": { "style": "color", "color": "#ffd166" },
+      "style": { "font": "Rozha One", "color": "#ffffff", "stroke": "#2a0a12", "strokeWidth": 0.7, "shadow": true, "background": null, "bold": false, "glow": null, "fill": null } },
+    { "name": "Bollywood", "words": { "style": "karaoke", "color": "#ff3df5" },
+      "style": { "font": "Yatra One", "color": "#ffffff", "stroke": "#000000", "strokeWidth": 0.6, "shadow": true, "background": null, "bold": false, "glow": null, "fill": null } },
+    { "name": "Gaming", "words": { "style": "box", "color": "#39ff14" },
+      "style": { "font": "Teko", "color": "#ffffff", "stroke": null, "shadow": true, "background": null, "bold": true, "glow": null, "fill": null, "letterSpacing": 0.05 } },
+    { "name": "Soft white", "words": { "style": "reveal", "color": "#ffffff" },
+      "style": { "font": "Mukta", "color": "#1a1a1a", "stroke": null, "shadow": false, "background": "rgba(255,255,255,0.85)", "bold": true, "glow": null, "fill": null } }
+  ],
+  "titles": [
+    { "name": "Festive sale", "text": "Festive Sale 🎁", "style": { "font": "Bangers", "size": 0.1, "fill": "gold", "glow": "#ffb000", "color": "#f7d24a", "shadow": false, "stroke": "#3d1f00", "strokeWidth": 0.5, "background": null }, "animIn": "pop", "animOut": "zoom", "loop": "heartbeat" },
+    { "name": "Jai Hind", "text": "जय हिंद 🇮🇳", "style": { "font": "Rozha One", "size": 0.11, "fill": "tiranga", "glow": null, "color": "#ff9933", "shadow": false, "stroke": "#0b2a6b", "strokeWidth": 0.4, "background": null }, "animIn": "zoom", "animOut": "fade", "loop": "float" },
+    { "name": "Like & share", "text": "Like 👍  Share ↗  Subscribe 🔔", "style": { "font": "Montserrat", "size": 0.06, "fill": null, "glow": null, "color": "#ffffff", "shadow": false, "stroke": null, "background": "#ff0033dd", "bold": true }, "animIn": "slide-up", "animOut": "slide-down", "loop": "pulse" },
+    { "name": "Coming soon", "text": "Coming Soon…", "style": { "font": "Playfair Display", "size": 0.09, "fill": "silver", "glow": "#ffffff", "color": "#ffffff", "shadow": false, "stroke": null, "background": null, "italic": true }, "animIn": "blur", "animOut": "fade", "loop": "shimmer" }
+  ]
+}

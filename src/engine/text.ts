@@ -151,6 +151,7 @@ export const FILLS: { value: TextFill; label: string; stops: string[] }[] = [
   { value: 'sunset', label: 'Sunset', stops: ['#ffd27a', '#ff8a5c', '#e8467c'] },
   { value: 'love', label: 'Love', stops: ['#ffd1e1', '#ff5c93', '#c2185b'] },
   { value: 'rainbow', label: 'Rainbow', stops: ['#ff3b3b', '#ffb000', '#ffe600', '#3ddc84', '#3d9bff', '#a259ff'] },
+  { value: 'tiranga', label: 'Tiranga', stops: ['#ff9933', '#ff9933', '#ffffff', '#138808', '#138808'] },
 ]
 
 /** Ready-made wedding and event titles: words, look and movement in one tap. */

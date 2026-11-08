@@ -1329,3 +1329,7 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
   .dock-left .tg-chip, .dock-right .tg-chip { padding: 5px 0; justify-content: center; }
   .dock-left .tools, .dock-right .tools { padding: 4px 2px; }
 }
+
+/* Desi pack: shayari lines in the Titles tab */
+.shayari-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; max-height: 260px; overflow-y: auto; }
+.shayari-line { text-align: left; white-space: normal; line-height: 1.4; font-family: "Noto Sans Devanagari", "Poppins", sans-serif; }

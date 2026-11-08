@@ -35,6 +35,13 @@ export const THEMES: Theme[] = [
   { id: 'desi', name: 'Desi', font: 'Yatra One', accent: '#ffd166', ctaBg: '#d00000', colors: ['#ff6b00', '#c9184a'] },
   { id: 'news', name: 'News', font: 'Bebas Neue', accent: '#ffcc00', ctaBg: '#e5383b', colors: ['#111111', '#3a3a3a'] },
   { id: 'elegant', name: 'Elegant', font: 'Playfair Display', accent: '#f1e3c6', ctaBg: '#a2845e', colors: ['#1d1a16', '#4a3f35'] },
+  // Desi creator pack: festival and wedding intros (fonts with Hindi letters, so Hindi titles look right too)
+  { id: 'diwali', name: 'Diwali', font: 'Yatra One', accent: '#ffd166', ctaBg: '#b5179e', colors: ['#2b0a3d', '#ff8800'] },
+  { id: 'holi', name: 'Holi', font: 'Modak', accent: '#ffe600', ctaBg: '#00b4d8', colors: ['#ff3d7f', '#38b000'] },
+  { id: 'eid', name: 'Eid', font: 'Rozha One', accent: '#f7d24a', ctaBg: '#0f5132', colors: ['#06281b', '#1b6b4a'] },
+  { id: 'shaadi', name: 'Shaadi', font: 'Amita', accent: '#f7d24a', ctaBg: '#8a1538', colors: ['#5c0a1e', '#c9184a'] },
+  { id: 'rakhi', name: 'Rakhi', font: 'Kalam', accent: '#fff3b0', ctaBg: '#e85d04', colors: ['#ff006e', '#ffbe0b'] },
+  { id: 'tiranga', name: 'Tiranga', font: 'Rozha One', accent: '#ffffff', ctaBg: '#138808', colors: ['#ff9933', '#138808'] },
 ]
 
 export const defaultDesign = (kind: TemplateKind): TemplateDesign => ({

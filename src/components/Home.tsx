@@ -61,7 +61,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
 
   const openFile = async (f: File) => {
     setError(null); setOpening(true)
-    try { onOpen(await importProjectFile(f)) } catch (e) { setError((e as Error).message) } finally { setOpening(false) }
+    try { onOpen(await importProjectFile(f)) } catch (e) { setError(t((e as Error).message)) } finally { setOpening(false) }
   }
 
   const checkOffline = () => Promise.all([isCoreCached(), isEngineCached()]).then(([a, b]) => setOffline(a && b ? 'ready' : 'no'))
@@ -119,7 +119,7 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         <button className="btn wide" onClick={() => setCompress(true)} data-testid="home-compress" data-help="compress">
           <Icon name="compress" size={18} /> {t('Compress video')}
         </button>
-        <input ref={fileInput} type="file" accept=".avp,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
+        <input ref={fileInput} type="file" accept=".avp,application/json,application/octet-stream" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = '' }} />
         {error && <p className="error-text">{error}</p>}
         {recover && projects?.some((p) => p.id === recover.id) && (
           <div className="recover-card" data-testid="recover-card" data-help="recover">

@@ -7,6 +7,7 @@ import { finishWebSignIn } from './lib/youtube'
 import { listenForBack } from './lib/back'
 import { startBlackbox } from './lib/blackbox'
 import { BlackboxHost, CrashGuard } from './components/BlackboxSheet'
+import { startTrending } from './lib/trending'
 
 // the flight recorder starts first, so even a failure while the app loads is kept
 startBlackbox()
@@ -24,6 +25,8 @@ if (import.meta.env.PROD && !isDesktop && 'serviceWorker' in navigator) {
 // the YouTube sign-in popup lands back on this page: hand the token to the app and close
 if (!finishWebSignIn()) {
   listenForBack()
+  // new trending caption looks and titles from the website, when the app is idle (never blocks start)
+  try { startTrending() } catch { /* offline or old browser: built-in looks only */ }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <CrashGuard><App /></CrashGuard>
