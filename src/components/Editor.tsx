@@ -74,6 +74,7 @@ import { MotionPanel, TrackPanel } from '../panels/MotionPanel'
 import { isTracked } from '../engine/tracker'
 import { loadCutout } from '../engine/cutout'
 import { BACK, useBack } from '../lib/back'
+import { SkipButton } from './SkipButton'
 import { FullScreenBar } from './FullScreen'
 import { enterNativeFullScreen, leaveNativeFullScreen, useIdle } from '../lib/fullscreen'
 import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, patchFor, rejectHabits, toolUsed, useHabitsVersion, usualFor, type Habit, type NextStep } from '../lib/habits'
@@ -818,8 +819,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       // while playing the arrows (and J / L) jump 5 s and keep playing; while paused they step a frame (Shift: 1 s)
       else if (e.key === 'ArrowLeft' && player?.playing) skip(-SKIP)
       else if (e.key === 'ArrowRight' && player?.playing) skip(SKIP)
-      else if (e.key === 'j' && !mod) skip(-SKIP)
-      else if (e.key === 'l' && !mod) skip(SKIP)
+      // J / L: a tap jumps 5 s, holding the key scans fast (the key repeats about 30 times a second)
+      else if (e.key === 'j' && !mod) skip(e.repeat ? -0.4 : -SKIP)
+      else if (e.key === 'l' && !mod) skip(e.repeat ? 0.4 : SKIP)
       else if (e.key === 'ArrowLeft') seek(time - (e.shiftKey ? 1 : 1 / 30))
       else if (e.key === 'ArrowRight') seek(time + (e.shiftKey ? 1 : 1 / 30))
     }
@@ -1333,11 +1335,11 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
         </span>
         <span className="play-group">
           <button className="icon-btn" disabled={empty} onClick={() => player?.seek(0)} aria-label="Go to start" title={t('Go to start')}><Icon name="toStart" /></button>
-          <button className="icon-btn" disabled={empty} onClick={() => skip(-SKIP)} aria-label="Back 5 seconds" title={t('Back 5 s (← or J)')}><Icon name="rewind" /></button>
+          <SkipButton player={player} dir={-1} onSkip={skip} disabled={empty} />
           <button className="icon-btn play" data-help="play" disabled={empty} onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
             <Icon name={playing ? 'pause' : 'play'} />
           </button>
-          <button className="icon-btn" disabled={empty} onClick={() => skip(SKIP)} aria-label="Forward 5 seconds" title={t('Forward 5 s (→ or L)')}><Icon name="forward" /></button>
+          <SkipButton player={player} dir={1} onSkip={skip} disabled={empty} />
           <button className="icon-btn" disabled={empty} onClick={() => seek(ed.layout.total)} aria-label="Go to end" title={t('Go to end')}><Icon name="toEnd" /></button>
         </span>
         <span className="zoom">

@@ -1,6 +1,7 @@
 import type { Player } from '../engine/player'
 import { t } from '../lib/i18n'
 import { Icon } from './Icon'
+import { SkipButton } from './SkipButton'
 
 interface Props {
   player: Player | null
@@ -31,9 +32,9 @@ export function FullScreenBar(p: Props) {
         style={{ '--done': `${p.total ? (p.time / p.total) * 100 : 0}%` } as React.CSSProperties}
       />
       <div className="fs-row">
-        <button className="icon-btn skip" onClick={() => p.onSkip(-5)} aria-label="Back 5 seconds" title={t('Back 5 s (← or J)')}><Icon name="rewind" /></button>
+        <SkipButton className="icon-btn skip" player={p.player} dir={-1} onSkip={p.onSkip} />
         <button className="icon-btn play" onClick={p.onTogglePlay} aria-label={p.playing ? 'Pause' : 'Play'}><Icon name={p.playing ? 'pause' : 'play'} /></button>
-        <button className="icon-btn skip" onClick={() => p.onSkip(5)} aria-label="Forward 5 seconds" title={t('Forward 5 s (→ or L)')}><Icon name="forward" /></button>
+        <SkipButton className="icon-btn skip" player={p.player} dir={1} onSkip={p.onSkip} />
         <span className="fs-time">{p.showTime(p.time)} <span className="muted">/ {p.showTime(p.total)}</span></span>
         <span className="fs-spacer" />
         <button className={`rate-btn${p.rate !== 1 ? ' on' : ''}`} onClick={p.onRate} title={t('Playback speed')}>{p.rate}x</button>

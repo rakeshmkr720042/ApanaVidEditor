@@ -28,7 +28,7 @@ export const KEYS: [string, string][] = [
   ['Delete', 'Delete the selected item'],
   ['Enter', 'Open the tool of the selected item'],
   ['← / →', 'One frame back / forward (Shift: 1 s)'],
-  ['J / L', '5 s back / forward'],
+  ['J / L', '5 s back / forward (hold the key: fast backward / forward)'],
   ['Home / End', 'Go to start / end'],
   ['+ / −', 'Zoom the timeline in / out'],
   ['F', 'Full screen (in full screen: E = edit panel)'],
