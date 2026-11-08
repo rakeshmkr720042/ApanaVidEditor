@@ -76,6 +76,30 @@ export async function videoWave(file: Blob, duration: number): Promise<string> {
   return waveform(buf, Math.round(Math.min(4000, Math.max(200, duration * 40))), 32)
 }
 
+/** Longest side a photo keeps (4K export is 3840 wide; a little more leaves room for Ken Burns zoom). */
+export const MAX_PHOTO = 4096
+
+/**
+ * A smaller copy of a photo bigger than MAX_PHOTO, or null when it is fine as it is (or is a GIF / SVG, whose
+ * animation or sharp lines a re-encode would lose). PNG and WebP stay PNG (they may be see-through).
+ */
+export async function shrinkPhoto(file: Blob, w: number, h: number): Promise<Blob | null> {
+  const long = Math.max(w, h)
+  if (long <= MAX_PHOTO || /gif|svg/i.test(file.type)) return null
+  const k = MAX_PHOTO / long
+  const W = Math.max(1, Math.round(w * k)), H = Math.max(1, Math.round(h * k))
+  // decoding straight to the small size needs far less memory than decoding the whole photo first
+  const bmp = await createImageBitmap(file, { resizeWidth: W, resizeHeight: H, resizeQuality: 'high' })
+  const c = document.createElement('canvas')
+  c.width = W; c.height = H
+  c.getContext('2d')!.drawImage(bmp, 0, 0)
+  bmp.close()
+  const type = /png|webp/i.test(file.type) ? 'image/png' : 'image/jpeg'
+  const out = await new Promise<Blob | null>((res) => c.toBlob(res, type, 0.92))
+  c.width = c.height = 0
+  return out && out.size > 0 ? out : null
+}
+
 /** Reads duration, size and thumbnails (or a waveform for audio). */
 export async function loadSource(file: Blob, name: string, id = uid()): Promise<MediaSource> {
   const kind = kindOf({ type: file.type, name })
@@ -86,6 +110,13 @@ export async function loadSource(file: Blob, name: string, id = uid()): Promise<
     const img = new Image()
     img.src = url
     await once(img, 'load')
+    // very big photos (50 MP phone cameras: 8160×6120 = 200 MB once decoded) are made 4096 px on the long side, which
+    // is still more than a 4K export needs. Ten of them in a slideshow used to be enough to close the app on a phone.
+    const smaller = await shrinkPhoto(file, img.naturalWidth, img.naturalHeight).catch(() => null)
+    if (smaller) {
+      URL.revokeObjectURL(url)
+      return loadSource(smaller, name, id)
+    }
     const c = document.createElement('canvas')
     c.height = THUMB_H
     c.width = Math.round((img.naturalWidth / img.naturalHeight) * THUMB_H)

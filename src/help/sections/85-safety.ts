@@ -136,6 +136,29 @@ const section: HelpSection = {
         ],
       },
     },
+    {
+      id: 'big-photos',
+      isNew: true,
+      keywords: ['50 mp', '108 mp', 'big photo', 'photo slideshow', 'crash', 'memory', 'heavy photo', 'badi photo'],
+      en: {
+        title: 'Very big photos are made lighter',
+        what: 'Photos from 50 MP or 108 MP cameras are made 4096 pixels on the long side when you add them. That is still sharper than a 4K video needs, and it keeps photo slideshows from running out of memory on a phone.',
+        steps: [
+          'Add photos as usual. Nothing to switch on.',
+          'Your original photo in the gallery is not changed; only the copy inside the project is lighter.',
+        ],
+        tips: ['GIFs and SVG logos are kept as they are.'],
+      },
+      hi: {
+        title: 'बहुत बड़ी फ़ोटो हल्की की जाती हैं',
+        what: '50 MP या 108 MP कैमरे की फ़ोटो जोड़ते समय लंबी तरफ़ से 4096 पिक्सेल की कर दी जाती हैं। यह 4K वीडियो की ज़रूरत से भी ज़्यादा साफ़ है, और इससे फ़ोन पर फ़ोटो स्लाइडशो में मेमोरी ख़त्म नहीं होती।',
+        steps: [
+          'फ़ोटो पहले की तरह जोड़ें। कुछ चालू नहीं करना है।',
+          'गैलरी में आपकी असली फ़ोटो नहीं बदलती; सिर्फ़ प्रोजेक्ट के अंदर वाली कॉपी हल्की होती है।',
+        ],
+        tips: ['GIF और SVG लोगो जैसे हैं वैसे ही रहते हैं।'],
+      },
+    },
   ],
 }
 

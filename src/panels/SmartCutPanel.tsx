@@ -3,7 +3,8 @@ import type { MediaSource, Project, TextLayer } from '../types'
 import type { Editor } from '../model/useEditor'
 import { DEFAULT_CUT, findCuts, findMoments, pickWithAI, soundMap, type CutSettings, type FoundCut, type Moment, type SoundMap } from '../engine/smartcut'
 import { findSpots } from '../engine/spots'
-import { allPieces, applyCuts, cutShort, punchIn } from '../model/smartcut'
+import { allPieces, applyCuts, cutShort, punchIn, type SpotAt } from '../model/smartcut'
+import { warn } from '../lib/blackbox'
 import { localAI } from '../lib/localai'
 import { offerAISetup } from '../lib/aisetup'
 import { fmtTime } from '../lib/format'
@@ -76,7 +77,9 @@ export function SmartCutPanel({ ed, onToast, onSeek, onShort, onClose }: {
   const saved = chosen.reduce((a, c) => a + c.len, 0)
   const pauses = chosen.filter((c) => c.kind === 'pause').length, fillers = chosen.length - pauses
 
-  const spotsFor = (pct: string) => findSpots(main.list, main.ranges, (q) => setBusy(`${t(pct)} ${Math.round(q * 100)}%`))
+  // finding the face needs the AI cutout model; if it can't run here (old phone, out of memory), frame the centre
+  const spotsFor = (pct: string): Promise<SpotAt> => findSpots(main.list, main.ranges, (q) => setBusy(`${t(pct)} ${Math.round(q * 100)}%`))
+    .catch((e) => { warn('Face finding failed, using the centre', e); return () => null })
 
   const cut = async () => {
     if (!chosen.length) return
