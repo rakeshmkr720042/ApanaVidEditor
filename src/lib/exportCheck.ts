@@ -1,11 +1,11 @@
 // Safe export: a check before an export starts (memory and free space against the size of the
 // video), lighter settings to fall back to when an export fails, and a note of the settings that
 // were running when the app died, so the next try starts safer.
-import { Capacitor } from '@capacitor/core'
 import type { ExportJob, Resolution } from '../engine/exporter'
 import { memoryNow } from './blackbox'
 
-export const isPhone = Capacitor.isNativePlatform() || /Android|iPhone|iPad|Mobile/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
+import { isPhone } from './device'
+export { isPhone }
 
 export interface ExportCheck {
   level: 'ok' | 'warn' | 'danger'

@@ -10,6 +10,25 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Old Android System WebView (Chrome before 111): the app's code can't run there and the screen would stay
+      // blank. Say what to update instead. Plain old JavaScript on purpose, so it runs on any WebView.
+      (function () {
+        var m = /Chrome\/(\d+)/.exec(navigator.userAgent || '');
+        if (!m || +m[1] >= 111) return;
+        var v = m[1];
+        var b = document.createElement('div');
+        b.id = 'old-webview';
+        b.setAttribute('style', 'position:fixed;top:0;left:0;right:0;bottom:0;background:#0f1115;color:#fff;font:16px/1.5 sans-serif;padding:32px 22px;overflow:auto;z-index:99');
+        b.innerHTML = '<h2 style="margin:0 0 12px">Please update Android System WebView</h2>' +
+          '<p>Apna Editor needs a newer version of <b>Android System WebView</b> (or Chrome). This phone has version ' + v + '; version 111 or newer is needed.</p>' +
+          '<p style="margin-top:18px"><b>कृपया "Android System WebView" अपडेट करें</b></p>' +
+          '<p>Apna Editor चलाने के लिए फ़ोन में <b>Android System WebView</b> (या Chrome) का नया वर्ज़न चाहिए। इस फ़ोन में वर्ज़न ' + v + ' है; 111 या नया चाहिए।</p>' +
+          '<ol><li>Play Store खोलें / Open Play Store</li><li>"Android System WebView" खोजें और <b>Update</b> दबाएँ / search it and tap <b>Update</b></li><li>"Chrome" भी अपडेट करें / update Chrome too</li><li>Apna Editor फिर से खोलें / open Apna Editor again</li></ol>' +
+          '<p><a style="color:#7cc4ff" target="_blank" href="https://play.google.com/store/apps/details?id=com.google.android.webview">Android System WebView (Play Store)</a></p>';
+        document.body.appendChild(b);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

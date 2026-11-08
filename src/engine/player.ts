@@ -85,6 +85,15 @@ export function mediaNeeds(project: Project, items: LaidClip[], sources: Record<
 
 const clampRate = (r: number) => Math.min(16, Math.max(0.0625, r))
 
+/**
+ * Photos the preview can let go of: unused for 10 s, oldest first, keeping the 8 most recently used
+ * (so going back and forth over a few photos never reloads them).
+ */
+export function photosToFree(used: Map<string, number>, now: number, keep = 8, idleMs = 10000): string[] {
+  const old = [...used].sort((a, b) => b[1] - a[1]).slice(keep)
+  return old.filter(([, at]) => now - at > idleMs).map(([id]) => id)
+}
+
 /** Live preview: drives <video>/<audio> elements from one clock and draws frames to a canvas. */
 export class Player {
   t = 0
@@ -110,6 +119,7 @@ export class Player {
   private els = new Map<string, HTMLMediaElement>()
   private used = new Map<string, number>()
   private imgs = new Map<string, HTMLImageElement>()
+  private imgUsed = new Map<string, number>()
   private raf = 0
   private clockStart = 0
   private clockT = 0
@@ -277,6 +287,7 @@ export class Player {
       img.src = src.url
       this.imgs.set(src.id, img)
     }
+    this.imgUsed.set(src.id, performance.now())
     return img
   }
 
@@ -320,6 +331,13 @@ export class Player {
         this.meter?.detach(el)
         this.els.delete(key)
       }
+    }
+    // photos not shown for a while let go of their decoded pixels (a 100 photo slideshow kept every one, ~50 MB each)
+    for (const id of photosToFree(this.imgUsed, now)) {
+      const img = this.imgs.get(id)
+      if (img) { img.onload = null; img.removeAttribute('src') }
+      this.imgs.delete(id)
+      this.imgUsed.delete(id)
     }
   }
 
