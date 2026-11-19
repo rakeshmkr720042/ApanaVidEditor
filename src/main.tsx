@@ -8,9 +8,13 @@ import { listenForBack } from './lib/back'
 import { startBlackbox } from './lib/blackbox'
 import { BlackboxHost, CrashGuard } from './components/BlackboxSheet'
 import { startTrending } from './lib/trending'
+import { startTesterKeys } from './lib/tester'
+import { TesterHost } from './components/TesterPanel'
 
 // the flight recorder starts first, so even a failure while the app loads is kept
 startBlackbox()
+// Ctrl+H: the hidden tester panel (Testing notes + Blackbox log)
+startTesterKeys()
 
 if (import.meta.env.PROD && !isDesktop && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { scope: './' }))
@@ -31,6 +35,7 @@ if (!finishWebSignIn()) {
     <StrictMode>
       <CrashGuard><App /></CrashGuard>
       <BlackboxHost />
+      <TesterHost />
     </StrictMode>,
   )
 }

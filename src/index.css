@@ -1347,3 +1347,9 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .rec-anno .keys { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; font-size: 13px; }
 .rec-modes { display: flex; gap: 6px; flex-wrap: wrap; }
 .rec-modes span { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(255, 45, 85, 0.25); }
+
+/* hidden tester panel (Ctrl+H / 5 taps on the Home logo) */
+.tester-panel .tester-actions { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.tester-panel .tester-lock { border-top: 1px solid #ffffff1a; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.tester-panel .tester-lock .row { display: flex; gap: 8px; width: 100%; }
+.tester-panel .tester-lock input { flex: 1; min-width: 0; }

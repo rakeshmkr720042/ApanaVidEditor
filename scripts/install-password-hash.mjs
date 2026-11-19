@@ -1,6 +1,7 @@
 // Prints the hashes kept for the install password, so the password itself never sits in the code.
 // Usage: node scripts/install-password-hash.mjs "<password>"
-// Put the two numbers in electron/installer.nsh (PWD_HASH_A/B).
+// Put the two numbers in electron/installer.nsh (PWD_HASH_A/B) AND src/lib/tester.ts (the in-app
+// Tester tools panel, Ctrl+H, checks the same password to show the Notes and Blackbox buttons).
 
 const pw = process.argv[2]
 if (!pw) { console.error('Give the password as the first argument.'); process.exit(1) }

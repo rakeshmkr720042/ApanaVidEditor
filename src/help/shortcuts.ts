@@ -18,6 +18,7 @@ export const KEYS: [string, string][] = [
   ['Ctrl+Alt+V', 'Paste style on the selected item(s)'],
   ['Shift+M', 'Add a marker at the playhead'],
   ['Ctrl+Shift+M', 'All markers (rename, colour, YouTube chapters)'],
+  ['Ctrl+H', 'Tester tools: Testing notes, Blackbox log (hidden until the install password is typed)'],
   ['Ctrl+Shift+L', 'Blackbox log (what happened, errors, crash reasons)'],
   ['Ctrl+← / Ctrl+→', 'Jump to the previous / next marker'],
   ['K', 'Pause'],

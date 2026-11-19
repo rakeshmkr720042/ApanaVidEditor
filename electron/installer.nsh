@@ -9,6 +9,7 @@
 !include FileFunc.nsh
 
 ; FNV-1a style hashes of the password (made by scripts/install-password-hash.mjs).
+; src/lib/tester.ts keeps the same two numbers (the in-app Ctrl+H panel checks the same password).
 !define PWD_HASH_A 464077357
 !define PWD_HASH_B 1231088143
 

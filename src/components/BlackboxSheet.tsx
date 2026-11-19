@@ -6,6 +6,7 @@ import { getLang, t } from '../lib/i18n'
 import safety from '../help/sections/85-safety'
 import { Icon } from './Icon'
 import { SheetClose } from '../ui/kit'
+import { testerUnlocked, useTesterUnlocked } from '../lib/tester'
 
 const fileName = () => `apna-editor-blackbox-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}.txt`
 
@@ -117,6 +118,8 @@ export function BlackboxSheet({ onClose }: { onClose: () => void }) {
 export function BlackboxHost() {
   const [open, setOpen] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  // the red "Problem recorded" pill is a tester tool too: hidden until the install password is typed
+  const tester = useTesterUnlocked()
   useEffect(() => onOpen(() => setOpen(true)), [])
   useEffect(() => onProblem((m) => setProblem(m)), [])
   useEffect(() => {
@@ -126,7 +129,7 @@ export function BlackboxHost() {
   }, [problem])
   return (
     <>
-      {problem && !open && (
+      {problem && !open && tester && (
         <button className="bb-pill" onClick={() => { setProblem(null); setOpen(true) }} data-testid="bb-pill">
           <Icon name="blackbox" size={14} /> {t('Problem recorded')} · {t('tap to see')}
         </button>
@@ -152,7 +155,7 @@ export class CrashGuard extends Component<{ children: ReactNode }, { failed: boo
         <div className="row wrap">
           <button className="btn primary" onClick={() => location.reload()}>{t('Reload the app')}</button>
           <button className="btn" onClick={() => { location.hash = ''; this.setState({ failed: false }) }}>{t('Go to Home')}</button>
-          <button className="btn" onClick={openBlackbox}><Icon name="blackbox" size={16} /> {t('Blackbox log')}</button>
+          {testerUnlocked() && <button className="btn" onClick={openBlackbox}><Icon name="blackbox" size={16} /> {t('Blackbox log')}</button>}
         </div>
       </div>
     )

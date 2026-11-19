@@ -239,11 +239,12 @@ const section: HelpSection = {
     {
       id: 'testing-notes',
       find: { selector: '[data-help="notes"]' },
-      keywords: ['notes', 'feedback', 'bug', 'report'],
+      keywords: ['notes', 'feedback', 'bug', 'report', 'ctrl+h'],
+      related: ['tester-tools'],
       en: {
         title: 'Testing notes',
         what: 'Write down a bug or an idea while you test, then copy all notes in one go to send them.',
-        where: 'Home → Notes, or the note button at the top of the editor',
+        where: 'Ctrl+H → Testing notes (the buttons are hidden until the install password is typed), then also Home → Notes and the note button at the top of the editor',
         steps: [
           'Tap Notes (Home) or the note icon (editor). The editor fills in where you were, for example the open tool.',
           'Type what went wrong or what you want, and save it.',
@@ -254,7 +255,7 @@ const section: HelpSection = {
       hi: {
         title: 'टेस्टिंग नोट्स',
         what: 'टेस्ट करते समय कोई गड़बड़ी या आइडिया लिख लें, फिर सारे नोट्स एक साथ कॉपी करके भेजें।',
-        where: 'होम → नोट्स, या एडिटर में ऊपर नोट वाला बटन',
+        where: 'Ctrl+H → टेस्टिंग नोट्स (इंस्टॉल पासवर्ड डालने तक बटन छुपे रहते हैं), फिर होम → नोट्स और एडिटर में ऊपर नोट वाला बटन',
         steps: [
           '"नोट्स" (होम) या नोट का निशान (एडिटर) दबाएँ। एडिटर अपने आप लिख देता है कि आप कहाँ थे, जैसे कौन सा टूल खुला था।',
           'क्या गलत हुआ या क्या चाहिए, लिखें और सेव करें।',

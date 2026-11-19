@@ -25,6 +25,7 @@ import { SignInOverlay } from './AuthScreen'
 import { useAccountState } from '../lib/account'
 import { usePremium } from '../lib/premium'
 import { openHelp } from '../help/open'
+import { tapCounter, useTesterUnlocked } from '../lib/tester'
 
 
 /** Brand picture behind New project; the left side is dark for the text (relative path works on web, Android and Windows). */
@@ -52,6 +53,9 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   const [accountSheet, setAccountSheet] = useState(false)
   const { premium, paid, trialDays } = usePremium()
   const account = useAccountState()
+  // Notes and Blackbox stay hidden until the install password is typed (Ctrl+H / 5 logo taps open them)
+  const tester = useTesterUnlocked()
+  const [logoTap] = useState(() => tapCounter())
   // Android, Free plan: a Google banner under Home only (never in the editor).
   useEffect(() => {
     if (paid) { hideHomeBanner(); return }
@@ -84,17 +88,17 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
   return (
     <div className="app home">
       <header className="top">
-        <div className="brand"><img className="logo-img" src="brand/icon-96.png" alt="" width={30} height={30} /> Apna Editor</div>
+        <div className="brand" onClick={logoTap} data-testid="home-logo"><img className="logo-img" src="brand/icon-96.png" alt="" width={30} height={30} /> Apna Editor</div>
         <div className="top-actions">
           <button className="btn ghost small" onClick={() => openHelp()} aria-label={t('User guide')} title={`${t('User guide')} (F1)`} data-help="help" data-testid="home-help">
             <Icon name="help" size={16} /><span className="wide-only"> {t('Help')}</span>
           </button>
-          <button className="btn ghost small notes-btn" data-help="notes" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
+          {tester && <button className="btn ghost small notes-btn" data-help="notes" onClick={() => setNotesSheet(true)} aria-label={t('Testing notes')}>
             <Icon name="note" size={16} /><span className="wide-only"> {t('Notes')}</span>{openNotes > 0 && <span className="count">{openNotes}</span>}
-          </button>
-          <button className="btn ghost small" onClick={openBlackbox} aria-label={t('Blackbox log')} title={`${t('Blackbox log')} (Ctrl+Shift+L)`} data-testid="home-blackbox" data-help="blackbox">
+          </button>}
+          {tester && <button className="btn ghost small" onClick={openBlackbox} aria-label={t('Blackbox log')} title={`${t('Blackbox log')} (Ctrl+Shift+L)`} data-testid="home-blackbox" data-help="blackbox">
             <Icon name="blackbox" size={16} /><span className="wide-only"> {t('Blackbox')}</span>
-          </button>
+          </button>}
           <button className="btn ghost small" data-help="habits" onClick={() => setHabitsSheet(true)} aria-label={t('Smart shortcuts')} title={t('Smart shortcuts')}>
             <Icon name="habit" size={16} /><span className="wide-only"> {t('Shortcuts')}</span>
           </button>
@@ -131,8 +135,8 @@ export function Home({ onOpen, onLang }: { onOpen: (id: string) => void; onLang:
         {stopped && (
           <p className="error-text" data-testid="job-stopped">
             {t(stopped.kind === 'compress' ? 'Last time the app closed while compressing a video.' : 'Last time the app closed while saving a video.')}{' '}
-            {t('Your project is saved. The phone probably ran out of memory: close other apps, then try a lower quality (720p) or the Small file size.')}{' '}
-            <button className="link-btn" onClick={openBlackbox}>{t('See blackbox log')}</button>
+            {t('Your project is saved. The phone probably ran out of memory: close other apps, then try a lower quality (720p) or the Small file size.')}{tester && <>{' '}
+            <button className="link-btn" onClick={openBlackbox}>{t('See blackbox log')}</button></>}
           </p>
         )}
         <div className="offline-row">
