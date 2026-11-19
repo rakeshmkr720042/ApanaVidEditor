@@ -409,6 +409,17 @@ const hi: Record<string, string> = {
   'Very small target for this length: the picture will be soft.': 'इतने लंबे वीडियो के लिए यह साइज़ बहुत कम है: तस्वीर धुंधली होगी।',
   'The new file is not smaller. Keep the original, or try a lower setting.': 'नई फ़ाइल छोटी नहीं बनी। असली फ़ाइल रखें, या कम सेटिंग आज़माएं।',
   'Compressing…': 'छोटा कर रहे हैं…', 'Compressing sound…': 'आवाज़ छोटी कर रहे हैं…',
+  // hidden tester panel (Ctrl+H)
+  'Tester tools': 'टेस्टर टूल्स',
+  'Hidden tools for testing. Ctrl+H opens this panel anywhere; on a phone tap the Apna Editor logo on Home 5 times.': 'टेस्टिंग के छुपे हुए टूल। Ctrl+H दबाने पर यह पैनल कहीं भी खुलता है; फ़ोन पर होम स्क्रीन पर Apna Editor लोगो को 5 बार टैप करें।',
+  'Install password (shows the Notes and Blackbox buttons)': 'इंस्टॉल पासवर्ड (नोट्स और ब्लैकबॉक्स बटन दिखाने के लिए)',
+  'Install password': 'इंस्टॉल पासवर्ड', 'Show buttons': 'बटन दिखाएं',
+  'Password right. Notes and Blackbox buttons are now shown on this device.': 'पासवर्ड सही है। अब इस डिवाइस पर नोट्स और ब्लैकबॉक्स बटन दिखेंगे।',
+  'Wrong password. Use the same password as the Windows installer.': 'गलत पासवर्ड। वही पासवर्ड डालें जो Windows इंस्टॉलर में डालते हैं।',
+  'Notes and Blackbox buttons are shown on this device.': 'इस डिवाइस पर नोट्स और ब्लैकबॉक्स बटन दिख रहे हैं।',
+  'Hide the buttons again': 'बटन फिर से छुपाएं',
+  'Buttons hidden again. Ctrl+H still opens this panel.': 'बटन फिर से छुप गए। Ctrl+H से यह पैनल अब भी खुलेगा।',
+  'Tester tools: Testing notes, Blackbox log (hidden until the install password is typed)': 'टेस्टर टूल्स: टेस्टिंग नोट्स, ब्लैकबॉक्स लॉग (इंस्टॉल पासवर्ड डालने तक छुपे रहते हैं)',
   // testing notes
   'Testing notes': 'टेस्टिंग नोट्स', 'Notes': 'नोट्स', 'Problem': 'कमी / गड़बड़', 'New idea': 'नया आइडिया', 'Note': 'नोट',
   'Found a problem or want something new? Write it here while you test, so it is not forgotten. Notes stay on this device until you send them.': 'कोई कमी मिली या कुछ नया चाहिए? टेस्ट करते समय यहीं लिख दें, ताकि भूलें नहीं। नोट्स इसी डिवाइस में रहते हैं जब तक आप भेजते नहीं।',

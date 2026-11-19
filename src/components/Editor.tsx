@@ -45,6 +45,7 @@ import type { AnnoTake } from '../lib/annorec'
 import type { AnnotateLayer } from '../types'
 import { PlaceSheet } from './PlaceSheet'
 import { FeedbackSheet } from './FeedbackSheet'
+import { useTesterUnlocked } from '../lib/tester'
 import { playable, trackName } from '../model/tracks'
 import { copyTrack, useCopiedTrack, type PasteTrackHow } from '../model/trackCopy'
 import { PasteTrackSheet } from './PasteTrackSheet'
@@ -150,6 +151,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const ed = useEditor(initial.project)
   const [name, setName] = useState(initial.name)
   const [notesSheet, setNotesSheet] = useState(false)
+  const tester = useTesterUnlocked()
   const [habitsSheet, setHabitsSheet] = useState(false)
   const [paywall, setPaywall] = useState<Feature | null>(null)
   usePremium()
@@ -1331,7 +1333,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
           <button data-help="presenter" className={`icon-btn${ed.project.presenter?.enabled ? ' on' : ''}`} onClick={() => { player?.pause(); ed.setSel(null); setPanel(panel === 'presenter' ? null : 'presenter') }}
             aria-label={t('Presenter profile')} title={t('Presenter profile')}><Icon name="user" /></button>
           <button className="icon-btn" onClick={() => { player?.pause(); openHelp() }} aria-label={t('User guide')} title={`${t('User guide')} (F1)`} data-help="help"><Icon name="help" /></button>
-          <button className="icon-btn" data-help="notes" onClick={() => { player?.pause(); setNotesSheet(true) }} aria-label={t('Testing notes')} title={t('Testing notes')}><Icon name="note" /></button>
+          {tester && <button className="icon-btn" data-help="notes" onClick={() => { player?.pause(); setNotesSheet(true) }} aria-label={t('Testing notes')} title={t('Testing notes')}><Icon name="note" /></button>}
           <button className="icon-btn" data-help="undo" disabled={!ed.canUndo} onClick={ed.undo} aria-label="Undo"><Icon name="undo" /></button>
           <button className="icon-btn" disabled={!ed.canRedo} onClick={ed.redo} aria-label="Redo"><Icon name="redo" /></button>
           <span className="menu-anchor">
@@ -1342,7 +1344,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
                 <button onClick={saveToApp}><Icon name="save" size={18} /> {t('Save project')}</button>
                 <button onClick={saveToFile}><Icon name="download" size={18} /> {t('Save as .avp file')}</button>
                 <button onClick={shareProject} data-testid="share-project"><Icon name="share" size={18} /> {t('Share project')}</button>
-                <button onClick={() => { setSaveMenu(false); player?.pause(); openBlackbox() }} data-testid="editor-blackbox"><Icon name="blackbox" size={18} /> {t('Blackbox log')}</button>
+                {tester && <button onClick={() => { setSaveMenu(false); player?.pause(); openBlackbox() }} data-testid="editor-blackbox"><Icon name="blackbox" size={18} /> {t('Blackbox log')}</button>}
               </div>
             )}
           </span>

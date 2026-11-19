@@ -12,15 +12,55 @@ const section: HelpSection = {
   },
   topics: [
     {
+      id: 'tester-tools',
+      isNew: true,
+      keywords: ['ctrl+h', 'hidden', 'chhupa', 'chupa', 'tester', 'notes', 'blackbox', 'password', 'install password', 'unlock', 'chhupe button'],
+      related: ['blackbox', 'testing-notes'],
+      en: {
+        title: 'Tester tools: hidden Notes and Blackbox (Ctrl+H)',
+        what: 'Testing notes and the Blackbox log are tools for testing, so their buttons are hidden for normal users. Ctrl+H opens them directly from anywhere, without showing any button. After the install password is typed once, the buttons are shown again on that device.',
+        where: 'Ctrl+H anywhere (computer), or tap the Apna Editor logo at the top left of Home 5 times quickly (phone)',
+        steps: [
+          'Press Ctrl+H on a computer. On a phone (no keyboard), tap the Apna Editor logo on the Home screen 5 times quickly.',
+          'The Tester tools panel opens. Tap Testing notes or Blackbox log to open it straight away.',
+          'To show the buttons all the time: type the install password (the same password the Windows installer asks for) and tap Show buttons.',
+          'Now the Notes and Blackbox buttons are back on Home, in the editor (note icon and Save menu → Blackbox log), and the red "Problem recorded" note shows again.',
+          'To hide them again, open the panel with Ctrl+H (or 5 logo taps) and tap Hide the buttons again.',
+        ],
+        tips: [
+          'Hidden or shown, the blackbox keeps recording in the background, so nothing is lost. Ctrl+Shift+L still opens the blackbox directly.',
+          'The choice is saved on this device only. A new phone or a fresh install starts hidden again.',
+          'The password is never stored in the app, only a check of it, like the Windows installer.',
+        ],
+      },
+      hi: {
+        title: 'टेस्टर टूल्स: छुपे हुए नोट्स और ब्लैकबॉक्स (Ctrl+H)',
+        what: 'टेस्टिंग नोट्स और ब्लैकबॉक्स लॉग टेस्टिंग के टूल हैं, इसलिए आम यूज़र को इनके बटन नहीं दिखते। Ctrl+H दबाने पर ये कहीं से भी सीधे खुल जाते हैं, कोई बटन दिखाए बिना। एक बार इंस्टॉल पासवर्ड डालने के बाद उस डिवाइस पर बटन फिर से दिखने लगते हैं।',
+        where: 'कहीं भी Ctrl+H (कंप्यूटर), या होम स्क्रीन पर ऊपर बाईं ओर Apna Editor लोगो को जल्दी-जल्दी 5 बार टैप करें (फ़ोन)',
+        steps: [
+          'कंप्यूटर पर Ctrl+H दबाएं। फ़ोन पर (कीबोर्ड नहीं है) होम स्क्रीन पर Apna Editor लोगो को जल्दी-जल्दी 5 बार टैप करें।',
+          '"टेस्टर टूल्स" पैनल खुलेगा। टेस्टिंग नोट्स या ब्लैकबॉक्स लॉग दबाकर उसे सीधे खोलें।',
+          'बटन हमेशा दिखाने के लिए: इंस्टॉल पासवर्ड डालें (वही पासवर्ड जो Windows इंस्टॉलर मांगता है) और "बटन दिखाएं" दबाएं।',
+          'अब नोट्स और ब्लैकबॉक्स बटन होम पर, एडिटर में (नोट का निशान और Save मेन्यू → ब्लैकबॉक्स लॉग) वापस दिखेंगे, और लाल "समस्या रिकॉर्ड हुई" नोट भी फिर दिखेगा।',
+          'फिर से छुपाने के लिए Ctrl+H (या लोगो पर 5 टैप) से पैनल खोलें और "बटन फिर से छुपाएं" दबाएं।',
+        ],
+        tips: [
+          'बटन छुपे हों या दिखें, ब्लैकबॉक्स पीछे से रिकॉर्ड करता रहता है, कुछ नहीं खोता। Ctrl+Shift+L से ब्लैकबॉक्स अब भी सीधे खुलता है।',
+          'यह सेटिंग सिर्फ़ इसी डिवाइस पर सेव होती है। नए फ़ोन या नए इंस्टॉल पर बटन फिर से छुपे रहेंगे।',
+          'पासवर्ड ऐप में कभी सेव नहीं होता, सिर्फ़ उसकी जांच रहती है, Windows इंस्टॉलर की तरह।',
+        ],
+      },
+    },
+    {
       id: 'blackbox',
       isNew: true,
       find: { selector: '[data-help="blackbox"]', needs: 'home' },
       keywords: ['log', 'crash', 'error', 'black box', 'bug', 'report', 'problem', 'galti', 'band ho gaya', 'samasya'],
-      related: ['safe-export', 'recover-project'],
+      related: ['tester-tools', 'safe-export', 'recover-project'],
       en: {
         title: 'Blackbox log (problem recorder)',
         what: 'Like the black box of an aeroplane, the app quietly records the last few hundred things that happened: buttons you tapped, screens you opened, every export step and every error with its technical details. If the app shows an error, closes suddenly or an export fails, the cause is already saved, even after a restart.',
-        where: 'Home → ✈ Blackbox, or in the editor: Save menu → Blackbox log, or Ctrl+Shift+L on a computer',
+        where: 'Ctrl+H → Blackbox log (hidden until the install password is typed), then also Home → ✈ Blackbox and editor: Save menu → Blackbox log. Ctrl+Shift+L on a computer',
         steps: [
           'Open the blackbox from the ✈ button on the Home screen (in the editor: the Save button → Blackbox log; on a computer press Ctrl+Shift+L anywhere).',
           'The newest lines are at the top. Red lines are errors and crashes. Tap a line with ▸ to see its details.',
@@ -38,7 +78,7 @@ const section: HelpSection = {
       hi: {
         title: 'ब्लैकबॉक्स लॉग (समस्या रिकॉर्डर)',
         what: 'हवाई जहाज़ के ब्लैक बॉक्स की तरह, ऐप चुपचाप पिछली कुछ सौ बातें रिकॉर्ड करता है: आपने कौन से बटन दबाए, कौन सी स्क्रीन खोली, एक्सपोर्ट का हर चरण और हर एरर तकनीकी जानकारी के साथ। अगर ऐप एरर दिखाए, अचानक बंद हो जाए या एक्सपोर्ट फेल हो, तो कारण पहले से सेव रहता है, ऐप दोबारा शुरू होने के बाद भी।',
-        where: 'होम → ✈ ब्लैकबॉक्स, या एडिटर में: Save मेन्यू → ब्लैकबॉक्स लॉग, या कंप्यूटर पर Ctrl+Shift+L',
+        where: 'Ctrl+H → ब्लैकबॉक्स लॉग (इंस्टॉल पासवर्ड डालने तक बटन छुपा रहता है), फिर होम → ✈ ब्लैकबॉक्स और एडिटर में: Save मेन्यू → ब्लैकबॉक्स लॉग। कंप्यूटर पर Ctrl+Shift+L',
         steps: [
           'होम स्क्रीन पर ✈ बटन से ब्लैकबॉक्स खोलें (एडिटर में: Save बटन → ब्लैकबॉक्स लॉग; कंप्यूटर पर कहीं भी Ctrl+Shift+L दबाएं)।',
           'सबसे नई लाइनें सबसे ऊपर होती हैं। लाल लाइनें एरर और क्रैश हैं। ▸ वाली लाइन पर टैप करके उसकी पूरी जानकारी देखें।',
