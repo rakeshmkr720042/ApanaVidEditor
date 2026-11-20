@@ -10,7 +10,7 @@ const section: HelpSection = {
     {
       id: 'export-video',
       find: { selector: '[data-help="export"]', needs: 'project' },
-      keywords: ['export', 'save video', 'render', 'mp4', 'download', '1080p', '4k', 'quality', 'gif', 'mp3'],
+      keywords: ['export', 'save video', 'render', 'mp4', 'download', '1080p', '4k', 'quality', 'gif', 'mp3', 'reel', 'short', '9:16', 'instagram', 'youtube shorts'],
       related: ['background-export', 'compress', 'youtube-upload'],
       en: {
         title: 'Export your video',
@@ -29,6 +29,7 @@ const section: HelpSection = {
           'Android: saved in Documents/Apna Editor and the share sheet opens. Website: the browser downloads it. Windows: it is saved where you choose.',
           '4K takes about 4 times longer than 1080p and makes big files; it works best on a computer.',
           'Batch exports several sizes in one go (for example YouTube and Reels).',
+          'A tall 9:16 video shows the label "📱 Instagram Reel / YouTube Short" while it renders and on the finished file, so you know it is the right shape to post as a Reel or Short.',
         ],
       },
       hi: {
@@ -48,6 +49,7 @@ const section: HelpSection = {
           'Android: Documents/Apna Editor में सेव होती है और शेयर का मेन्यू खुलता है। वेबसाइट: ब्राउज़र डाउनलोड करता है। Windows: जहाँ आप चुनें वहाँ सेव होती है।',
           '4K में 1080p से लगभग 4 गुना समय लगता है और फ़ाइल बड़ी बनती है; कंप्यूटर पर सबसे अच्छा।',
           '"बैच" एक बार में कई साइज़ बनाता है (जैसे YouTube और Reels दोनों)।',
+          'लंबी (9:16) वीडियो के रेंडर होते समय और तैयार फ़ाइल पर "📱 Instagram Reel / YouTube Short" लिखा आता है, ताकि पता रहे कि यह Reel या Short के लिए सही शेप में है।',
         ],
       },
     },

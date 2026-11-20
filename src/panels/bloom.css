@@ -1,0 +1,9 @@
+/* Flower bloom reveal (panels/BloomPanel.tsx) */
+.bloom-flowers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.bloom-flowers button { position: relative; display: grid; justify-items: center; gap: 2px; padding: 6px 2px; border-radius: 12px; background: radial-gradient(circle at 50% 40%, #2a2f45, #141824); border: 1px solid var(--line); color: inherit; font-size: 11px; line-height: 1.2; min-width: 0; }
+.bloom-flowers button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bloom-flowers button.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.bloom-thumb { display: block; }
+.bloom-pro { position: absolute; top: 3px; right: 3px; font-style: normal; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 6px; background: linear-gradient(90deg, #ffb300, #ff6d00); color: #1a1000; }
+.bloom-colors { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px; }
+@media (max-width: 380px) { .bloom-flowers { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

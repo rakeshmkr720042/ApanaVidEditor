@@ -62,6 +62,7 @@ import { TrimPanel, LayerTrimPanel } from '../panels/TrimPanel'
 import { ZoomMovePanel } from '../panels/ClipKeysPanel'
 import { MaskPanel } from '../panels/MaskPanel'
 import { RevealPanel } from '../panels/RevealPanel'
+import { BloomEditPanel } from '../panels/BloomPanel'
 import { clipSrcAt, layerSrcAt } from '../model/clipKeys'
 import { rippleDeleteLayer, trimClipToPlayhead, trimLayerToPlayhead } from '../model/trim'
 import { PasteStyleSheet } from './PasteStyleSheet'
@@ -146,7 +147,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'scenery' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'reveal' | 'adjlayer' | 'scenes' | 'join' | 'frame' | 'annotate' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'reveal' | 'bloomadd' | 'bloom' | 'adjlayer' | 'scenes' | 'join' | 'frame' | 'annotate' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -794,7 +795,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? (ed.project.main?.locked ? null : clipAtPlayhead)
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'beat', 'smartcut', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop', 'frame', 'reveal'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'beat', 'smartcut', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop', 'frame', 'reveal', 'bloomadd'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -1066,6 +1067,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ],
       sticker: [{ icon: (selLayer as StickerLayer).shower ? 'shower' : 'sticker', label: (selLayer as StickerLayer).shower ? 'Shower' : 'Stickers', on: () => setPanel('stickers') } as Tool],
       media: [
+        ...((selLayer as MediaLayer).bloom ? [{ icon: 'flower', label: 'Flower bloom', on: () => setPanel('bloom'), active: true } as Tool] : []),
         { icon: 'overlay', label: 'Size & opacity', on: () => setPanel('overlay') } as Tool,
         { icon: 'crop', label: 'Crop', on: () => setPanel('layer-crop') } as Tool,
         { icon: 'mask', label: 'Mask', on: () => setPanel('mask'), active: !!(selLayer as MediaLayer).shapeMask } as Tool,
@@ -1110,6 +1112,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...(copied ? [{ icon: 'paste', label: 'Paste track', on: () => setPasteSheet(true) } as Tool] : []),
       { icon: 'overlay', label: 'Overlay', on: () => overlayInput.current?.click(), disabled: empty },
       { icon: 'mask', label: 'Shape reveal', on: () => { player?.pause(); setPanel('reveal') }, disabled: empty },
+      { icon: 'flower', label: 'Flower bloom', on: () => { player?.pause(); setPanel('bloomadd') }, disabled: empty },
       { icon: 'brush', label: 'Annotate', on: annotateHere, disabled: empty },
       { icon: 'text', label: 'Text', on: () => { ed.addText(time); setPanel('text') }, disabled: empty },
       { icon: 'splitscreen', label: 'Split screen', on: () => setPanel('split'), disabled: empty },
@@ -1247,14 +1250,15 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'volume' && selLayer?.type === 'audio') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, fadeIn: selLayer.fadeIn, fadeOut: selLayer.fadeOut, volKeys: selLayer.volKeys }} onClose={closePanel}
     src={group ? undefined : time >= selLayer.start && time < selLayer.end ? layerSrcAt(selLayer, time - selLayer.start) : null} />
   else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} src={group ? undefined : srcOfClip(tclip)} />
-  else if (panel === 'reveal') panelView = (
-    <RevealPanel ed={ed} time={time} onClose={closePanel}
+  else if (panel === 'bloom' && selLayer?.type === 'media' && selLayer.bloom) panelView = <BloomEditPanel ed={ed} layer={selLayer} onClose={closePanel} onLocked={() => setPaywall('nature')} />
+  else if (panel === 'reveal' || panel === 'bloomadd') panelView = (
+    <RevealPanel key={panel} ed={ed} time={time} onClose={closePanel} initialTab={panel === 'bloomadd' ? 'bloom' : 'shapes'} onLocked={() => setPaywall('nature')}
       importSource={async (f) => {
         try { const s = await loadSource(f, f.name); ed.addSource(s); await saveMedia(s); return s } catch (e) { setToast((e as Error).message); return null }
       }}
-      onAdded={(id, start) => {
-        announce({ sel: { type: 'layer', id }, start, where: 'track', cut: false }, t('Shape reveal'))
-        setPanel('mask')
+      onAdded={(id, start, kind) => {
+        announce({ sel: { type: 'layer', id }, start, where: 'track', cut: false }, t(kind === 'bloom' ? 'Flower bloom' : 'Shape reveal'))
+        setPanel(kind === 'bloom' ? 'bloom' : 'mask')
       }} />
   )
   else if (panel === 'mask' && selLayer?.type === 'media') panelView = <MaskPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />

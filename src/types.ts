@@ -383,6 +383,22 @@ export interface MediaLayer extends LayerBase, Keyed {
   effect?: VideoEffect | null
   grade?: Grade | null
   cutout?: Cutout | null // background removal (person cutout), missing = off
+  bloom?: Bloom | null // flower bloom reveal (engine/bloom.ts): the picture comes out of an opening flower, missing = none
+}
+
+/**
+ * Flower bloom reveal: a bud grows and opens into a flower, the layer's photo / video comes out of its centre
+ * (and can fill the frame), and the flower's petals fall over the whole picture.
+ */
+export interface Bloom {
+  flower: 'rose' | 'lotus' | 'sunflower' | 'sakura' | 'marigold'
+  color: string | null // petal colour, null = the flower's own
+  open: number // seconds the bud takes to open fully
+  size: number // flower size, fraction of the frame's short side
+  fill: boolean // the photo / video grows until it fills the frame (else it stays inside the flower)
+  petals: number // how many petals fall (0 = none)
+  seconds: number // how long new petals keep coming
+  wind: number // -1..1, petals drift left / right
 }
 
 export interface BlurLayer extends LayerBase {
