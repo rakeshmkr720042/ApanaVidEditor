@@ -7,6 +7,7 @@ import { CaptionStyle } from './CaptionStyle'
 import { ANIMS, FILLS, LOOPS, STICKERS, TEXT_ONLY_ANIMS, TEXT_PRESETS, TITLE_PRESETS, ensureFont, hasHindiLetters, isDevanagari, preferredHindiFont, prefetchFonts, rememberHindiFont } from '../engine/text'
 import { FontPicker, HindiTextInput } from './HindiText'
 import { SHOWER_MOTIONS, SHOWER_PRESETS } from '../engine/shower'
+import { FLOWERS } from '../engine/bloom'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { parseSrt, toSrt } from '../lib/srt'
 import { fileBase, saveTextFiles } from '../lib/save'
@@ -17,6 +18,8 @@ import { t } from '../lib/i18n'
 import { outputSize } from '../engine/renderer'
 import { useTrending } from '../lib/useTrending'
 import { CARD_LOOKS, FESTIVAL_TITLES, SHAYARI, SHAYARI_KINDS, cardFrame, pickShayari, type ShayariKind, type TitlePreset } from '../lib/desi'
+
+const PETAL_ICON: Record<string, string> = Object.fromEntries(FLOWERS.map((f) => [f.value, f.icon]))
 
 interface P { ed: Editor; onClose: () => void }
 
@@ -178,7 +181,7 @@ export function StickerPanel({ ed, layer, t: time, onClose, showers }: P & { lay
                   className={layer?.emoji === pr.emoji && sh?.motion === pr.shower.motion ? 'on' : ''}
                   onClick={() => (layer ? set({ emoji: pr.emoji, shower: { ...pr.shower } }) : ed.addSticker(time, pr.emoji, pr.shower))}
                 >
-                  <span className="shower-icon">{pr.emoji === 'petal' ? '🌹' : pr.emoji === 'paper' ? '🎊' : pr.emoji}</span>{t(pr.name)}
+                  <span className="shower-icon">{pr.emoji.startsWith('petal:') ? PETAL_ICON[pr.emoji.slice(6)] : pr.emoji === 'petal' ? '🌹' : pr.emoji === 'paper' ? '🎊' : pr.emoji}</span>{t(pr.name)}
                 </button>
               ))}
             </div>

@@ -18,6 +18,7 @@ const KEYS: Record<StylePart, { key: string; kinds: Kind[]; none: unknown }[]> =
     { key: 'adjust', kinds: ['clip', 'media'], none: undefined },
     { key: 'effect', kinds: ['clip', 'media'], none: null },
     { key: 'grade', kinds: ['clip', 'media'], none: null },
+    { key: 'scene', kinds: ['clip'], none: null },
   ],
   sound: [
     { key: 'volume', kinds: ['clip', 'media', 'audio'], none: 1 },

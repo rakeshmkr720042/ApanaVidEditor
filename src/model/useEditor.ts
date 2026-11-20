@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AdjustmentLayer, AudioLayer, BeatFx, BlurLayer, Marker, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, ShapeMask, ShapeReveal, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
+import type { AdjustmentLayer, AudioLayer, BeatFx, Bloom, BlurLayer, Marker, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, ShapeMask, ShapeReveal, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
 import { uid } from '../lib/format'
@@ -777,6 +777,22 @@ export function useEditor(initial: Project) {
     return l
   }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Flower bloom reveal: `src` covers the frame from the playhead and comes out of an opening flower. */
+  const addBloom = useCallback((t: number, src: MediaSource, bloom: Bloom, dur: number) => {
+    const p = ref.current
+    const ar = src.width && src.height ? src.width / src.height : 16 / 9
+    const { w: W, h: H } = outputSize(p, sourcesRef.current, 1000)
+    const base = ar >= 1 ? Math.max(W / ar, H) : Math.max(W, H * ar) // covers the frame
+    const scale = (base / (Math.min(W, H) * 0.5)) * 1.001
+    const l: MediaLayer = {
+      id: uid(), type: 'media', sourceId: src.id, in: 0, ...span(t, src.kind === 'image' ? dur : src.duration), box: { ...centerBox(), scale },
+      volume: src.kind === 'video' ? 1 : 0, chroma: defaultChroma(), mask: 'none', border: 0,
+      adjust: defaultAdjust(), filter: null, filterAmount: 1, bloom: { ...bloom },
+    }
+    addLayer(l)
+    return l
+  }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const addAudio = useCallback((t: number, src: MediaSource, kind: AudioLayer['kind'], label: string, extra?: Partial<AudioLayer>) => {
     const tot = total()
     const start = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
@@ -1020,7 +1036,7 @@ export function useEditor(initial: Project) {
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
     addSource, splitClipAt, joinClips, breakApart, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter, addMarker, updateMarker, removeMarker,
-    addText, addSticker, addBlur, addAdjustment, addOverlay, addReveal, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
+    addText, addSticker, addBlur, addAdjustment, addOverlay, addReveal, addBloom, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
     track, setTrack, addTrack, pasteTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,
     remove, duplicate, split, moveClip, moveClipAt, closeGap, swapClips, swapLayers, replaceProject,

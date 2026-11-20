@@ -1,4 +1,4 @@
-import type { AdjustmentLayer, AnnotateLayer, Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, MainFrame, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
+import type { AdjustmentLayer, AnnotateLayer, Backdrop, BlendMode, BlurLayer, ChromaKey, Clip, Cutout, MainFrame, MediaLayer, MediaSource, Project, TextLayer, VisualLayer } from '../types'
 import { inBetween } from './interp'
 import { activeAt, sourceAt, type LaidClip } from '../model/timeline'
 import { stabAt } from './motion'
@@ -8,12 +8,14 @@ import { kenBurnsAt } from '../model/slideshow'
 import { posAt } from '../model/clipKeys'
 import { contentRect, mainFrameOn } from '../model/mainFrame'
 import { applyMask, drawEdge, revealAt } from './shapeMask'
+import { bloomMask, bloomOpening, drawBloomBack, drawBloomFront } from './bloom'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
 import { gradeGpu } from './grade'
 import { toChroma } from './chromakey'
 import { drawOutline, keepPerson, personMask } from './cutout'
+import { drawGroundShadow, drawSceneBack, drawSceneFront, lightMatch, noPersonSeen, personBox, sceneBehind, sceneFront, sideShift } from './scenery'
 import { beatLayer, beatPulse, layerBeats } from './beats'
 import { defaultAdjust } from '../model/timeline'
 import { DEVA_FALLBACK, animState, drawSticker, drawText, ensureFont, fontLoaded, isDevanagari, frameHeightFor, measureText, STICKER_BASE } from './text'
@@ -51,6 +53,8 @@ export const layerKey = (l: { id: string }) => `l:${l.id}`
 export const backdropKey = (o: { id: string }) => `g:${o.id}`
 
 const keyOn = (k: ChromaKey | null | undefined): k is ChromaKey => !!k?.enabled
+/** The person cutout a scene behind uses when Remove BG itself is off. */
+const SCENE_CUT: Cutout = { enabled: true, soft: 0.3, outline: 'none' }
 const NEUTRAL = colorParams(defaultAdjust(), null, 1)
 
 function makeCanvas(w = 2, h = 2): Canvas {
@@ -153,6 +157,13 @@ export class Renderer {
       } else {
         this.draw2dGraded(ka.img, ka.p)
       }
+    }
+
+    if (a) {
+      // scene frames in front of the picture (leaves, flowers, mist); in a transition each fades with its clip
+      const tr = !!(b && a.item.clip.transition)
+      this.drawFront(a.item.clip, inp.t, tr ? 1 - progress : 1)
+      if (tr) this.drawFront(b!.item.clip, inp.t, progress)
     }
 
     if (a && inp.project.beatFx) this.applyBeat(inp)
@@ -422,7 +433,10 @@ export class Renderer {
   private clipImage(i: number, clip: Clip, inp: RenderInput, progress: number, seed: number, local: number): { img: Canvas; p: ColorParams; done: boolean } {
     const p = { ...colorParams(clip.adjust, clip.filter, clip.filterAmount), gpu: gradeGpu(clip.grade, inp.project) }
     const keyed = keyOn(clip.chroma) && !!this.grader
-    const cut = !keyed && clip.cutout?.enabled && this.grader ? clip.cutout : null
+    // a scene behind the person: needs the person cutout (or a green screen), and WebGL for both
+    const sc = sceneBehind(clip.scene) && this.grader ? clip.scene! : null
+    if (sceneBehind(clip.scene) && !this.grader) noPersonSeen.set(clip.id, true)
+    const cut = !keyed && this.grader ? (clip.cutout?.enabled ? clip.cutout : sc ? SCENE_CUT : null) : null
     const fr = this.drawClipFrame(i, clip, inp, progress, keyed || !!cut, local)
     if (cut) {
       const stamp = `${inp.t.toFixed(3)}:${clip.fit}:${clip.rotate}:${clip.flipH}:${clip.flipV}:${JSON.stringify(clip.crop ?? null)}:${this.W}x${this.H}`
@@ -434,9 +448,23 @@ export class Renderer {
       const bg = inp.project.settings.background
       c.fillStyle = bg === 'white' ? '#fff' : bg === 'black' || bg === 'blur' ? '#000' : bg
       c.fillRect(0, 0, this.W, this.H)
-      if (clip.backdrop) this.drawBackdrop(c, clip.backdrop, backdropKey(clip), inp)
       this.grader!.drawGraded(fr, p, seed)
       if (!mask) { c.drawImage(this.grader!.canvas, 0, 0); return { img: out, p: NEUTRAL, done: true } } // AI still loading
+      if (sc) {
+        const box = personBox(mask, stamp)
+        noPersonSeen.set(clip.id, !box)
+        // nobody in this frame: the picture stays as it is (only the front frame goes on it)
+        if (!box) { c.drawImage(this.grader!.canvas, 0, 0); return { img: out, p: NEUTRAL, done: true } }
+        drawSceneBack(c, sc, this.W, this.H, inp.t, progress)
+        const dx = sideShift(sc, box)
+        if (sc.shadow) drawGroundShadow(c, box, dx, this.W, this.H)
+        const person = keepPerson(this.grader!.canvas, mask, this.W, this.H)
+        if (sc.light) lightMatch(person, sc, this.W, this.H)
+        drawOutline(c, mask, cut, dx * this.W, 0, this.W, this.H, inp.t)
+        c.drawImage(person, dx * this.W, 0)
+        return { img: out, p: NEUTRAL, done: true }
+      }
+      if (clip.backdrop) this.drawBackdrop(c, clip.backdrop, backdropKey(clip), inp)
       drawOutline(c, mask, cut, 0, 0, this.W, this.H, inp.t)
       c.drawImage(keepPerson(this.grader!.canvas, mask, this.W, this.H), 0, 0)
       return { img: out, p: NEUTRAL, done: true }
@@ -449,10 +477,19 @@ export class Renderer {
     const bg = inp.project.settings.background
     c.fillStyle = bg === 'white' ? '#fff' : bg === 'black' || bg === 'blur' ? '#000' : bg
     c.fillRect(0, 0, this.W, this.H)
-    if (clip.backdrop) this.drawBackdrop(c, clip.backdrop, backdropKey(clip), inp)
+    if (sc) drawSceneBack(c, sc, this.W, this.H, inp.t, progress)
+    else if (clip.backdrop) this.drawBackdrop(c, clip.backdrop, backdropKey(clip), inp)
     this.grader!.drawGraded(fr, p, seed, toChroma(clip.chroma!))
-    c.drawImage(this.grader!.canvas, 0, 0)
+    if (sc) noPersonSeen.set(clip.id, false)
+    c.drawImage(this.grader!.canvas, sc ? sideShift(sc, null) * this.W : 0, 0)
     return { img: out, p: NEUTRAL, done: true }
+  }
+
+  /** A clip's scene frame in front of the picture; also when the scene can't go behind (nobody in the picture). */
+  private drawFront(clip: Clip, t: number, alpha: number) {
+    const s = clip.scene
+    if (!s || !(sceneFront(s) || noPersonSeen.get(clip.id))) return
+    drawSceneFront(this.ctx, s, this.W, this.H, t, alpha)
   }
 
   /** A green screen's backdrop over the whole frame: a colour, or a photo/video filling (or fitting) it. */
@@ -743,8 +780,31 @@ export class Renderer {
       if (rv.edge > 0 && l.shapeMask.reveal?.edge) drawEdge(mc, rv.mask, mw, mh, l.shapeMask.reveal.edge, rv.edge)
       img = ms; sx = 0; sy = 0; sw = mw; sh = mh
     }
+    // flower bloom: the picture shows in a circle that grows out of the flower's centre
+    const bl = l.bloom
+    const bLocal = inp.t - l.start, bDur = l.end - l.start
+    const bx = l.box.x * W, by = l.box.y * H
+    const open = bl ? bloomOpening(bl, bLocal, bx, by, W, H) : null
+    if (bl && open && open.r > 0 && Number.isFinite(open.r)) {
+      const mw = Math.max(2, Math.round(fw)), mh = Math.max(2, Math.round(fh))
+      const ms = (this.maskScratch ??= makeCanvas(mw, mh))
+      if (ms.width !== mw || ms.height !== mh) { ms.width = mw; ms.height = mh }
+      const mc = ctx2d(ms)
+      mc.setTransform(1, 0, 0, 1, 0, 0)
+      mc.globalCompositeOperation = 'copy'
+      mc.drawImage(img, sx, sy, sw, sh, 0, 0, mw, mh)
+      mc.globalCompositeOperation = 'source-over'
+      const bm = bloomMask(open.r, mw, mh)
+      applyMask(mc, bm, mw, mh)
+      if (open.edge > 0) drawEdge(mc, bm, mw, mh, '#ffe9a8', open.edge)
+      img = ms; sx = 0; sy = 0; sw = mw; sh = mh
+    }
     const a = animState({ start: l.start, end: l.end, animIn: l.animIn ?? 'none', animOut: l.animOut ?? 'none' }, inp.t)
     if (a.alpha <= 0.001 || a.scale <= 0.001) return
+    if (bl) {
+      drawBloomBack(ctx, bl, bLocal, bDur, bx, by, W, H, a.alpha * l.box.opacity)
+      if (open && open.r <= 0) { drawBloomFront(ctx, bl, bLocal, bDur, bx, by, W, H, a.alpha * l.box.opacity); return }
+    }
     if ((l.chroma.enabled || (l.cutout?.enabled && mask)) && l.backdrop) {
       // the backdrop fills the frame under the keyed layer, fading in and out with it
       ctx.save()
@@ -782,6 +842,7 @@ export class Renderer {
       else ctx.stroke()
     }
     ctx.restore()
+    if (bl) drawBloomFront(ctx, bl, bLocal, bDur, bx, by, W, H, a.alpha * l.box.opacity)
   }
 
   private drawBlur(l: BlurLayer) {

@@ -1,9 +1,12 @@
 import { useRef, useState } from 'react'
-import type { MediaSource, ShapeMask, ShapeReveal } from '../types'
+import type { Bloom, MediaSource, ShapeMask, ShapeReveal } from '../types'
 import type { Editor } from '../model/useEditor'
 import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { REVEAL_SHAPE_OPTIONS, defaultReveal } from '../model/reveal'
+import { bloomLength, defaultBloom } from '../engine/bloom'
+import { BloomControls, FlowerPicker } from './BloomPanel'
+import { bloomLocked } from '../model/bloom'
 
 type Style = 'fill' | 'stay' | 'close'
 const STYLES: { value: Style; label: string }[] = [
@@ -32,11 +35,15 @@ export function RevealControls({ begin, end, value, onChange }: { begin?: () => 
  * Shape reveal: pick a shape and the scene (photo or video) that shows inside it; it goes over the video from
  * the playhead, filling the frame, and opens like a heart opening with that scene inside.
  */
-export function RevealPanel({ ed, time, onAdded, onClose, importSource }: {
+export function RevealPanel({ ed, time, onAdded, onClose, importSource, initialTab = 'shapes', onLocked }: {
   ed: Editor; time: number; onClose: () => void
-  onAdded: (layerId: string, start: number) => void
+  onAdded: (layerId: string, start: number, kind: 'shape' | 'bloom') => void
   importSource: (f: File) => Promise<MediaSource | null>
+  initialTab?: 'shapes' | 'bloom'
+  onLocked?: () => void
 }) {
+  const [tab, setTab] = useState<'shapes' | 'bloom'>(initialTab)
+  const [bloom, setBloom] = useState<Bloom>(() => defaultBloom('rose'))
   const [shape, setShape] = useState<ShapeMask['shape']>('heart')
   const [reveal, setReveal] = useState<ShapeReveal>(() => defaultReveal('heart'))
   const [size, setSize] = useState(0.6)
@@ -48,16 +55,34 @@ export function RevealPanel({ ed, time, onAdded, onClose, importSource }: {
   const pickShape = (s: ShapeMask['shape']) => { setShape(s); setReveal((r) => ({ ...r, pulse: s === 'heart' ? true : r.pulse, edge: r.edge === null ? null : s === 'heart' ? '#ff2d55' : r.edge })) }
   const add = () => {
     if (!src) return
+    if (tab === 'bloom') {
+      if (bloomLocked(bloom.flower)) { onLocked?.(); return }
+      const l = ed.addBloom(time, src, bloom, bloomLength(bloom))
+      onAdded(l.id, l.start, 'bloom')
+      return
+    }
     const l = ed.addReveal(time, src, shape, reveal, size)
-    onAdded(l.id, l.start)
+    onAdded(l.id, l.start, 'shape')
   }
   const name = (s: MediaSource) => `${s.kind === 'image' ? '🖼' : '🎬'} ${s.name.length > 22 ? `${s.name.slice(0, 20)}…` : s.name}`
   return (
-    <Panel title="Shape reveal" onClose={onClose} tall>
-      <p className="muted small">{t('A shape (heart, star…) opens over your video and the scene you pick shows inside it.')}</p>
-      <b className="small">{t('1. Shape')}</b>
-      <Chips options={REVEAL_SHAPE_OPTIONS} value={shape} onChange={pickShape} wrap />
-      <b className="small">{t('2. Scene inside the shape')}</b>
+    <Panel title={tab === 'bloom' ? 'Flower bloom' : 'Shape reveal'} onClose={onClose} tall>
+      <Chips options={[{ value: 'shapes', label: 'Shapes' }, { value: 'bloom', label: '🌹 Flower bloom' }]} value={tab} onChange={setTab} />
+      {tab === 'shapes' ? (
+        <>
+          <p className="muted small">{t('A shape (heart, star…) opens over your video and the scene you pick shows inside it.')}</p>
+          <b className="small">{t('1. Shape')}</b>
+          <Chips options={REVEAL_SHAPE_OPTIONS} value={shape} onChange={pickShape} wrap />
+          <b className="small">{t('2. Scene inside the shape')}</b>
+        </>
+      ) : (
+        <>
+          <p className="muted small">{t('A flower blooms, your photo or video comes out of it, and its petals fall over the whole screen.')}</p>
+          <b className="small">{t('1. Flower')}</b>
+          <FlowerPicker value={bloom.flower} color={bloom.color} onChange={(flower) => setBloom((b) => ({ ...defaultBloom(flower), fill: b.fill, open: b.open, size: b.size, petals: b.petals, seconds: b.seconds }))} />
+          <b className="small">{t('2. Photo or video that comes out')}</b>
+        </>
+      )}
       {visual.length > 0 && <Chips options={visual.map((s) => ({ value: s.id, label: name(s) }))} value={srcId} onChange={setSrcId} wrap />}
       <button className="btn small" disabled={busy} onClick={() => file.current?.click()}>{busy ? t('Adding…') : t('Pick a photo or video…')}</button>
       <input ref={file} type="file" accept="video/*,image/*" hidden onChange={async (e) => {
@@ -68,9 +93,13 @@ export function RevealPanel({ ed, time, onAdded, onClose, importSource }: {
         try { const s = await importSource(f); if (s) setSrcId(s.id) } finally { setBusy(false) }
       }} />
       <b className="small">{t('3. How it opens')}</b>
-      <Slider label="Shape size" min={0.2} max={1} step={0.01} value={size} format={(v) => `${Math.round(v * 100)}%`} onChange={setSize} />
-      <RevealControls value={reveal} onChange={setReveal} />
-      <button className="btn primary" disabled={!src} onClick={add}>{src ? t('Add at playhead') : t('Pick the scene first')}</button>
+      {tab === 'shapes' ? (
+        <>
+          <Slider label="Shape size" min={0.2} max={1} step={0.01} value={size} format={(v) => `${Math.round(v * 100)}%`} onChange={setSize} />
+          <RevealControls value={reveal} onChange={setReveal} />
+        </>
+      ) : <BloomControls value={bloom} onChange={setBloom} />}
+      <button className="btn primary" disabled={!src} onClick={add}>{src ? (tab === 'bloom' && bloomLocked(bloom.flower) ? `🔒 ${t('Unlock with Pro')}` : t('Add at playhead')) : t('Pick the scene first')}</button>
     </Panel>
   )
 }

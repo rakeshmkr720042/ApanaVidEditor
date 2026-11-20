@@ -6,6 +6,7 @@ import { exportFast, isSimpleProject } from '../lib/export'
 import { resetFFmpeg } from '../lib/ffmpeg'
 import { isNative, saveNative } from '../lib/save'
 import { layoutClips } from '../model/timeline'
+import { outputSize } from '../engine/renderer'
 import { fmtTime } from '../lib/format'
 import { Chips, Slider, Toggle, SheetClose } from '../ui/kit'
 import { t } from '../lib/i18n'
@@ -28,7 +29,20 @@ interface Props {
   onClose: () => void
 }
 
-interface Result { id: string; label: string; blob: Blob; url: string; file: string; cover: Blob | null; info: string }
+interface Result { id: string; label: string; blob: Blob; url: string; file: string; cover: Blob | null; info: string; reel?: boolean }
+
+/** Label shown beside a 9:16 (tall) video while it renders and on the finished file. */
+const REEL_LABEL = 'Instagram Reel / YouTube Short'
+/** True when the job makes a 9:16 video (a preset, or the project's own frame, including "original" from a tall clip). */
+function isReelShape(project: Project, sources: Record<string, MediaSource>, aspect: AspectRatio | undefined, format: Format) {
+  if (format === 'mp3') return false
+  const a = aspect ?? project.settings.aspect
+  if (a === '9:16') return true
+  if (a !== 'original') return false
+  const { w, h } = outputSize({ ...project, settings: { ...project.settings, aspect: a } }, sources, 1080)
+  return Math.abs(h / w - 16 / 9) < 0.02
+}
+const ReelBadge = () => <span className="reel-badge" data-testid="reel-badge">📱 {REEL_LABEL}</span>
 
 const FORMATS: { value: Format; label: string }[] = [
   { value: 'mp4', label: 'MP4' }, { value: 'webm', label: 'WebM' }, { value: 'mov', label: 'MOV' }, { value: 'gif', label: 'GIF' }, { value: 'mp3', label: 'MP3 (audio)' },
@@ -80,7 +94,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
   const [coverImg, setCoverImg] = useState<string | null>(null)
   const [fast, setFast] = useState(false)
   const [batch, setBatch] = useState<ExportJob[]>([])
-  const [running, setRunning] = useState<{ i: number; n: number; p: number; label: string } | null>(null)
+  const [running, setRunning] = useState<{ i: number; n: number; p: number; label: string; reel: boolean } | null>(null)
   const [results, setResults] = useState<Result[]>([])
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -173,15 +187,16 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
     const stopWatch = watchMemory('Export')
     try {
       for (const [i, j] of jobs.entries()) {
-        setRunning({ i, n: jobs.length, p: 0, label: 'Starting…' })
-        const onP = (p: number, label: string) => setRunning({ i, n: jobs.length, p, label })
+        const reel = isReelShape(project, sources, fast && simple && jobs.length === 1 ? undefined : j.aspect, fast && simple && jobs.length === 1 ? 'mp4' : j.format)
+        setRunning({ i, n: jobs.length, p: 0, label: 'Starting…', reel })
+        const onP = (p: number, label: string) => setRunning({ i, n: jobs.length, p, label, reel })
         const started = performance.now()
         if (fast && simple && jobs.length === 1) {
           logInfo('Export started: original quality cut', `${total.toFixed(1)}s`)
           const out = await exportFast(project, sources, onP)
           const file = `${base}.${out.ext}`
           logInfo('Export finished', `${(out.blob.size / 1048576).toFixed(1)} MB`)
-          setResults((r) => [...r, { id: crypto.randomUUID(), label: 'Original quality', blob: out.blob, url: URL.createObjectURL(out.blob), file, cover: null, info: `${(out.blob.size / 1048576).toFixed(1)} MB` }])
+          setResults((r) => [...r, { id: crypto.randomUUID(), label: 'Original quality', blob: out.blob, url: URL.createObjectURL(out.blob), file, cover: null, info: `${(out.blob.size / 1048576).toFixed(1)} MB`, reel }])
           continue
         }
         logInfo(`Export started: ${describe(j)}`, `${total.toFixed(1)}s of video, ${project.clips.length} clips, ${project.layers.length} layers, estimate ${estimate != null ? mb(estimate) : '?'}`, true)
@@ -193,6 +208,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
         setResults((r) => [...r, {
           id: crypto.randomUUID(), label: `${describe(done)}${safer ? ` · ${t('safer settings')}` : ''}`, blob: out.blob, url: URL.createObjectURL(out.blob), file, cover: out.cover,
           info: `${(out.blob.size / 1048576).toFixed(1)} MB${out.width ? ` · ${out.width}×${out.height}` : ''} · ${secs.toFixed(0)}s`,
+          reel: out.width && out.height ? done.format !== 'mp3' && Math.abs(out.height / out.width - 16 / 9) < 0.02 : reel,
         }])
         if (safer) setToast(t('The first try failed, so the video was made with safer settings (lower resolution, smaller file).'))
         // phones: start the next job (and the editor) with ffmpeg's memory given back
@@ -243,6 +259,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
         {running ? (
           <>
             <h2>{running.n > 1 ? `${running.i + 1}/${running.n} · ` : ''}{t(running.label)}</h2>
+            {running.reel && <ReelBadge />}
             <div className="progress"><div style={{ width: `${Math.round(running.p * 100)}%` }} /></div>
             <p className="muted">{Math.round(running.p * 100)}% · {t(runsInBackground ? 'you can switch to other apps meanwhile' : isNative ? 'keep this screen open (it stays on by itself)' : 'you can switch tabs, just keep this tab open')}</p>
             <button className="btn wide" onClick={cancel}>{t('Cancel')}</button>
@@ -339,6 +356,7 @@ export function ExportSheet({ project, sources, name, snapshot, onClose }: Props
               <div key={r.id} className="result">
                 {r.blob.type.startsWith('video') ? <video src={r.url} controls playsInline /> : r.blob.type.startsWith('image') ? <img src={r.url} alt="" /> : <audio src={r.url} controls />}
                 <div className="result-meta"><b>{r.label}</b><span className="muted small">{r.info}</span></div>
+                {r.reel && <ReelBadge />}
                 <div className="row">
                   <button className="btn primary" onClick={() => save(r)}>{t('Save')}</button>
                   {canShare && <button className="btn" onClick={() => share(r)}>{t('Share')}</button>}

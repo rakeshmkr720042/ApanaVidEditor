@@ -49,7 +49,7 @@ export const cutoutFailed = () => failed
 
 /** True when something in the project needs the person cutout. */
 export const usesCutout = (p: Project) =>
-  p.clips.some((c) => c.cutout?.enabled) || p.layers.some((l) => (l.type === 'media' && l.cutout?.enabled) || (l.type === 'text' && l.behind))
+  p.clips.some((c) => c.cutout?.enabled || (c.scene && c.scene.mode !== 'front')) || p.layers.some((l) => (l.type === 'media' && l.cutout?.enabled) || (l.type === 'text' && l.behind))
 
 /** Starts loading and calls `redraw` once it is ready (for the live preview). */
 function ensure(redraw?: (() => void) | null) {
