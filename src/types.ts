@@ -160,6 +160,27 @@ export interface Clip {
   smoothSlow?: number | null // source frames per second: slow motion blends neighbouring frames, missing = off
   slowMode?: 'blend' | 'flow' // with smoothSlow: 'flow' makes new in-between frames from the movement (ultra smooth), missing = blend
   photo3d?: Photo3D | null // photos: 3D zoom (near things move more than far ones), missing = off
+  scene?: SceneFx | null // a scene in front of / behind the picture (src/engine/scenery.ts), missing = none
+}
+
+/** The built-in, code-drawn scenes (no image files). */
+export type ScenePack = 'garden' | 'jungle' | 'hill' | 'mountain' | 'waterfall' | 'fountain' | 'paris'
+
+/**
+ * A scene with the clip: a frame in front of the picture (leaves, flowers, mist), the scene behind the person
+ * (the AI person cutout takes the real background away), both (sandwich), or the person on one side and the
+ * scene's landmark on the other. Without a person in the picture only the front frame shows.
+ */
+export interface SceneFx {
+  pack: ScenePack
+  mode: 'front' | 'behind' | 'sandwich' | 'side'
+  side: 'left' | 'right' // side mode: where the person stands
+  blur: number // 0..1 soft focus of the scene behind
+  front: number // 0..1 how far the front frame reaches into the picture
+  light: boolean // tints the person with the scene's light
+  shadow: boolean // soft shadow under the person's feet (when the feet are in the picture)
+  move: 'none' | 'push' | 'pan' // slow camera move over the scene (near parts move more)
+  living: boolean // water flows, clouds drift, birds fly
 }
 
 /**

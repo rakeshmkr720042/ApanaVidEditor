@@ -74,6 +74,7 @@ import { ArrangePanel, BlendPanel, KeyframePanel, MediaAnimPanel } from '../pane
 import { ClipOrderPanel, type OrderMode } from '../panels/ClipOrderPanel'
 import { GreenScreenPanel } from '../panels/GreenScreenPanel'
 import { CutoutPanel } from '../panels/CutoutPanel'
+import { SceneryPanel } from '../panels/SceneryPanel'
 import { BeatPanel } from '../panels/BeatPanel'
 import { SmartCutPanel } from '../panels/SmartCutPanel'
 import { MotionPanel, TrackPanel } from '../panels/MotionPanel'
@@ -145,7 +146,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
-  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
+  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'scenery' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
   | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'reveal' | 'bloomadd' | 'bloom' | 'adjlayer' | 'scenes' | 'join' | 'frame' | 'annotate' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
@@ -953,6 +954,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       // remove a green/blue screen and put a photo, video or colour behind the person
       { icon: 'user', label: 'Remove BG', on: () => setPanel('cutout'), active: !!selClip.cutout?.enabled },
       { icon: 'chroma', label: 'Green screen', on: () => setPanel('chroma'), active: !!selClip.chroma?.enabled },
+      // a beautiful place with the clip: leaves in front, the Eiffel Tower or mountains behind the person
+      { icon: 'mountain', label: 'Scenes', on: () => setPanel('scenery'), active: !!selClip.scene },
       { icon: 'split', label: 'Split', on: () => ed.split(time) },
       { icon: 'trim', label: 'Trim', on: () => setPanel('trim') },
       ...(!photo ? [{ icon: 'film', label: 'Find shots', on: () => setPanel('scenes') } as Tool] : []),
@@ -1293,6 +1296,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'cutout' && selStored?.type === 'media') panelView = <CutoutPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} onToast={setToast} onClose={closePanel} />
   else if (panel === 'motion' && tclip) panelView = <MotionPanel key={tclip.id} ed={ed} clip={tclip} onToast={setToast} onClose={closePanel} />
   else if (panel === 'track' && selStored) panelView = <TrackPanel key={selStored.id} ed={ed} layer={selStored} time={time} onSeek={seek} onClose={closePanel} />
+  else if (panel === 'scenery' && tclip) panelView = <SceneryPanel key={tclip.id} ed={ed} clip={tclip} onToast={setToast} onClose={closePanel} onPaywall={() => setPaywall('nature')} />
   else if (panel === 'cutout' && tclip) panelView = <CutoutPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} onToast={setToast} onClose={closePanel} />
   else if (panel === 'chroma' && tclip) panelView = <GreenScreenPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'order' && selClip) panelView = (
