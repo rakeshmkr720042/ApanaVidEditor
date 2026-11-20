@@ -22,6 +22,4 @@ export default {
   'Green screen is on: the scene shows through the green screen.': 'ग्रीन स्क्रीन चालू है: सीन ग्रीन स्क्रीन की जगह दिखेगा।',
   'The scene goes behind people only (the AI finds people). A video without a person gets the front frame.':
     'सीन सिर्फ़ लोगों के पीछे लगता है (AI लोगों को ढूँढता है)। बिना व्यक्ति वाले वीडियो पर आगे का फ़्रेम लगता है।',
-  'Scenes behind you': 'आपके पीछे सीन', 'Eiffel Tower, mountains, waterfall and more behind you, leaves and flowers in front':
-    'आपके पीछे एफ़िल टॉवर, पहाड़, झरना और भी, आगे पत्तियाँ और फूल',
 } as Record<string, string>

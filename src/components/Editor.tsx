@@ -1292,7 +1292,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'cutout' && selStored?.type === 'media') panelView = <CutoutPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} onToast={setToast} onClose={closePanel} />
   else if (panel === 'motion' && tclip) panelView = <MotionPanel key={tclip.id} ed={ed} clip={tclip} onToast={setToast} onClose={closePanel} />
   else if (panel === 'track' && selStored) panelView = <TrackPanel key={selStored.id} ed={ed} layer={selStored} time={time} onSeek={seek} onClose={closePanel} />
-  else if (panel === 'scenery' && tclip) panelView = <SceneryPanel key={tclip.id} ed={ed} clip={tclip} onToast={setToast} onClose={closePanel} onPaywall={() => setPaywall('scenery')} />
+  else if (panel === 'scenery' && tclip) panelView = <SceneryPanel key={tclip.id} ed={ed} clip={tclip} onToast={setToast} onClose={closePanel} onPaywall={() => setPaywall('nature')} />
   else if (panel === 'cutout' && tclip) panelView = <CutoutPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} onToast={setToast} onClose={closePanel} />
   else if (panel === 'chroma' && tclip) panelView = <GreenScreenPanel key={tclip.id} ed={ed} target={{ kind: 'clip', clip: tclip }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'order' && selClip) panelView = (

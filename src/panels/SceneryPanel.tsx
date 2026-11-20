@@ -35,7 +35,7 @@ export function SceneryPanel({ ed, clip, onToast, onClose, onPaywall }: {
 }) {
   const { premium, locked } = usePremium()
   const cur = clip.scene ?? null
-  const [mode, setMode] = useState<SceneFx['mode']>(cur?.mode ?? (isAllowed('scenery') ? 'sandwich' : 'behind'))
+  const [mode, setMode] = useState<SceneFx['mode']>(cur?.mode ?? (isAllowed('nature') ? 'sandwich' : 'behind'))
   const [noPerson, setNoPerson] = useState(false)
   const [aiFailed, setAiFailed] = useState(cutoutFailed())
   const crown = (s: Pick<SceneFx, 'pack' | 'mode'>) => locked && !premium && scenePremium(s)
@@ -49,7 +49,7 @@ export function SceneryPanel({ ed, clip, onToast, onClose, onPaywall }: {
   }, [clip.id, cur])
 
   const apply = (s: SceneFx) => {
-    if (scenePremium(s) && !isAllowed('scenery')) { onPaywall(); return false }
+    if (scenePremium(s) && !isAllowed('nature')) { onPaywall(); return false }
     ed.updateClip(clip.id, { scene: s })
     return true
   }
@@ -60,7 +60,7 @@ export function SceneryPanel({ ed, clip, onToast, onClose, onPaywall }: {
   }
   const pickMode = (m: SceneFx['mode']) => {
     if (cur) { if (apply({ ...cur, mode: m })) setMode(m) }
-    else if ((m === 'sandwich' || m === 'side') && !isAllowed('scenery')) onPaywall()
+    else if ((m === 'sandwich' || m === 'side') && !isAllowed('nature')) onPaywall()
     else setMode(m)
   }
   const patch = (p: Partial<SceneFx>) => cur && ed.updateClip(clip.id, { scene: { ...cur, ...p } })
