@@ -49,7 +49,7 @@ put('text', ['Text', 'Titles', 'Edit', 'Style', 'Caption style', 'Behind person'
 put('look', ['Filters', 'Effects', 'Adjust', 'Color', 'Crop', 'Mask', 'Transition', 'Green screen', 'Remove BG', 'Blend', 'Animation', 'motion',
   'Photo', 'Size & opacity', 'Watermark', 'Format', 'Adjustment layer', 'Scopes', 'Strength', 'Main frame'])
 put('audio', ['Audio', 'Record voice', 'Volume', 'Remove noise', 'Audio effects', 'Detach audio', 'Beats', 'Beat sync', 'Waveform'])
-put('ai', ['AI Dub', 'Smart cut', 'Slides to video', 'Script to video', 'Mind map to video', 'Audio to video', 'Quiz to video', 'Data to video', 'Article to video'])
+put('ai', ['AI Dub', 'Smart cut', 'Auto reframe', 'Slides to video', 'Script to video', 'Mind map to video', 'Audio to video', 'Quiz to video', 'Data to video', 'Article to video'])
 
 export const groupOf = (key: string) => GROUP_OF[key] ?? 'edit'
 

@@ -192,7 +192,7 @@ export interface ShapeReveal {
 
 /** Zoom & move of a main-video clip's picture: offset (fraction of the frame), zoom and turn. */
 export interface ClipPos { x: number; y: number; scale: number; rotation: number }
-export interface ClipKey { t: number; pos: ClipPos }
+export interface ClipKey { t: number; pos: ClipPos; lin?: boolean } // lin: glides straight to the next one (auto reframe)
 /** A volume point: at source time t the sound is v (0..2, like the volume slider). */
 export interface VolKey { t: number; v: number }
 
