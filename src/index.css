@@ -113,6 +113,8 @@ input, textarea { font: inherit; color: inherit; }
   background: rgba(30, 34, 43, 0.95); padding: 8px 14px; border-radius: 99px; font-size: 14px; white-space: nowrap;
 }
 .toast.error { background: #4a1f24; color: #ffd6d6; white-space: normal; text-align: center; max-width: 90%; border-radius: 12px; }
+/* in the editor the toast sits above the compare / full-screen buttons in the video's corner, never on top of them */
+.app.editor:not(.fs) .stage-wrap .toast { bottom: 54px; max-width: calc(100% - 24px); width: max-content; white-space: normal; text-align: center; border-radius: 18px; }
 
 .transport { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 4px 10px; }
 .time { font-variant-numeric: tabular-nums; font-size: 13px; }
@@ -209,7 +211,7 @@ input, textarea { font: inherit; color: inherit; }
 .co-slot.add { border-style: solid; background: var(--accent); color: #fff; font-size: 20px; }
 .co-slot.none { border: 0; width: 8px; margin: 0; }
 
-.tools { display: flex; gap: 2px; padding: 6px 4px 8px; overflow-x: auto; scrollbar-width: none; min-height: 64px; }
+.tools { display: flex; gap: 4px; padding: 6px 4px 8px; overflow-x: auto; scrollbar-width: none; min-height: 64px; }
 .tools::-webkit-scrollbar { display: none; }
 .tool {
   display: grid; justify-items: center; align-content: center; gap: 3px; background: transparent; border: 0; padding: 6px 4px;
@@ -1289,7 +1291,8 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .dock-left .tool.back, .dock-right .tool.back { border-right: 0; border-bottom: 1px solid var(--line); margin: 0 0 4px; }
 @media (min-width: 1200px) {
   .toolbar.dock-left, .toolbar.dock-right { width: 168px; }
-  .dock-left .tools, .dock-right .tools { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+  .dock-left .tools, .dock-right .tools { display: grid; grid-template-columns: 1fr 1fr; align-content: start; gap: 6px; }
+  .dock-left .tool.back, .dock-right .tool.back { grid-column: 1 / -1; }
   .dock-left .tool-groups .tg-chip span, .dock-right .tool-groups .tg-chip span { display: inline; }
 }
 
