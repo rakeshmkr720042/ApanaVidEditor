@@ -262,12 +262,13 @@ export type TextFill = 'gold' | 'rose-gold' | 'silver' | 'royal' | 'sunset' | 'l
  * Word-by-word captions: the word being spoken stands out (Reels/Shorts style). Word times are shared out over
  * the caption's time by word length, with a little extra after commas and full stops.
  */
-export type WordFxStyle = 'color' | 'box' | 'pop' | 'karaoke' | 'reveal' | 'one'
+export type WordFxStyle = 'color' | 'box' | 'pop' | 'karaoke' | 'reveal' | 'one' | 'bounce' | 'glow' | 'underline'
 export interface WordFx {
   style: WordFxStyle // color: the word changes colour; box: a coloured box behind it; pop: it grows; karaoke: words fill as
   // they are said; reveal: words appear one by one; one: only the word being said shows, big
   color: string // highlight colour
   caps?: boolean // show the words in CAPITALS
+  emoji?: boolean // a matching emoji pops up over a word while it is said ("money" → 💰), missing = off
 }
 
 export interface TextStyle {

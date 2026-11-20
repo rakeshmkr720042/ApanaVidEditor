@@ -16,6 +16,9 @@ const WORD_STYLES: { value: WordFxStyle | ''; label: string }[] = [
   { value: 'karaoke', label: 'Karaoke' },
   { value: 'reveal', label: 'Word by word' },
   { value: 'one', label: 'One word' },
+  { value: 'bounce', label: 'Bounce' },
+  { value: 'glow', label: 'Glow' },
+  { value: 'underline', label: 'Underline' },
 ]
 
 /**
@@ -80,6 +83,7 @@ export function CaptionStyle({ ed, layer }: { ed: Editor; layer: TextLayer }) {
           <ColorRow value={fx.color} onChange={(c) => setFx({ color: c ?? '#ffe600' })} />
           <div className="row-toggles">
             <Toggle label="CAPITALS" value={!!fx.caps} onChange={(caps) => setFx({ caps })} />
+            <Toggle label="Emoji pops on words (money → 💰)" value={!!fx.emoji} onChange={(emoji) => setFx({ emoji })} />
           </div>
           <p className="muted small">{t('Word timing follows each caption\'s length. If a word lights up early or late, drag the caption\'s ends on the timeline.')}</p>
         </>

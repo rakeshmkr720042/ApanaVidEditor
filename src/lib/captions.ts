@@ -1,6 +1,9 @@
 import type { TextLayer, TextStyle, WordFx } from '../types'
 import { wordTimes } from '../engine/text'
 import { uid } from './format'
+import { PICTO, EMOJI_RUN, emojiFor } from './emoji'
+
+export { emojiFor }
 
 /** Ready-made trending caption looks: font, colours and the word-by-word style in one tap. */
 export const CAPTION_LOOKS: { name: string; style: Partial<TextStyle>; words: WordFx | null; size?: number }[] = [
@@ -39,6 +42,22 @@ export const CAPTION_LOOKS: { name: string; style: Partial<TextStyle>; words: Wo
   {
     name: 'Hindi', words: { style: 'color', color: '#ffd166' },
     style: { font: 'Noto Sans Devanagari', color: '#ffffff', stroke: '#000000', strokeWidth: 0.7, shadow: true, background: null, bold: true, glow: null, fill: null },
+  },
+  {
+    name: 'Emoji karaoke', words: { style: 'karaoke', color: '#ffe600', emoji: true },
+    style: { font: 'Poppins', color: '#ffffff', stroke: '#000000', strokeWidth: 0.7, shadow: true, background: null, bold: true, glow: null, fill: null },
+  },
+  {
+    name: 'Bounce', words: { style: 'bounce', color: '#ff9f1c', caps: true, emoji: true },
+    style: { font: 'Bangers', color: '#ffffff', stroke: '#000000', strokeWidth: 1, shadow: true, background: null, bold: false, letterSpacing: 0.03, glow: null, fill: null },
+  },
+  {
+    name: 'Glow karaoke', words: { style: 'glow', color: '#00f0ff' },
+    style: { font: 'Righteous', color: '#d0d6e0', stroke: null, shadow: false, background: null, bold: false, glow: null, fill: null },
+  },
+  {
+    name: 'Underline', words: { style: 'underline', color: '#ff4d6d' },
+    style: { font: 'Montserrat', color: '#ffffff', stroke: '#000000', strokeWidth: 0.5, shadow: true, background: null, bold: true, glow: null, fill: null },
   },
   {
     name: 'Clean', words: null,
@@ -81,81 +100,7 @@ export function splitShort(subs: TextLayer[], max: number): { remove: Set<string
   return { remove, add }
 }
 
-// ---------- emojis
-
-/** Words (English, Hinglish, Hindi) and the emoji that goes with them. First match in a caption wins. */
-const EMOJI: [string[], string][] = [
-  [['love', 'pyar', 'pyaar', 'प्यार', 'mohabbat', 'heart', 'dil', 'दिल'], '❤️'],
-  [['money', 'paisa', 'paise', 'पैसा', 'पैसे', 'rupees', 'rupaye', 'रुपये', 'cash', 'dollar', 'dollars', 'income', 'salary', 'earn', 'kamai', 'कमाई'], '💰'],
-  [['fire', 'aag', 'आग', 'hot', 'lit', 'amazing', 'awesome', 'zabardast', 'जबरदस्त', 'kamaal', 'कमाल'], '🔥'],
-  [['laugh', 'funny', 'lol', 'haha', 'hasi', 'हंसी', 'joke', 'mazak', 'मजाक'], '😂'],
-  [['sad', 'cry', 'dukh', 'दुख', 'rona', 'रोना', 'udaas', 'उदास'], '😢'],
-  [['happy', 'khush', 'खुश', 'khushi', 'खुशी', 'smile', 'muskaan'], '😊'],
-  [['wow', 'shocked', 'shock', 'surprise', 'unbelievable', 'omg'], '😮'],
-  [['idea', 'tip', 'tips', 'trick', 'secret', 'raaz', 'राज़', 'राज', 'soch', 'सोच'], '💡'],
-  [['time', 'samay', 'समय', 'waqt', 'वक्त', 'minute', 'minutes', 'hour', 'hours', 'ghanta', 'घंटा'], '⏰'],
-  [['work', 'kaam', 'काम', 'job', 'office', 'business', 'dhandha', 'धंधा', 'vyapar', 'व्यापार'], '💼'],
-  [['food', 'khana', 'खाना', 'eat', 'khao', 'pizza', 'burger', 'recipe', 'tasty', 'swad', 'स्वाद'], '🍔'],
-  [['chai', 'चाय', 'tea', 'coffee'], '☕'],
-  [['phone', 'mobile', 'call', 'फोन', 'मोबाइल'], '📱'],
-  [['computer', 'laptop', 'code', 'coding', 'software'], '💻'],
-  [['music', 'song', 'gaana', 'gana', 'गाना', 'sangeet', 'संगीत'], '🎵'],
-  [['video', 'videos', 'camera', 'shoot', 'film', 'movie'], '🎬'],
-  [['book', 'books', 'kitab', 'किताब', 'padhai', 'पढ़ाई', 'study', 'exam', 'school', 'college'], '📚'],
-  [['winner', 'jeet', 'जीत', 'success', 'safalta', 'सफलता', 'trophy', 'champion'], '🏆'],
-  [['goal', 'target', 'lakshya', 'लक्ष्य', 'focus'], '🎯'],
-  [['grow', 'growth', 'badhna', 'बढ़ना', 'increase', 'profit', 'munafa', 'मुनाफा'], '📈'],
-  [['loss', 'nuksaan', 'नुकसान', 'girna'], '📉'],
-  [['strong', 'power', 'taakat', 'ताकत', 'gym', 'workout', 'fitness', 'exercise'], '💪'],
-  [['health', 'sehat', 'सेहत', 'doctor', 'medicine', 'dawai', 'दवाई'], '🩺'],
-  [['sleep', 'neend', 'नींद', 'sona', 'tired', 'thakaan'], '😴'],
-  [['think', 'thinking', 'sochna', 'सोचना', 'question', 'sawal', 'सवाल', 'why', 'kyun', 'क्यों'], '🤔'],
-  [['sahi', 'सही', 'correct', 'done'], '✅'],
-  [['wrong', 'galat', 'गलत', 'mistake', 'galti', 'गलती'], '❌'],
-  [['warning', 'danger', 'khatra', 'खतरा', 'careful', 'dhyan', 'ध्यान', 'alert'], '⚠️'],
-  [['world', 'duniya', 'दुनिया', 'earth', 'global', 'country', 'desh', 'देश'], '🌍'],
-  [['india', 'bharat', 'भारत', 'hindustan', 'हिंदुस्तान'], '🇮🇳'],
-  [['home', 'ghar', 'घर', 'house'], '🏠'],
-  [['car', 'gaadi', 'गाड़ी', 'drive', 'bike'], '🚗'],
-  [['travel', 'trip', 'safar', 'सफर', 'flight', 'yatra', 'यात्रा'], '✈️'],
-  [['family', 'parivar', 'परिवार', 'mummy', 'papa', 'maa', 'माँ', 'baby', 'bachche', 'बच्चे'], '👨‍👩‍👧'],
-  [['friend', 'friends', 'dost', 'दोस्त', 'yaar', 'यार'], '🤝'],
-  [['god', 'bhagwan', 'भगवान', 'pray', 'prayer', 'puja', 'पूजा', 'blessing', 'ashirwad'], '🙏'],
-  [['thanks', 'thank', 'shukriya', 'शुक्रिया', 'dhanyavaad', 'धन्यवाद'], '🙏'],
-  [['wedding', 'shaadi', 'shadi', 'शादी', 'marriage', 'vivah', 'विवाह'], '💍'],
-  [['party', 'celebrate', 'celebration', 'birthday', 'janamdin', 'जन्मदिन', 'jashn'], '🎉'],
-  [['gift', 'tohfa', 'तोहफा', 'free', 'muft', 'मुफ्त'], '🎁'],
-  [['star', 'superstar'], '⭐'],
-  [['fast', 'quick', 'jaldi', 'जल्दी', 'speed'], '⚡'],
-  [['brain', 'dimag', 'दिमाग', 'smart', 'intelligent', 'mind'], '🧠'],
-  [['rain', 'barish', 'baarish', 'बारिश'], '🌧️'],
-  [['sun', 'suraj', 'सूरज', 'summer', 'garmi', 'गर्मी'], '☀️'],
-  [['night', 'raat', 'रात', 'moon', 'chand', 'चाँद'], '🌙'],
-  [['cricket', 'match'], '🏏'],
-  [['game', 'games', 'gaming', 'khel', 'खेल'], '🎮'],
-  [['subscribe', 'share', 'comment', 'follow'], '👍'],
-  [['dekho', 'देखो', 'watch', 'dekhiye', 'देखिए'], '👀'],
-  [['start', 'shuru', 'शुरू', 'launch', 'begin'], '🚀'],
-  [['stop', 'ruko', 'रुको'], '✋'],
-  [['angry', 'gussa', 'गुस्सा'], '😡'],
-  [['cool', 'style', 'swag'], '😎'],
-]
-
-const LOOKUP = new Map<string, string>()
-for (const [words, e] of EMOJI) for (const w of words) if (!LOOKUP.has(w)) LOOKUP.set(w, e)
-
-const PICTO = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u
-const EMOJI_RUN = /\s*(?:[\p{Extended_Pictographic}\p{Regional_Indicator}‍️\u{1F3FB}-\u{1F3FF}])+/gu
-
-/** The emoji that fits a caption, or null. */
-export function emojiFor(text: string): string | null {
-  for (const raw of text.toLocaleLowerCase().split(/\s+/)) {
-    const w = raw.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}\p{M}]+$/gu, '')
-    const e = LOOKUP.get(w)
-    if (e) return e
-  }
-  return null
-}
+// ---------- emojis (the word list lives in ./emoji.ts, shared with the live word emojis in engine/text.ts)
 
 /** The caption with a matching emoji at the end (unchanged when it has one already or nothing matches). */
 export function withEmoji(text: string) {

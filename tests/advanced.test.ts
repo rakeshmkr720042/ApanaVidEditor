@@ -5,7 +5,10 @@ import './_env'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Clip, MediaSource, Project } from '../src/types'
-import { centreOn, holdPath, lookTimes, pictureSize, reframeKeys, reframeProject, simplify, type Look } from '../src/model/reframe'
+import { centreOn, holdPath, lookTimes, pictureSize, reframeKeys, reframeProject, simplify, smooth, type Look } from '../src/model/reframe'
+import { emojiFor, emojiForWord } from '../src/lib/emoji'
+import { CAPTION_LOOKS, withEmoji } from '../src/lib/captions'
+import { parseTrending } from '../src/lib/trending'
 import { posAt } from '../src/model/clipKeys'
 
 const clip = (p: Partial<Clip> = {}): Clip => ({
@@ -84,8 +87,18 @@ test('reframe: a cut in the video makes the camera jump, not glide', () => {
   assert.ok(before > 0 && after < 0)
 })
 
-test('reframe: smoothing keeps a steady walk on its line, also at the ends', async () => {
-  const { smooth } = await import('../src/model/reframe')
+test('reframe: smoothing keeps a steady walk on its line, also at the ends', () => {
   const ts = [0, 0.5, 1, 1.5, 2], v = ts.map((t) => 0.2 + 0.1 * t)
   smooth(ts, v, 0.8).forEach((x, i) => assert.ok(Math.abs(x - v[i]) < 1e-9))
+})
+
+test('karaoke: word emojis and new looks', () => {
+  assert.equal(emojiForWord('Paisa,'), '💰')
+  assert.equal(emojiForWord('पैसा'), '💰')
+  assert.equal(emojiForWord('banana'), null)
+  assert.equal(emojiFor('I love chai'), '❤️')
+  assert.equal(withEmoji('kamaal hai'), 'kamaal hai 🔥')
+  for (const n of ['Emoji karaoke', 'Bounce', 'Glow karaoke', 'Underline']) assert.ok(CAPTION_LOOKS.some((l) => l.name === n), n)
+  const p = parseTrending({ version: 1, captionLooks: [{ name: 'B', words: { style: 'bounce', color: '#ff0000', emoji: true }, style: { font: 'Anton' } }], titles: [] })!
+  assert.deepEqual(p.captionLooks[0].words, { style: 'bounce', color: '#ff0000', emoji: true })
 })

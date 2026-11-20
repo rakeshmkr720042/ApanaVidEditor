@@ -54,6 +54,45 @@ const section: HelpSection = {
         ],
       },
     },
+    {
+      id: 'karaoke-emoji',
+      isNew: true,
+      find: { tool: 'Caption style', needs: 'text' },
+      related: ['caption-style'],
+      keywords: ['karaoke', 'emoji', 'word by word', 'bounce', 'glow', 'underline', 'captions style', 'subtitle animation'],
+      en: {
+        title: 'Karaoke captions with emoji pops',
+        what: 'New word-by-word caption looks: Emoji karaoke, Bounce, Glow karaoke and Underline. With "Emoji pops on words" on, a matching emoji springs up over a word while it is said (money / paisa → 💰, love / pyar → ❤️, Hindi words too).',
+        where: 'Select a caption → Caption style → Trending looks',
+        steps: [
+          'Make captions first (Subtitles → Auto captions), or add any text.',
+          'Select a caption and open Caption style.',
+          'Tap a look: Emoji karaoke, Bounce, Glow karaoke or Underline. All captions change together.',
+          'Under "Highlight the word being said" you can mix any style with the "Emoji pops on words" switch and pick the highlight colour.',
+        ],
+        tips: [
+          'The emoji shows for about a second and then fades, so it never covers the next line.',
+          'For Shorts, use "Short captions → 2 or 3 words a screen" first; the effects look best on short lines.',
+          'Words with no matching emoji simply show no emoji.',
+        ],
+      },
+      hi: {
+        title: 'इमोजी के साथ कराओके कैप्शन',
+        what: 'शब्द-दर-शब्द कैप्शन के नए लुक: इमोजी कराओके, उछाल, ग्लो कराओके और अंडरलाइन। "शब्दों पर इमोजी उछले" चालू हो, तो जो शब्द बोला जा रहा है उसके ऊपर मिलता-जुलता इमोजी उछलकर आता है (money / पैसा → 💰, love / प्यार → ❤️, हिंदी शब्द भी)।',
+        where: 'कैप्शन चुनें → कैप्शन स्टाइल → ट्रेंडिंग लुक',
+        steps: [
+          'पहले कैप्शन बनाएँ (सबटाइटल → ऑटो कैप्शन), या कोई भी टेक्स्ट जोड़ें।',
+          'कोई कैप्शन चुनें और "कैप्शन स्टाइल" खोलें।',
+          'एक लुक दबाएँ: इमोजी कराओके, उछाल, ग्लो कराओके या अंडरलाइन। सारे कैप्शन एक साथ बदलते हैं।',
+          '"बोले जा रहे शब्द को चमकाएं" में कोई भी स्टाइल "शब्दों पर इमोजी उछले" स्विच के साथ मिला सकते हैं और रंग चुन सकते हैं।',
+        ],
+        tips: [
+          'इमोजी लगभग एक सेकंड दिखकर धीरे से गायब होता है, ताकि अगली लाइन न ढके।',
+          'शॉर्ट्स के लिए पहले "छोटे कैप्शन → 2 या 3 शब्द" करें; छोटी लाइनों पर इफ़ेक्ट सबसे अच्छे लगते हैं।',
+          'जिस शब्द का कोई इमोजी नहीं है, उस पर इमोजी नहीं आता।',
+        ],
+      },
+    },
   ],
 }
 

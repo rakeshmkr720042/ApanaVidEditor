@@ -21,7 +21,7 @@ const MAX = 40
 export interface CaptionLook { name: string; style: Partial<TextStyle>; words: WordFx | null; size?: number }
 export interface TrendingPack { version: 1; updated: string; captionLooks: CaptionLook[]; titles: TitlePreset[] }
 
-const WORD_STYLES: WordFxStyle[] = ['color', 'box', 'pop', 'karaoke', 'reveal', 'one']
+const WORD_STYLES: WordFxStyle[] = ['color', 'box', 'pop', 'karaoke', 'reveal', 'one', 'bounce', 'glow', 'underline']
 const ANIMS: TextAnim[] = ['none', 'fade', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'pop', 'typewriter', 'zoom', 'bounce', 'blur', 'spin', 'drop', 'wipe', 'letters']
 const LOOPS: LoopAnim[] = ['none', 'pulse', 'float', 'swing', 'shimmer', 'heartbeat']
 const FILLS: TextFill[] = ['gold', 'rose-gold', 'silver', 'royal', 'sunset', 'love', 'rainbow', 'tiranga']
@@ -60,7 +60,7 @@ function cleanLook(v: unknown): CaptionLook | null {
   let words: WordFx | null = null
   if (isObj(v.words)) {
     const ws = oneOf(v.words.style, WORD_STYLES), wc = colour(v.words.color)
-    if (ws && wc) words = { style: ws, color: wc, ...(v.words.caps === true ? { caps: true } : {}) }
+    if (ws && wc) words = { style: ws, color: wc, ...(v.words.caps === true ? { caps: true } : {}), ...(v.words.emoji === true ? { emoji: true } : {}) }
   }
   return { name, style, words, ...(num(v.size, 0.02, 0.2) !== undefined ? { size: num(v.size, 0.02, 0.2) } : {}) }
 }
