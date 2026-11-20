@@ -237,9 +237,86 @@ const TRENDING: [string, string, string, string][] = [
 ]
 
 
+/** Liquid & ink: melting drips, ink drops and swirls, water ripples, a wave, paint splash, smoke and a gooey morph. */
+const LIQUID: [string, string, string, string][] = [
+  ['melt', 'Liquid melt', 'Liquid & ink', `float col = uv.x*ratio*7.0;
+    float n1 = mix(rnd(vec2(floor(col), 5.0)), rnd(vec2(floor(col) + 1.0, 5.0)), smoothstep(0.0, 1.0, fract(col)));
+    float n2 = mix(rnd(vec2(floor(col*3.1), 9.0)), rnd(vec2(floor(col*3.1) + 1.0, 9.0)), smoothstep(0.0, 1.0, fract(col*3.1)));
+    float e = p*p*(3.0 - 2.0*p);
+    float drop = e*(1.25 + n1*0.9 + n2*0.25);
+    float y = uv.y + drop;
+    if (y > 1.0) return to(uv);
+    vec4 c = from(vec2(uv.x, y));
+    float lip = smoothstep(0.035, 0.0, 1.0 - y)*step(0.001, p);
+    return vec4(mix(c.rgb, c.rgb*0.55 + vec3(0.25), lip*0.6), 1.0);`],
+  ['inkdrops', 'Ink drops', 'Liquid & ink', `${fbm('n', 'uv*vec2(ratio,1.0)*4.0')}
+    float dm = 9.0;
+    for (int i = 0; i < 7; i++) {
+      float fi = float(i);
+      vec2 c = vec2(rnd(vec2(fi, 1.3)), rnd(vec2(fi, 7.7)));
+      float st = rnd(vec2(fi, 3.1))*0.45;
+      float r = clamp((p - st)/0.55, 0.0, 1.0); r = r*r*(3.0 - 2.0*r)*0.62;
+      float d = length((uv - c)*vec2(ratio, 1.0)) + (n - 0.5)*0.22;
+      dm = min(dm, r > 0.001 ? d - r : 9.0);
+    }
+    float m = smoothstep(0.0, -0.015, dm);
+    float ring = smoothstep(0.03, 0.0, abs(dm))*step(0.01, p);
+    m = max(m, step(0.985, p));
+    vec4 c2 = mix(from(uv), to(uv), m);
+    return vec4(mix(c2.rgb, vec3(0.03, 0.03, 0.08), ring*0.8*(1.0 - p)), 1.0);`],
+  ['inkswirl', 'Ink swirl', 'Liquid & ink', `vec2 o = (uv - 0.5)*vec2(ratio, 1.0); float r = length(o);
+    float a = atan(o.y, o.x) + (1.0 - r)*4.0*p;
+    vec2 w = vec2(cos(a), sin(a))*r;
+    ${fbm('n', 'w*3.0 + vec2(p*1.5, 0.0)')}
+    float v = n*0.8 + r*0.6; float edge = p*1.7 - 0.25;
+    float m = smoothstep(edge + 0.02, edge - 0.02, v);
+    float ring = smoothstep(0.045, 0.0, abs(v - edge))*step(0.01, p)*step(p, 0.99);
+    vec4 c = mix(from(uv), to(uv), m);
+    return vec4(mix(c.rgb, vec3(0.05, 0.02, 0.12), ring*0.85), 1.0);`],
+  ['waterripple', 'Water ripple', 'Liquid & ink', `vec2 d = (uv - 0.5)*vec2(ratio, 1.0); float l = length(d) + 1e-4;
+    float front = p*1.25*length(vec2(ratio, 1.0))*0.5;
+    float s = sin(p*3.14159);
+    float wave = sin(l*55.0 - p*40.0)*exp(-abs(l - front)*9.0)*s;
+    vec2 q = clamp(uv + (d/l)*wave*0.03/vec2(ratio, 1.0), 0.0, 1.0);
+    float m = smoothstep(front + 0.03, front - 0.03, l);
+    vec4 c = mix(from(q), to(q), m);
+    float shine = max(0.0, wave)*0.35;
+    return vec4(min(c.rgb + shine, 1.0), 1.0);`],
+  ['wave', 'Liquid wave', 'Liquid & ink', `float e = p*p*(3.0 - 2.0*p);
+    float edge = -0.15 + e*1.3 + sin(uv.y*9.0 + p*12.0)*0.05 + sin(uv.y*23.0 - p*7.0)*0.02;
+    float d = uv.x - edge;
+    vec2 q = clamp(uv + vec2(0.0, sin(uv.x*14.0 + p*9.0)*0.012*sin(p*3.14159)), 0.0, 1.0);
+    vec4 c = d < 0.0 ? to(q) : from(q);
+    float foam = smoothstep(0.025, 0.0, abs(d))*step(0.001, p)*step(p, 0.999);
+    return vec4(mix(c.rgb, vec3(0.92, 0.97, 1.0), foam*0.85), 1.0);`],
+  ['splash', 'Paint splash', 'Liquid & ink', `vec2 o = (uv - 0.5)*vec2(ratio, 1.0); float a = atan(o.y, o.x); float r = length(o);
+    float spikes = 0.0;
+    for (int i = 0; i < 4; i++) { float fi = float(i); spikes += sin(a*(5.0 + fi*4.0) + fi*1.7)*rnd(vec2(fi, 4.0))*0.08; }
+    float g = p < 0.5 ? p*2.0 : 1.0; float h = p < 0.5 ? 0.0 : (p - 0.5)*2.0;
+    float out_ = g*g*(3.0 - 2.0*g)*(1.1*length(vec2(ratio, 1.0))*0.5) + spikes*g;
+    float hole = h*h*(3.0 - 2.0*h)*(1.2*length(vec2(ratio, 1.0))*0.5) + spikes*h*0.6;
+    vec3 paint = vec3(1.0, 0.27, 0.42);
+    if (r < hole) return to(uv);
+    if (r < out_) { float shade = 0.82 + 0.18*smoothstep(out_ - 0.12, out_, r) - 0.1*smoothstep(hole + 0.1, hole, r)*step(0.001, hole); return vec4(paint*shade, 1.0); }
+    return p < 0.5 ? from(uv) : to(uv);`],
+  ['smoke', 'Smoke', 'Liquid & ink', `${fbm('n', 'uv*vec2(ratio,1.0)*3.0 + vec2(0.0, -p*1.2)', 5)}
+    float v = n + (1.0 - uv.y)*0.25; float edge = p*1.5 - 0.25;
+    float m = smoothstep(edge + 0.08, edge - 0.08, v);
+    float puff = smoothstep(0.16, 0.0, abs(v - edge))*sin(p*3.14159);
+    vec4 c = mix(from(uv), to(uv), m);
+    return vec4(mix(c.rgb, vec3(0.93), puff*0.75), 1.0);`],
+  ['goo', 'Gooey morph', 'Liquid & ink', `float s = sin(p*3.14159);
+    ${fbm('n', 'uv*vec2(ratio,1.0)*2.5 + vec2(p*0.8, p*0.5)')}
+    ${fbm('k', 'uv*vec2(ratio,1.0)*2.5 + vec2(5.2 - p*0.6, 1.3)')}
+    vec2 q = clamp(uv + (vec2(n, k) - 0.5)*0.22*s, 0.0, 1.0);
+    return mix(from(q), to(q), smoothstep(0.3, 0.7, p));`],
+]
+
+
 const T: [string, string, string, string][] = [
   // id, name, group, glsl
   ...TRENDING,
+  ...LIQUID,
   ...REVEAL,
 
   ['fade', 'Fade', 'Basic', 'return mix(from(uv), to(uv), p);'],

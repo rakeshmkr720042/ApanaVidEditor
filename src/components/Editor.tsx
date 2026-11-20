@@ -77,6 +77,9 @@ import { CutoutPanel } from '../panels/CutoutPanel'
 import { SceneryPanel } from '../panels/SceneryPanel'
 import { BeatPanel } from '../panels/BeatPanel'
 import { SmartCutPanel } from '../panels/SmartCutPanel'
+import { ReframePanel } from '../panels/ReframePanel'
+import { CameraPanel } from '../panels/CameraPanel'
+import { FollowTagPanel } from '../panels/FollowTagPanel'
 import { MotionPanel, TrackPanel } from '../panels/MotionPanel'
 import { isTracked } from '../engine/tracker'
 import { loadCutout } from '../engine/cutout'
@@ -146,8 +149,8 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 }
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
-  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'scenery' | 'beat' | 'smartcut' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'reveal' | 'bloomadd' | 'bloom' | 'adjlayer' | 'scenes' | 'join' | 'frame' | 'annotate' | null
+  | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'scenery' | 'beat' | 'smartcut' | 'reframe' | 'followtag' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'camera' | 'mask' | 'reveal' | 'bloomadd' | 'bloom' | 'adjlayer' | 'scenes' | 'join' | 'frame' | 'annotate' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -795,7 +798,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const clipAtPlayhead = useMemo(() => activeAt(ed.layout.items, time).a?.item.clip ?? null, [ed.layout.items, time])
   const targetClip = selClip ?? (ed.project.main?.locked ? null : clipAtPlayhead)
 
-  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'beat', 'smartcut', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop', 'frame', 'reveal', 'bloomadd'].includes(panel)) setPanel(null) }, [sel, panel])
+  useEffect(() => { if (!sel && panel && !['text', 'stickers', 'showers', 'split', 'beat', 'smartcut', 'reframe', 'followtag', 'audio', 'format', 'subtitles', 'ai', 'watermark', 'presenter', 'templates', 'slideshow', 'filters', 'effects', 'color', 'adjust', 'speed', 'volume', 'crop', 'frame', 'reveal', 'bloomadd'].includes(panel)) setPanel(null) }, [sel, panel])
 
   const openClipPanel = (p: PanelName) => {
     if (!targetClip) return
@@ -961,6 +964,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...(!photo ? [{ icon: 'film', label: 'Find shots', on: () => setPanel('scenes') } as Tool] : []),
       { icon: 'layers', label: selClip.compound ? 'Break apart' : 'Join clips', on: () => setPanel('join'), active: !!selClip.compound },
       { icon: 'keyframe', label: 'Zoom & move', on: () => setPanel('zoommove'), active: !!(selClip.keys?.length || selClip.pos) },
+      { icon: 'camera', label: 'Camera moves', on: () => setPanel('camera'), active: !!selClip.camera },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { key: 'motion', icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
       { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !!selClip.ramp },
@@ -1124,11 +1128,13 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'music', label: 'Audio', on: () => { setAudioTab('mine'); setPanel('audio') } },
       { icon: 'mic', label: 'Record voice', on: () => { player?.pause(); setAudioTab('voice'); setPanel('audio') } },
       { icon: 'smartcut', label: 'Smart cut', on: () => setPanel('smartcut'), disabled: empty },
+      { icon: 'fit', label: 'Auto reframe', on: () => { player?.pause(); setPanel('reframe') }, disabled: empty },
       { icon: 'music', label: 'Beat sync', on: () => setPanel('beat'), disabled: empty, active: !!ed.project.beatFx },
       { icon: 'subtitles', label: 'Subtitles', on: () => setPanel('subtitles'), disabled: empty },
       { icon: 'chroma', label: 'Green screen', on: () => openClipPanel('chroma'), disabled: !targetClip },
       { icon: 'speed', label: 'Speed', on: () => openClipPanel('speed'), disabled: !targetClip },
       { icon: 'sticker', label: 'Stickers', on: () => setPanel('stickers'), disabled: empty },
+      { icon: 'track', label: 'Follow tag', on: () => { player?.pause(); setPanel('followtag') }, disabled: empty },
       { icon: 'shower', label: 'Showers', on: () => setPanel('showers'), disabled: empty },
       { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !targetClip || !!targetClip.ramp },
       { icon: 'filter', label: 'Filters', on: () => openClipPanel('filters'), disabled: !targetClip },
@@ -1263,6 +1269,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   )
   else if (panel === 'mask' && selLayer?.type === 'media') panelView = <MaskPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'mask' && selClip) panelView = <MaskPanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
+  else if (panel === 'camera' && selClip) panelView = <CameraPanel key={selClip.id} ed={ed} clip={selClip} onToast={setToast} onClose={closePanel} />
   else if (panel === 'zoommove' && selClip) panelView = <ZoomMovePanel ed={ed} clip={selClip} src={srcOfClip(selClip)} start={ed.layout.items.find((x) => x.clip.id === selClip.id)?.start ?? 0} onSeek={seek} onClose={closePanel} />
   else if (panel === 'noise' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <NoisePanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'noise' && selClip) panelView = <NoisePanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
@@ -1292,6 +1299,8 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'chroma' && selStored?.type === 'media') panelView = <GreenScreenPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} time={time} onToast={setToast} onClose={closePanel} />
   else if (panel === 'smartcut') panelView = <SmartCutPanel ed={ed} onToast={setToast} onClose={closePanel} onShort={makeShort}
       onSeek={(tt) => { player?.seek(tt); player?.play() }} />
+  else if (panel === 'followtag') panelView = <FollowTagPanel ed={ed} time={time} onSeek={seek} onToast={setToast} onClose={closePanel} />
+  else if (panel === 'reframe') panelView = <ReframePanel ed={ed} onToast={setToast} onClose={closePanel} onCopy={makeShort} />
   else if (panel === 'beat') panelView = <BeatPanel ed={ed} onToast={setToast} onMusic={() => { setAudioTab('mine'); setPanel('audio') }} onClose={closePanel} />
   else if (panel === 'cutout' && selStored?.type === 'media') panelView = <CutoutPanel key={selStored.id} ed={ed} target={{ kind: 'layer', layer: selStored }} onToast={setToast} onClose={closePanel} />
   else if (panel === 'motion' && tclip) panelView = <MotionPanel key={tclip.id} ed={ed} clip={tclip} onToast={setToast} onClose={closePanel} />

@@ -1,4 +1,5 @@
 import { drawShower } from './shower'
+import { emojiForWord } from '../lib/emoji'
 import type { CaptionFrame, CaptionFramePreset, LoopAnim, StickerLayer, TextAnim, TextFill, TextLayer, TextStyle, WordFx } from '../types'
 
 /** How a font looks, so the font picker can group them. */
@@ -351,7 +352,7 @@ const inkOn = (hex: string) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#111111' : '#ffffff'
 }
 
-interface Words { fx: WordFx; times: number[]; k: number; t: number; end: number; pop: number }
+interface Words { fx: WordFx; times: number[]; k: number; t: number; end: number; pop: number; text: string }
 
 /**
  * The text as shown with word captions on: in capitals if asked, or (one-word style) only the word being said,
@@ -364,7 +365,7 @@ function wordView(layer: TextLayer, t: number): { layer: TextLayer; words: Words
   const times = wordTimes(text, layer.start, layer.end)
   const k = activeWord(times, t)
   const pop = Math.min(1, Math.max(0, (t - (times[k] ?? layer.start)) / 0.16))
-  const words: Words = { fx, times, k, t, end: layer.end, pop }
+  const words: Words = { fx, times, k, t, end: layer.end, pop, text }
   if (fx.style === 'one') {
     const word = text.match(/\S+/g)?.[k] ?? ''
     return { layer: { ...layer, text: word, style: { ...layer.style, color: fx.color, fill: null } }, words }
@@ -392,6 +393,11 @@ function paintWordLine(ctx: Ctx, st: TextStyle, line: string, left: number, y: n
   for (const it of order) {
     const on = it.i === w.k
     if (fx.style === 'reveal' && it.i > w.k) continue
+    if (!on && (fx.style === 'glow' || fx.style === 'underline')) {
+      // said words keep the highlight colour, words still to come stay plain
+      paintText(ctx, it.i < w.k ? flat(st, fx.color) : st, it.word, it.x, y, px, lineX, lineW, 2)
+      continue
+    }
     if (!on || fx.style === 'color' || fx.style === 'karaoke') {
       const said = fx.style === 'karaoke' ? it.i < w.k : on
       paintText(ctx, said ? flat(st, fx.color) : st, it.word, it.x, y, px, lineX, lineW, 2)
@@ -422,6 +428,27 @@ function paintWordLine(ctx: Ctx, st: TextStyle, line: string, left: number, y: n
       const sc = 1 + 0.22 * grow
       ctx.scale(sc, sc)
       paintText(ctx, flat(st, fx.color), it.word, -it.w / 2, 0, px, 0, it.w, 2)
+    } else if (fx.style === 'bounce') {
+      // the word jumps up and lands as it is said
+      const jump = Math.sin(Math.min(1, w.pop * 1.4) * Math.PI) * px * 0.32
+      ctx.translate(cx, y - jump)
+      const sc = 1 + 0.12 * grow
+      ctx.scale(sc, sc)
+      paintText(ctx, flat(st, fx.color), it.word, -it.w / 2, 0, px, 0, it.w, 2)
+    } else if (fx.style === 'glow') {
+      ctx.shadowColor = fx.color
+      ctx.shadowBlur = px * (0.5 + 0.5 * grow)
+      paintText(ctx, { ...flat(st, '#ffffff'), glow: fx.color }, it.word, it.x, y, px, lineX, lineW, 2)
+      ctx.shadowBlur = 0
+      paintText(ctx, { ...flat(st, '#ffffff'), stroke: null, glow: null, shadow: false }, it.word, it.x, y, px, lineX, lineW, 2)
+    } else if (fx.style === 'underline') {
+      // a bar sweeps under the word while it is said
+      paintText(ctx, flat(st, fx.color), it.word, it.x, y, px, lineX, lineW, 2)
+      const next = w.times[it.i + 1] ?? w.end
+      const p = Math.min(1, Math.max(0, (w.t - w.times[it.i]) / Math.max(0.05, next - w.times[it.i])))
+      ctx.fillStyle = fx.color
+      roundRect(ctx, it.x, y + px * 0.55, Math.max(px * 0.2, it.w * easeOut(p)), px * 0.14, px * 0.07)
+      ctx.fill()
     } else if (fx.style === 'reveal') {
       ctx.globalAlpha = base * Math.min(1, w.pop * 1.5)
       paintText(ctx, flat(st, fx.color), it.word, it.x, y + (1 - easeOut(w.pop)) * px * 0.35, px, lineX, lineW, 2)
@@ -429,7 +456,43 @@ function paintWordLine(ctx: Ctx, st: TextStyle, line: string, left: number, y: n
     ctx.restore()
   }
   ctx.globalAlpha = base
+  if (fx.emoji) {
+    const e = wordEmoji(w)
+    const it = e && items.find((x) => x.i === e.i)
+    if (e && it) paintEmoji(ctx, e.emoji, e.age, it.x + it.w / 2, y - px * 1.15, px)
+  }
   return items.length
+}
+
+/** The emoji to show now: the last word said (within a second) that has one. */
+function wordEmoji(w: Words): { i: number; emoji: string; age: number } | null {
+  const all = w.text.match(/\S+/g) ?? []
+  for (let i = w.k; i >= 0; i--) {
+    const age = w.t - w.times[i]
+    if (age > 1.1) return null
+    const emoji = emojiForWord(all[i] ?? '')
+    if (emoji) return { i, emoji, age }
+  }
+  return null
+}
+
+/** An emoji popping up (springs in, floats a little, fades after a second) centred on x, y. */
+function paintEmoji(ctx: Ctx, emoji: string, age: number, x: number, y: number, px: number) {
+  const k = Math.max(0, easeOutBack(Math.min(1, age / 0.25)))
+  const fade = age > 0.85 ? Math.max(0, 1 - (age - 0.85) / 0.25) : 1
+  if (k <= 0.01 || fade <= 0.01) return
+  ctx.save()
+  ctx.globalAlpha *= fade
+  ctx.translate(x, y - age * px * 0.25)
+  ctx.rotate(Math.sin(age * 9) * 0.12)
+  ctx.scale(k, k)
+  ctx.font = `${Math.round(px * 1.1)}px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'
+  ctx.shadowBlur = px * 0.2
+  ctx.fillText(emoji, 0, 0)
+  ctx.restore()
 }
 
 export function drawText(ctx: Ctx, source: TextLayer, t: number, W: number, H: number) {
@@ -499,6 +562,10 @@ export function drawText(ctx: Ctx, source: TextLayer, t: number, W: number, H: n
     ctx.textAlign = st.align
     paintText(ctx, st, line, x, y, m.px, left + lw / 2, lw, lp.shine)
   })
+  if (words?.fx.style === 'one' && words.fx.emoji) {
+    const e = wordEmoji(words)
+    if (e) paintEmoji(ctx, e.emoji, e.age, x, top - m.lh * 0.95, m.px)
+  }
   ctx.restore()
 }
 
@@ -639,6 +706,10 @@ function drawFramedText(ctx: Ctx, source: TextLayer, frame: CaptionFrame, t: num
     if (words && words.fx.style !== 'one') { wordAt += paintWordLine(ctx, st, line, lx - lw / 2, ly, m.px, lw, words, wordAt); ctx.textAlign = st.align; return }
     paintText(ctx, st, line, tx, ly, m.px, lx, lw, shine)
   })
+  if (words?.fx.style === 'one' && words.fx.emoji) {
+    const e = wordEmoji(words)
+    if (e) paintEmoji(ctx, e.emoji, e.age, tx, top - m.lh * 0.95, m.px)
+  }
   ctx.restore()
 }
 

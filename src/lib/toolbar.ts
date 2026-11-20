@@ -42,14 +42,14 @@ export const GROUPS: { id: GroupId; label: string; icon: IconName }[] = [
 const GROUP_OF: Record<string, Exclude<GroupId, 'all' | 'fav'>> = {}
 const put = (g: Exclude<GroupId, 'all' | 'fav'>, keys: string[]) => { for (const k of keys) GROUP_OF[k] = g }
 put('edit', ['Split', 'Trim', 'Delete', 'Duplicate', 'Move / swap', 'Swap', 'Select all', 'One clip', 'One item', 'Insert after', 'Replace',
-  'Freeze frame', 'reverse', 'Speed', 'Layer order', 'Keyframes', 'Track', 'Zoom & move', 'fit', 'Copy track', 'Paste track', 'Copy style',
+  'Freeze frame', 'reverse', 'Speed', 'Layer order', 'Keyframes', 'Track', 'Zoom & move', 'Camera moves', 'fit', 'Copy track', 'Paste track', 'Copy style',
   'Paste style', 'marker'])
-put('add', ['Add', 'Overlay', 'Add overlay', 'Shape reveal', 'Stickers', 'Shower', 'Showers', 'Split screen', 'Blur', 'Record screen', 'Record camera', 'Intro/Outro', 'Slideshow'])
+put('add', ['Add', 'Overlay', 'Add overlay', 'Shape reveal', 'Stickers', 'Follow tag', 'Shower', 'Showers', 'Split screen', 'Blur', 'Record screen', 'Record camera', 'Intro/Outro', 'Slideshow'])
 put('text', ['Text', 'Titles', 'Edit', 'Style', 'Caption style', 'Behind person', 'captions', 'Subtitles', 'Listen again'])
 put('look', ['Filters', 'Effects', 'Adjust', 'Color', 'Crop', 'Mask', 'Transition', 'Green screen', 'Remove BG', 'Blend', 'Animation', 'motion',
   'Photo', 'Size & opacity', 'Watermark', 'Format', 'Adjustment layer', 'Scopes', 'Strength', 'Main frame'])
 put('audio', ['Audio', 'Record voice', 'Volume', 'Remove noise', 'Audio effects', 'Detach audio', 'Beats', 'Beat sync', 'Waveform'])
-put('ai', ['AI Dub', 'Smart cut', 'Slides to video', 'Script to video', 'Mind map to video', 'Audio to video', 'Quiz to video', 'Data to video', 'Article to video'])
+put('ai', ['AI Dub', 'Smart cut', 'Auto reframe', 'Slides to video', 'Script to video', 'Mind map to video', 'Audio to video', 'Quiz to video', 'Data to video', 'Article to video'])
 
 export const groupOf = (key: string) => GROUP_OF[key] ?? 'edit'
 

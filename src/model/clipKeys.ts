@@ -23,7 +23,8 @@ export function posAt(c: Clip, src: number): ClipPos {
   if (src >= last.t) return last.pos
   const i = keys.findIndex((k) => k.t > src)
   const a = keys[i - 1], b = keys[i]
-  const k = ease((src - a.t) / (b.t - a.t))
+  const f = (src - a.t) / (b.t - a.t)
+  const k = a.lin ? f : ease(f)
   return { x: mix(a.pos.x, b.pos.x, k), y: mix(a.pos.y, b.pos.y, k), scale: mix(a.pos.scale, b.pos.scale, k), rotation: mix(a.pos.rotation, b.pos.rotation, k) }
 }
 
@@ -32,6 +33,7 @@ export const isNoPos = (p: ClipPos | null | undefined) => !p || (Math.abs(p.x) <
 /** Keyframes with `pos` saved at source time `src` (replacing one already there). */
 export function withClipKey(c: Clip, src: number, pos: ClipPos): ClipKey[] {
   const keys = (c.keys ?? []).filter((k) => Math.abs(k.t - src) >= CLIP_KEY_SNAP)
+  // a key the user sets by hand eases in and out (auto-reframe keys glide straight)
   return [...keys, { t: src, pos: { ...pos } }].sort((a, b) => a.t - b.t)
 }
 

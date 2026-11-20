@@ -130,6 +130,7 @@ export interface Clip {
   rampPts?: number[] // the user's own speed curve (8 speeds over the clip), used when ramp = 'custom'
   pos?: ClipPos | null // zoom & move of the picture (no keyframes), missing = none
   keys?: ClipKey[] // zoom & move keyframes, t in SOURCE seconds (they stay on the video through trims and splits)
+  camera?: { id: string; strength: number } | null // the camera-move preset the keys were made from (src/model/camera.ts), missing = none
   volKeys?: VolKey[] // volume keyframes (source seconds); when set they decide the volume
   shapeMask?: ShapeMask | null // pro mask, missing = none
   compound?: { clips: Clip[] } | null // joined clip: the clips it was made from, so it can be broken apart again
@@ -213,7 +214,7 @@ export interface ShapeReveal {
 
 /** Zoom & move of a main-video clip's picture: offset (fraction of the frame), zoom and turn. */
 export interface ClipPos { x: number; y: number; scale: number; rotation: number }
-export interface ClipKey { t: number; pos: ClipPos }
+export interface ClipKey { t: number; pos: ClipPos; lin?: boolean } // lin: glides straight to the next one (auto reframe)
 /** A volume point: at source time t the sound is v (0..2, like the volume slider). */
 export interface VolKey { t: number; v: number }
 
@@ -262,6 +263,7 @@ interface LayerBase {
   start: number // timeline seconds
   end: number
   track?: string // id of the Track row it sits on (given to every layer by withTracks)
+  tag?: string // follow tag: the layers of one tag share this id and move together (src/model/followTag.ts), missing = none
 }
 
 /** A saved pose of a layer at a moment, counted from the layer's start. Between keyframes the layer glides. */
@@ -283,12 +285,13 @@ export type TextFill = 'gold' | 'rose-gold' | 'silver' | 'royal' | 'sunset' | 'l
  * Word-by-word captions: the word being spoken stands out (Reels/Shorts style). Word times are shared out over
  * the caption's time by word length, with a little extra after commas and full stops.
  */
-export type WordFxStyle = 'color' | 'box' | 'pop' | 'karaoke' | 'reveal' | 'one'
+export type WordFxStyle = 'color' | 'box' | 'pop' | 'karaoke' | 'reveal' | 'one' | 'bounce' | 'glow' | 'underline'
 export interface WordFx {
   style: WordFxStyle // color: the word changes colour; box: a coloured box behind it; pop: it grows; karaoke: words fill as
   // they are said; reveal: words appear one by one; one: only the word being said shows, big
   color: string // highlight colour
   caps?: boolean // show the words in CAPITALS
+  emoji?: boolean // a matching emoji pops up over a word while it is said ("money" → 💰), missing = off
 }
 
 export interface TextStyle {
