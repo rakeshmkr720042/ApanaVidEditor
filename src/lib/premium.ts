@@ -18,7 +18,7 @@ export const LICENCE_PUBLIC_KEY = ''
 /** Days a licence keeps working without internet after the last successful check. */
 export const GRACE_DAYS = 7
 
-export type Feature = 'export2k' | 'batch' | 'nomark' | 'dub' | 'audio' | 'greenscreen' | 'presenter' | 'scenes'
+export type Feature = 'export2k' | 'batch' | 'nomark' | 'dub' | 'audio' | 'greenscreen' | 'presenter' | 'scenes' | 'nature'
 
 export const FEATURES: Record<Feature, { label: string; info: string }> = {
   export2k: { label: '2K & 4K export', info: 'Sharper 1440p and 2160p videos' },
@@ -29,6 +29,7 @@ export const FEATURES: Record<Feature, { label: string; info: string }> = {
   greenscreen: { label: 'Smart green screen', info: 'Remove the background in one tap' },
   presenter: { label: 'Presenter profile', info: 'Your name and photo banner on every video' },
   scenes: { label: 'Content to video', info: 'Slides, script, article, audio, mind map, quiz and data to video' },
+  nature: { label: 'Flower bloom & nature effects', info: 'Lotus, sunflower, cherry blossom and marigold bloom reveals' },
 }
 
 export type PlanId = string

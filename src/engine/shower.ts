@@ -1,4 +1,5 @@
 import type { Shower, StickerLayer } from '../types'
+import { drawLoosePetal, type FlowerKind } from './bloom'
 
 /**
  * Showers: many copies of a sticker moving over the whole picture (falling rose petals, rising hearts, confetti,
@@ -10,6 +11,11 @@ type Canvas = HTMLCanvasElement | OffscreenCanvas
 
 export const SHOWER_PRESETS: { name: string; emoji: string; shower: Shower }[] = [
   { name: 'Rose petals', emoji: 'petal', shower: { motion: 'fall', count: 40, size: 1, speed: 1 } },
+  { name: 'Rose petals 3D', emoji: 'petal:rose', shower: { motion: 'fall', count: 45, size: 1, speed: 0.9 } },
+  { name: 'Lotus petals', emoji: 'petal:lotus', shower: { motion: 'fall', count: 30, size: 1.1, speed: 0.7 } },
+  { name: 'Sunflower petals', emoji: 'petal:sunflower', shower: { motion: 'fall', count: 45, size: 1, speed: 1.1 } },
+  { name: 'Sakura rain', emoji: 'petal:sakura', shower: { motion: 'fall', count: 90, size: 0.55, speed: 0.7 } },
+  { name: 'Marigold petals', emoji: 'petal:marigold', shower: { motion: 'fall', count: 70, size: 0.6, speed: 1 } },
   { name: 'Flower shower', emoji: '🌸', shower: { motion: 'fall', count: 30, size: 1, speed: 0.9 } },
   { name: 'Marigold', emoji: '🌼', shower: { motion: 'fall', count: 30, size: 1, speed: 1 } },
   { name: 'Rising hearts', emoji: '❤️', shower: { motion: 'rise', count: 22, size: 1, speed: 1 } },
@@ -126,6 +132,8 @@ export function drawShower(ctx: Ctx, l: StickerLayer, t: number, W: number, H: n
       ctx.scale(1, Math.max(0.15, Math.abs(flip)))
       ctx.fillStyle = PAPER[Math.floor(rnd(i, 8) * PAPER.length)]
       ctx.fillRect(-size * 0.22, -size * 0.12, size * 0.44, size * 0.24)
+    } else if (l.emoji.startsWith('petal:')) {
+      drawLoosePetal(ctx, l.emoji.slice(6) as FlowerKind, null, size * 0.75, flip, rnd(i, 10) > 0.8)
     } else if (l.emoji === 'petal') {
       ctx.scale(Math.max(0.3, Math.abs(flip)), 1)
       petal(ctx, size * 0.32, i)

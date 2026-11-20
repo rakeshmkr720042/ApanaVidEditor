@@ -8,6 +8,7 @@ import { kenBurnsAt } from '../model/slideshow'
 import { posAt } from '../model/clipKeys'
 import { contentRect, mainFrameOn } from '../model/mainFrame'
 import { applyMask, drawEdge, revealAt } from './shapeMask'
+import { bloomMask, bloomOpening, drawBloomBack, drawBloomFront } from './bloom'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
@@ -743,8 +744,31 @@ export class Renderer {
       if (rv.edge > 0 && l.shapeMask.reveal?.edge) drawEdge(mc, rv.mask, mw, mh, l.shapeMask.reveal.edge, rv.edge)
       img = ms; sx = 0; sy = 0; sw = mw; sh = mh
     }
+    // flower bloom: the picture shows in a circle that grows out of the flower's centre
+    const bl = l.bloom
+    const bLocal = inp.t - l.start, bDur = l.end - l.start
+    const bx = l.box.x * W, by = l.box.y * H
+    const open = bl ? bloomOpening(bl, bLocal, bx, by, W, H) : null
+    if (bl && open && open.r > 0 && Number.isFinite(open.r)) {
+      const mw = Math.max(2, Math.round(fw)), mh = Math.max(2, Math.round(fh))
+      const ms = (this.maskScratch ??= makeCanvas(mw, mh))
+      if (ms.width !== mw || ms.height !== mh) { ms.width = mw; ms.height = mh }
+      const mc = ctx2d(ms)
+      mc.setTransform(1, 0, 0, 1, 0, 0)
+      mc.globalCompositeOperation = 'copy'
+      mc.drawImage(img, sx, sy, sw, sh, 0, 0, mw, mh)
+      mc.globalCompositeOperation = 'source-over'
+      const bm = bloomMask(open.r, mw, mh)
+      applyMask(mc, bm, mw, mh)
+      if (open.edge > 0) drawEdge(mc, bm, mw, mh, '#ffe9a8', open.edge)
+      img = ms; sx = 0; sy = 0; sw = mw; sh = mh
+    }
     const a = animState({ start: l.start, end: l.end, animIn: l.animIn ?? 'none', animOut: l.animOut ?? 'none' }, inp.t)
     if (a.alpha <= 0.001 || a.scale <= 0.001) return
+    if (bl) {
+      drawBloomBack(ctx, bl, bLocal, bDur, bx, by, W, H, a.alpha * l.box.opacity)
+      if (open && open.r <= 0) { drawBloomFront(ctx, bl, bLocal, bDur, bx, by, W, H, a.alpha * l.box.opacity); return }
+    }
     if ((l.chroma.enabled || (l.cutout?.enabled && mask)) && l.backdrop) {
       // the backdrop fills the frame under the keyed layer, fading in and out with it
       ctx.save()
@@ -782,6 +806,7 @@ export class Renderer {
       else ctx.stroke()
     }
     ctx.restore()
+    if (bl) drawBloomFront(ctx, bl, bLocal, bDur, bx, by, W, H, a.alpha * l.box.opacity)
   }
 
   private drawBlur(l: BlurLayer) {
