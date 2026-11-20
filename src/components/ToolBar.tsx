@@ -82,9 +82,10 @@ export function ToolBar(p: {
       // two columns (wide screens): grow by distance in both directions, no sliding
       const px = clientX - r.left - n.clientLeft + n.scrollLeft
       const d = list.map((b) => Math.hypot(b.offsetLeft + b.offsetWidth / 2 - px, b.offsetTop + b.offsetHeight / 2 - pos))
-      const lv = magnifyLevels(d, 0, list[0].offsetHeight, 2.2)
+      // no sliding here, so the buttons only grow as much as the gap between them allows (no overlapping)
+      const lv = magnifyLevels(d, 0, list[0].offsetHeight, 1.4)
       list.forEach((b, i) => {
-        b.style.transform = lv[i] > 0.001 ? `scale(${(1 + GROW * 0.8 * lv[i]).toFixed(3)})` : ''
+        b.style.transform = lv[i] > 0.001 ? `scale(${(1 + 0.1 * lv[i]).toFixed(3)})` : ''
         b.style.setProperty('--mag', lv[i].toFixed(3))
         b.style.zIndex = lv[i] > 0.001 ? String(1 + Math.round(lv[i] * 10)) : ''
       })
@@ -101,6 +102,12 @@ export function ToolBar(p: {
       const f = Math.max(0, Math.min(1, (pos - start[i]) / size[i]))
       before += grow[i] * f
     })
+    // the tools may only slide back as far as there is free room: never over the Back button (or past the
+    // start of the bar) while that part is on screen; once it has scrolled away they may slide under the edge
+    const back = n.querySelector<HTMLElement>(':scope > .tool.back')
+    const edge = back ? (side ? back.offsetTop + back.offsetHeight : back.offsetLeft + back.offsetWidth) + 2 : start[0]
+    const scrolled = side ? n.scrollTop : n.scrollLeft
+    before = Math.max(0, Math.min(before, start[0] - edge + Math.max(0, scrolled - (back ? (side ? back.offsetTop : back.offsetLeft) : 0))))
     let acc = 0
     list.forEach((b, i) => {
       const shift = acc + grow[i] / 2 - before

@@ -141,7 +141,10 @@ const section: HelpSection = {
           'Move the mouse over the toolbar. The tool under the cursor is the biggest and brightest.',
           'To turn it off, open Toolbar settings and switch off "Magnify tools under the mouse".',
         ],
-        tips: ['Touch screens do not use this effect. It is also off in full screen.'],
+        tips: [
+          'Touch screens do not use this effect. It is also off in full screen.',
+          'Growing tools push their neighbours aside and never cover the Back button or another tool. In the two-column side toolbar on wide screens they only grow a little, so they stay inside their own spot.',
+        ],
       },
       hi: {
         title: 'माउस के नीचे टूल बड़े होते हैं',
@@ -151,7 +154,10 @@ const section: HelpSection = {
           'टूलबार पर माउस घुमाएँ। कर्सर के नीचे वाला टूल सबसे बड़ा और चमकदार होता है।',
           'बंद करने के लिए टूलबार सेटिंग खोलें और "माउस के नीचे वाले टूल बड़े करें" बंद करें।',
         ],
-        tips: ['टच स्क्रीन पर यह इफ़ेक्ट नहीं चलता। फ़ुल स्क्रीन में भी यह बंद रहता है।'],
+        tips: [
+          'टच स्क्रीन पर यह इफ़ेक्ट नहीं चलता। फ़ुल स्क्रीन में भी यह बंद रहता है।',
+          'बड़ा होता टूल पास वाले टूल को किनारे खिसकाता है, वापस बटन या दूसरे टूल के ऊपर कभी नहीं चढ़ता। चौड़ी स्क्रीन पर दो कॉलम वाले बगल के टूलबार में टूल बस थोड़े बड़े होते हैं, ताकि अपनी जगह में ही रहें।',
+        ],
       },
     },
   ],
