@@ -169,6 +169,47 @@ const section: HelpSection = {
         ],
       },
     },
+    {
+      id: 'follow-tag',
+      isNew: true,
+      find: { tool: 'Follow tag', needs: 'nothing' },
+      related: ['tracking'],
+      keywords: ['follow', 'tag', 'name tag', 'arrow', 'tracking', 'sticker follow', 'label', 'price', 'pichha', 'naam'],
+      en: {
+        title: 'Follow tags: a label that moves with a person or thing',
+        what: 'Put a Name tag, Arrow + text, Price tag, an emoji or a circle on someone or something, and it stays on them as they move. The face can be found for you.',
+        where: 'Select nothing → toolbar → Follow tag',
+        steps: [
+          'Move the playhead to where the person or thing is clearly seen.',
+          'Tap Follow tag, pick a kind and type the text (for example the person\'s name).',
+          'Keep "Put it on the face (AI)" on for people, and tap Add tag here. For a thing, drag the tag onto it.',
+          'With the tag selected, tap Follow it. The tag moves with them; the text keeps its place above the pointer.',
+          'Stop following takes the movement off; Delete tag removes it.',
+        ],
+        tips: [
+          'A tag lasts 5 seconds; drag its ends on the timeline to change that, then tap Follow it again.',
+          'If it loses the thing (fast moves, a cut), it stops there. Try a bigger "Area to follow".',
+          'Everything is worked out on this device; nothing is uploaded.',
+        ],
+      },
+      hi: {
+        title: 'फ़ॉलो टैग: व्यक्ति या चीज़ के साथ चलने वाला लेबल',
+        what: 'किसी व्यक्ति या चीज़ पर नाम टैग, तीर + टेक्स्ट, दाम टैग, इमोजी या घेरा लगाएँ, और वह उनके चलने पर उन्हीं पर टिका रहता है। चेहरा अपने-आप ढूँढा जा सकता है।',
+        where: 'कुछ न चुनें → टूलबार → फ़ॉलो टैग',
+        steps: [
+          'प्लेहेड वहाँ ले जाएँ जहाँ व्यक्ति या चीज़ साफ़ दिखे।',
+          '"फ़ॉलो टैग" दबाएँ, कोई टैग चुनें और टेक्स्ट लिखें (जैसे व्यक्ति का नाम)।',
+          'लोगों के लिए "चेहरे पर लगाएँ (AI)" चालू रखें और "यहाँ टैग लगाएँ" दबाएँ। किसी चीज़ के लिए टैग को उस पर खींचें।',
+          'टैग चुना रहे, तब "पीछा करवाएँ" दबाएँ। टैग उनके साथ चलता है; टेक्स्ट तीर के ऊपर अपनी जगह रहता है।',
+          '"पीछा बंद करें" से चलना हटता है; "टैग हटाएँ" से टैग हट जाता है।',
+        ],
+        tips: [
+          'टैग 5 सेकंड का होता है; टाइमलाइन पर उसके किनारे खींचकर बदलें, फिर "पीछा करवाएँ" दोबारा दबाएँ।',
+          'अगर चीज़ छूट जाए (तेज़ हलचल, कट), तो टैग वहीं रुक जाता है। बड़ा "पीछा करने का हिस्सा" आज़माएँ।',
+          'सब कुछ इसी डिवाइस पर होता है; कुछ अपलोड नहीं होता।',
+        ],
+      },
+    },
   ],
 }
 

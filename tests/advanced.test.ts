@@ -4,13 +4,14 @@
 import './_env'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { Clip, MediaSource, Project } from '../src/types'
+import type { Box, Clip, Layer, MediaSource, Project } from '../src/types'
 import { centreOn, holdPath, lookTimes, pictureSize, reframeKeys, reframeProject, simplify, smooth, type Look } from '../src/model/reframe'
 import { emojiFor, emojiForWord } from '../src/lib/emoji'
 import { CAPTION_LOOKS, withEmoji } from '../src/lib/captions'
 import { parseTrending } from '../src/lib/trending'
 import { CAMERA_PRESETS, cameraKeys } from '../src/model/camera'
 import { TRANSITIONS } from '../src/engine/transitions'
+import { keysFromPath, makeTag, sourceToFrame, tagsIn } from '../src/model/followTag'
 import { posAt } from '../src/model/clipKeys'
 
 const clip = (p: Partial<Clip> = {}): Clip => ({
@@ -127,4 +128,32 @@ test('transitions: Liquid & ink group with unique ids', () => {
   assert.equal(new Set(TRANSITIONS.map((x) => x.id)).size, TRANSITIONS.length)
   // a // comment in a one-line GLSL template swallows the code after it
   for (const x of liquid) assert.ok(!x.glsl.includes('//'), x.id)
+})
+
+test('follow tag: tag layers share an id; keys move them by the path, keeping their offsets', () => {
+  const layers = makeTag('name', 'Rakesh', 0.4, 0.3, 1, 4)
+  assert.equal(layers.length, 2)
+  assert.ok(layers[0].tag && layers[0].tag === layers[1].tag)
+  assert.equal(tagsIn(layers).size, 1)
+  const path = [{ t: 1, x: 0.4, y: 0.4 }, { t: 2, x: 0.5, y: 0.4 }, { t: 3, x: 0.6, y: 0.45 }, { t: 9, x: 0.9, y: 0.9 }]
+  for (const l of layers) {
+    const keys = keysFromPath(l as Layer & { box: Box }, path, 1)
+    assert.equal(keys.length, 3) // the point outside the layer's time is left out
+    const b = (l as Layer & { box: Box }).box
+    assert.ok(Math.abs(keys[2].box.x - (b.x + 0.2)) < 1e-9 && Math.abs(keys[2].box.y - (b.y + 0.05)) < 1e-9)
+    assert.equal(keys[0].t, 0)
+  }
+  assert.equal(makeTag('ring', '', 0.5, 0.5, 0, 2).length, 1)
+})
+
+test('follow tag: a source point maps into the frame like the renderer draws it', () => {
+  const c = clip({ fit: 'fill' })
+  // 16:9 source filling a 9:16 frame: the middle stays the middle, and the picture is ~3.16 frames wide
+  assert.deepEqual(sourceToFrame(c, wide, 1080, 1920, 0.5, 0.5, 0), { x: 0.5, y: 0.5 })
+  const p = sourceToFrame(c, wide, 1080, 1920, 0.6, 0.5, 0)!
+  assert.ok(Math.abs(p.x - (0.5 + 0.1 * (16 / 9) / (9 / 16))) < 1e-6)
+  // a zoom & move shift moves it too
+  const moved = sourceToFrame(clip({ fit: 'fill', pos: { x: 0.1, y: 0, scale: 1, rotation: 0 } }), wide, 1080, 1920, 0.5, 0.5, 0)!
+  assert.ok(Math.abs(moved.x - 0.6) < 1e-9)
+  assert.equal(sourceToFrame(clip({ rotate: 90 }), wide, 1080, 1920, 0.5, 0.5, 0), null)
 })

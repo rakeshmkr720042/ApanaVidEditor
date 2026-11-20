@@ -242,6 +242,7 @@ interface LayerBase {
   start: number // timeline seconds
   end: number
   track?: string // id of the Track row it sits on (given to every layer by withTracks)
+  tag?: string // follow tag: the layers of one tag share this id and move together (src/model/followTag.ts), missing = none
 }
 
 /** A saved pose of a layer at a moment, counted from the layer's start. Between keyframes the layer glides. */

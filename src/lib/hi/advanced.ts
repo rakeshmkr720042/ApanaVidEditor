@@ -33,4 +33,12 @@ export default {
   'The camera lifts up slowly, like a crane shot.': 'कैमरा धीरे-धीरे ऊपर उठता है, जैसे क्रेन शॉट।',
   // liquid & ink transitions
   'Liquid & ink': 'लिक्विड और स्याही',
+  // follow tags
+  'Follow tag': 'फ़ॉलो टैग', 'Name tag': 'नाम टैग', 'Arrow + text': 'तीर + टेक्स्ट', 'Price tag': 'दाम टैग', 'Emoji on it': 'उस पर इमोजी', 'Circle it': 'घेरा लगाएँ',
+  'Look!': 'देखो!', 'Tag text': 'टैग का टेक्स्ट', 'Put it on the face (AI)': 'चेहरे पर लगाएँ (AI)', 'Add tag here': 'यहाँ टैग लगाएँ', 'Follow': 'पीछा',
+  'Follow it': 'पीछा करवाएँ', 'Stop following': 'पीछा बंद करें', 'Delete tag': 'टैग हटाएँ', 'This tag': 'यह टैग', 'tags in this video': 'टैग इस वीडियो में',
+  'A name tag, arrow, price tag, emoji or circle that moves with a person or thing.': 'नाम टैग, तीर, दाम टैग, इमोजी या घेरा जो किसी व्यक्ति या चीज़ के साथ-साथ चलता है।',
+  'Select a tag (tap it in the video) to make it follow.': 'पीछा करवाने के लिए कोई टैग चुनें (वीडियो में उस पर टैप करें)।',
+  'Tag added. Drag it onto the thing if needed, then tap Follow it.': 'टैग लग गया। ज़रूरत हो तो उसे चीज़ पर खींचें, फिर "पीछा करवाएँ" दबाएँ।',
+  'No face found here; the tag is in the middle. Drag it onto the person or thing.': 'यहाँ चेहरा नहीं मिला; टैग बीच में है। उसे व्यक्ति या चीज़ पर खींचें।',
 } as Record<string, string>
