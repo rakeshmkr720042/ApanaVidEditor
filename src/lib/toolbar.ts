@@ -42,7 +42,7 @@ export const GROUPS: { id: GroupId; label: string; icon: IconName }[] = [
 const GROUP_OF: Record<string, Exclude<GroupId, 'all' | 'fav'>> = {}
 const put = (g: Exclude<GroupId, 'all' | 'fav'>, keys: string[]) => { for (const k of keys) GROUP_OF[k] = g }
 put('edit', ['Split', 'Trim', 'Delete', 'Duplicate', 'Move / swap', 'Swap', 'Select all', 'One clip', 'One item', 'Insert after', 'Replace',
-  'Freeze frame', 'reverse', 'Speed', 'Layer order', 'Keyframes', 'Track', 'Zoom & move', 'fit', 'Copy track', 'Paste track', 'Copy style',
+  'Freeze frame', 'reverse', 'Speed', 'Layer order', 'Keyframes', 'Track', 'Zoom & move', 'Camera moves', 'fit', 'Copy track', 'Paste track', 'Copy style',
   'Paste style', 'marker'])
 put('add', ['Add', 'Overlay', 'Add overlay', 'Shape reveal', 'Stickers', 'Shower', 'Showers', 'Split screen', 'Blur', 'Record screen', 'Record camera', 'Intro/Outro', 'Slideshow'])
 put('text', ['Text', 'Titles', 'Edit', 'Style', 'Caption style', 'Behind person', 'captions', 'Subtitles', 'Listen again'])

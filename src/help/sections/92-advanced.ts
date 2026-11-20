@@ -93,6 +93,45 @@ const section: HelpSection = {
         ],
       },
     },
+    {
+      id: 'camera-moves',
+      isNew: true,
+      find: { tool: 'Camera moves', needs: 'clip' },
+      related: ['zoom-move'],
+      keywords: ['camera', 'shake', 'zoom', 'crash zoom', 'handheld', 'push in', 'dolly', 'cinematic', 'earthquake', 'hilna', 'jhatka'],
+      en: {
+        title: 'Camera moves: push-in, crash zoom, handheld, shake…',
+        what: 'Eleven cinematic camera moves in one tap: Slow push-in, Pull back, Crash zoom, Handheld, Impact shake, Earthquake, Dutch tilt, Spin in, Slide right / left and Rise up.',
+        where: 'Select a clip → Camera moves',
+        steps: [
+          'Select a clip on the main track.',
+          'Tap Camera moves and tap a move. Play to see it.',
+          'Drag Strength for a softer or stronger move.',
+          'Use on all clips puts the same move on every clip. Remove takes it off.',
+        ],
+        tips: [
+          'The move is saved as zoom & move keyframes, so it exports exactly as you see it. Open Zoom & move to fine-tune it.',
+          'Picking another move replaces the old one. Undo takes any change back.',
+          'Impact shake is great right on a beat drop: split the clip at the drop and use it on the new clip.',
+        ],
+      },
+      hi: {
+        title: 'कैमरा मूव: पास आना, क्रैश ज़ूम, हाथ वाला कैमरा, शेक…',
+        what: 'एक टैप में ग्यारह सिनेमा जैसे कैमरा मूव: धीरे पास आना, पीछे हटना, क्रैश ज़ूम, हाथ वाला कैमरा, इम्पैक्ट शेक, भूकंप, तिरछा कैमरा, घूमकर आना, दाएँ / बाएँ खिसकना और ऊपर उठना।',
+        where: 'क्लिप चुनें → कैमरा मूव',
+        steps: [
+          'मेन ट्रैक पर कोई क्लिप चुनें।',
+          '"कैमरा मूव" दबाएँ और कोई मूव चुनें। देखने के लिए प्ले करें।',
+          'हल्का या तेज़ करने के लिए "ताकत" खिसकाएँ।',
+          '"सारी क्लिप पर लगाएँ" से वही मूव हर क्लिप पर लगता है। "हटाएं" से हट जाता है।',
+        ],
+        tips: [
+          'मूव "ज़ूम और मूव" कीफ़्रेम के रूप में सेव होता है, इसलिए एक्सपोर्ट में बिल्कुल वैसा ही आता है। बारीकी से ठीक करने के लिए "ज़ूम और मूव" खोलें।',
+          'दूसरा मूव चुनने पर पुराना बदल जाता है। Undo से कोई भी बदलाव वापस होता है।',
+          'इम्पैक्ट शेक बीट ड्रॉप पर कमाल लगता है: ड्रॉप पर क्लिप काटें और नई क्लिप पर लगाएँ।',
+        ],
+      },
+    },
   ],
 }
 

@@ -25,7 +25,7 @@ export function ZoomMovePanel({ ed, clip, src, start, onSeek, onClose }: {
   const removeKey = () => ed.updateClip(clip.id, { keys: keys.filter((_, i) => i !== clipKeyAt(clip, src)) })
   /** A ready motion over the whole clip: two keyframes, at its first and last frame. */
   const quick = (a: Partial<ClipPos>, b: Partial<ClipPos>) => ed.updateClip(clip.id, {
-    pos: null, keys: [{ t: clip.in, pos: { ...NO_POS, ...a } }, { t: clip.out, pos: { ...NO_POS, ...b } }],
+    pos: null, keys: [{ t: clip.in, pos: { ...NO_POS, ...a } }, { t: clip.out, pos: { ...NO_POS, ...b } }], camera: null,
   })
   return (
     <Panel title="Zoom & move" onClose={onClose}>
@@ -50,7 +50,7 @@ export function ZoomMovePanel({ ed, clip, src, start, onSeek, onClose }: {
         <button onClick={() => quick({ scale: 1.35 }, {})}>{t('Slow zoom out')}</button>
         <button onClick={() => quick({ scale: 1.3, x: 0.1 }, { scale: 1.3, x: -0.1 })}>{t('Pan right')}</button>
         <button onClick={() => quick({ scale: 1.3, x: -0.1 }, { scale: 1.3, x: 0.1 })}>{t('Pan left')}</button>
-        <button disabled={!keys.length && isNoPos(clip.pos)} onClick={() => ed.updateClip(clip.id, { pos: null, keys: [] })}>{t('Reset')}</button>
+        <button disabled={!keys.length && isNoPos(clip.pos)} onClick={() => ed.updateClip(clip.id, { pos: null, keys: [], camera: null })}>{t('Reset')}</button>
       </div>
       {keys.length > 0 && <p className="muted small">{keys.length} {t('keyframes')}: {keys.map((k) => fmtTime(at(k) - start)).join(', ')}</p>}
       {src === null && <p className="muted small">{t('Move the playhead inside this clip to add keyframes.')}</p>}

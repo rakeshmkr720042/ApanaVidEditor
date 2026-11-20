@@ -14,4 +14,21 @@ export default {
   // karaoke captions + word emojis
   'Emoji karaoke': 'इमोजी कराओके', 'Bounce': 'उछाल', 'Glow karaoke': 'ग्लो कराओके', 'Underline': 'अंडरलाइन',
   'Emoji pops on words (money → 💰)': 'शब्दों पर इमोजी उछले (पैसा → 💰)',
+  // camera moves
+  'Camera moves': 'कैमरा मूव', 'Use on all clips': 'सारी क्लिप पर लगाएँ',
+  'Cinematic moves in one tap. They become zoom & move keyframes, so the export looks the same.': 'एक टैप में सिनेमा जैसे कैमरा मूव। ये "ज़ूम और मूव" कीफ़्रेम बनते हैं, इसलिए एक्सपोर्ट में भी वैसे ही दिखते हैं।',
+  'The camera move is on every clip. Undo takes it back.': 'कैमरा मूव हर क्लिप पर लग गया। Undo से वापस करें।',
+  'Slow push-in': 'धीरे पास आना', 'Pull back': 'पीछे हटना', 'Crash zoom': 'क्रैश ज़ूम', 'Handheld': 'हाथ वाला कैमरा', 'Impact shake': 'इम्पैक्ट शेक',
+  'Earthquake': 'भूकंप', 'Dutch tilt': 'तिरछा कैमरा', 'Spin in': 'घूमकर आना', 'Slide right': 'दाएँ खिसकना', 'Slide left': 'बाएँ खिसकना', 'Rise up': 'ऊपर उठना',
+  'The camera slowly moves closer. Builds tension, great for talking.': 'कैमरा धीरे-धीरे पास आता है। माहौल बनता है, बातचीत के लिए बढ़िया।',
+  'Starts close and slowly reveals the whole scene.': 'पास से शुरू होकर धीरे-धीरे पूरा सीन दिखाता है।',
+  'A sudden fast zoom in at the start, then it holds. For drama and comedy.': 'शुरू में अचानक तेज़ ज़ूम, फिर रुक जाता है। ड्रामा और कॉमेडी के लिए।',
+  'Gentle drifting like a camera held in the hand. Makes still shots feel alive.': 'हाथ में पकड़े कैमरे जैसी हल्की हलचल। रुके हुए शॉट में जान आती है।',
+  'A hard shake at the start that settles down. For hits, drops and reveals.': 'शुरू में ज़ोरदार झटका जो धीरे से थमता है। मार, बीट ड्रॉप और रिवील के लिए।',
+  'Strong shaking for the whole clip.': 'पूरी क्लिप में ज़ोरदार हिलना।',
+  'The picture slowly tilts to one side. Feels tense or dreamy.': 'तस्वीर धीरे-धीरे एक तरफ़ झुकती है। तनाव या सपने जैसा एहसास।',
+  'Comes in turning and zoomed, then settles. A punchy opening.': 'घूमते और ज़ूम होते हुए आता है, फिर ठहरता है। दमदार शुरुआत।',
+  'A smooth sideways camera move (dolly) to the right.': 'कैमरा आराम से दाईं ओर खिसकता है (डॉली)।',
+  'A smooth sideways camera move (dolly) to the left.': 'कैमरा आराम से बाईं ओर खिसकता है (डॉली)।',
+  'The camera lifts up slowly, like a crane shot.': 'कैमरा धीरे-धीरे ऊपर उठता है, जैसे क्रेन शॉट।',
 } as Record<string, string>

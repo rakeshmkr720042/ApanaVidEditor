@@ -76,6 +76,7 @@ import { CutoutPanel } from '../panels/CutoutPanel'
 import { BeatPanel } from '../panels/BeatPanel'
 import { SmartCutPanel } from '../panels/SmartCutPanel'
 import { ReframePanel } from '../panels/ReframePanel'
+import { CameraPanel } from '../panels/CameraPanel'
 import { MotionPanel, TrackPanel } from '../panels/MotionPanel'
 import { isTracked } from '../engine/tracker'
 import { loadCutout } from '../engine/cutout'
@@ -146,7 +147,7 @@ export function Editor({ projectId, onBack }: { projectId: string; onBack: () =>
 
 type PanelName = 'speed' | 'volume' | 'filters' | 'effects' | 'color' | 'split' | 'showers' | 'adjust' | 'transition' | 'format' | 'crop' | 'text' | 'text-titles' | 'text-style' | 'text-anim' | 'text-words'
   | 'stickers' | 'overlay' | 'chroma' | 'cutout' | 'beat' | 'smartcut' | 'reframe' | 'motion' | 'track' | 'blur' | 'subtitles' | 'audio' | 'ai' | 'watermark' | 'presenter' | 'templates' | 'slideshow' | 'photo' | 'wave'
-  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'mask' | 'reveal' | 'adjlayer' | 'scenes' | 'join' | 'frame' | 'annotate' | null
+  | 'arrange' | 'media-anim' | 'blend' | 'keys' | 'layer-crop' | 'noise' | 'audiofx' | 'order' | 'trim' | 'zoommove' | 'camera' | 'mask' | 'reveal' | 'adjlayer' | 'scenes' | 'join' | 'frame' | 'annotate' | null
 
 function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }) {
   const ed = useEditor(initial.project)
@@ -958,6 +959,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       ...(!photo ? [{ icon: 'film', label: 'Find shots', on: () => setPanel('scenes') } as Tool] : []),
       { icon: 'layers', label: selClip.compound ? 'Break apart' : 'Join clips', on: () => setPanel('join'), active: !!selClip.compound },
       { icon: 'keyframe', label: 'Zoom & move', on: () => setPanel('zoommove'), active: !!(selClip.keys?.length || selClip.pos) },
+      { icon: 'camera', label: 'Camera moves', on: () => setPanel('camera'), active: !!selClip.camera },
       { icon: 'speed', label: 'Speed', on: () => setPanel('speed') },
       { key: 'motion', icon: 'motion', label: photo ? '3D zoom' : 'Motion', on: () => setPanel('motion'), active: !!(selClip.stabilize || selClip.motionBlur || selClip.smoothSlow || selClip.photo3d) },
       { icon: 'freeze', label: 'Freeze frame', on: freeze, disabled: !!selClip.ramp },
@@ -1258,6 +1260,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   )
   else if (panel === 'mask' && selLayer?.type === 'media') panelView = <MaskPanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'mask' && selClip) panelView = <MaskPanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />
+  else if (panel === 'camera' && selClip) panelView = <CameraPanel key={selClip.id} ed={ed} clip={selClip} onToast={setToast} onClose={closePanel} />
   else if (panel === 'zoommove' && selClip) panelView = <ZoomMovePanel ed={ed} clip={selClip} src={srcOfClip(selClip)} start={ed.layout.items.find((x) => x.clip.id === selClip.id)?.start ?? 0} onSeek={seek} onClose={closePanel} />
   else if (panel === 'noise' && (selLayer?.type === 'media' || selLayer?.type === 'audio')) panelView = <NoisePanel ed={ed} target={{ kind: 'layer', layer: selLayer }} onClose={closePanel} />
   else if (panel === 'noise' && selClip) panelView = <NoisePanel ed={ed} target={{ kind: 'clip', clip: selClip }} onClose={closePanel} />

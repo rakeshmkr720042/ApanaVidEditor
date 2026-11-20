@@ -9,6 +9,7 @@ import { centreOn, holdPath, lookTimes, pictureSize, reframeKeys, reframeProject
 import { emojiFor, emojiForWord } from '../src/lib/emoji'
 import { CAPTION_LOOKS, withEmoji } from '../src/lib/captions'
 import { parseTrending } from '../src/lib/trending'
+import { CAMERA_PRESETS, cameraKeys } from '../src/model/camera'
 import { posAt } from '../src/model/clipKeys'
 
 const clip = (p: Partial<Clip> = {}): Clip => ({
@@ -101,4 +102,20 @@ test('karaoke: word emojis and new looks', () => {
   for (const n of ['Emoji karaoke', 'Bounce', 'Glow karaoke', 'Underline']) assert.ok(CAPTION_LOOKS.some((l) => l.name === n), n)
   const p = parseTrending({ version: 1, captionLooks: [{ name: 'B', words: { style: 'bounce', color: '#ff0000', emoji: true }, style: { font: 'Anton' } }], titles: [] })!
   assert.deepEqual(p.captionLooks[0].words, { style: 'bounce', color: '#ff0000', emoji: true })
+})
+
+test('camera: every preset makes keyframes inside the clip, no edge shows on zoom-only moves', () => {
+  const c = clip({ in: 2, out: 8 })
+  for (const p of CAMERA_PRESETS) {
+    const keys = cameraKeys(c, p.id, 0.6)
+    assert.ok(keys.length >= 2, p.id)
+    assert.ok(keys.every((k) => k.t >= 2 - 1e-9 && k.t <= 8 + 1e-9), `${p.id} keys within the clip`)
+    assert.ok(keys.every((k) => k.pos.scale >= 1 - 1e-9), `${p.id} never smaller than the frame`)
+    // the picture never moves further than its zoom allows
+    assert.ok(keys.every((k) => Math.abs(k.pos.x) <= (k.pos.scale - 1) / 2 + 1e-6 && Math.abs(k.pos.y) <= (k.pos.scale - 1) / 2 + 1e-6), `${p.id} edges hidden`)
+  }
+  const fast = clip({ in: 0, out: 8, speed: 2 })
+  const k = cameraKeys(fast, 'crash', 0.6)
+  assert.ok(Math.abs(k[1].t - 0.44) < 1e-6, 'crash zoom lands 0.22 s of timeline in (0.44 s of a 2x clip)')
+  assert.ok(cameraKeys(c, 'quake', 1).length > 50)
 })

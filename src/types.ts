@@ -130,6 +130,7 @@ export interface Clip {
   rampPts?: number[] // the user's own speed curve (8 speeds over the clip), used when ramp = 'custom'
   pos?: ClipPos | null // zoom & move of the picture (no keyframes), missing = none
   keys?: ClipKey[] // zoom & move keyframes, t in SOURCE seconds (they stay on the video through trims and splits)
+  camera?: { id: string; strength: number } | null // the camera-move preset the keys were made from (src/model/camera.ts), missing = none
   volKeys?: VolKey[] // volume keyframes (source seconds); when set they decide the volume
   shapeMask?: ShapeMask | null // pro mask, missing = none
   compound?: { clips: Clip[] } | null // joined clip: the clips it was made from, so it can be broken apart again
