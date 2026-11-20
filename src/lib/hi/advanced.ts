@@ -31,4 +31,6 @@ export default {
   'A smooth sideways camera move (dolly) to the right.': 'कैमरा आराम से दाईं ओर खिसकता है (डॉली)।',
   'A smooth sideways camera move (dolly) to the left.': 'कैमरा आराम से बाईं ओर खिसकता है (डॉली)।',
   'The camera lifts up slowly, like a crane shot.': 'कैमरा धीरे-धीरे ऊपर उठता है, जैसे क्रेन शॉट।',
+  // liquid & ink transitions
+  'Liquid & ink': 'लिक्विड और स्याही',
 } as Record<string, string>

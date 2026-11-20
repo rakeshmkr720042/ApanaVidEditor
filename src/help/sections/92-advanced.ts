@@ -132,6 +132,43 @@ const section: HelpSection = {
         ],
       },
     },
+    {
+      id: 'liquid-transitions',
+      isNew: true,
+      find: { tool: 'Transition', needs: 'clip' },
+      related: ['transitions'],
+      keywords: ['transition', 'liquid', 'ink', 'melt', 'water', 'ripple', 'splash', 'smoke', 'goo', 'paani', 'syahi'],
+      en: {
+        title: 'Liquid & ink transitions',
+        what: 'Eight flowing transitions between two clips: Liquid melt, Ink drops, Ink swirl, Water ripple, Liquid wave, Paint splash, Smoke and Gooey morph.',
+        where: 'Select a clip → Transition → Liquid & ink',
+        steps: [
+          'Select the clip before the cut (the transition goes into the next clip).',
+          'Tap Transition and pick the Liquid & ink group.',
+          'Tap a transition, then set its Duration (0.8 to 1.2 s looks best for these).',
+          'Apply to all puts the same transition between every clip.',
+        ],
+        tips: [
+          'They run on the graphics chip, the same in preview and export, on phone and computer.',
+          'Ink drops and Smoke look great between a dark and a bright shot; Paint splash suits fun, colourful videos.',
+        ],
+      },
+      hi: {
+        title: 'लिक्विड और स्याही ट्रांज़िशन',
+        what: 'दो क्लिप के बीच आठ बहते हुए ट्रांज़िशन: लिक्विड मेल्ट, स्याही की बूँदें, स्याही भँवर, पानी की लहर, लिक्विड वेव, पेंट स्प्लैश, धुआँ और गूई मॉर्फ़।',
+        where: 'क्लिप चुनें → ट्रांज़िशन → लिक्विड और स्याही',
+        steps: [
+          'कट से पहले वाली क्लिप चुनें (ट्रांज़िशन अगली क्लिप में जाता है)।',
+          '"ट्रांज़िशन" दबाएँ और "लिक्विड और स्याही" ग्रुप चुनें।',
+          'कोई ट्रांज़िशन दबाएँ, फिर उसका "समय" रखें (इनके लिए 0.8 से 1.2 सेकंड सबसे अच्छा लगता है)।',
+          '"सब पर लगाएं" से हर क्लिप के बीच वही ट्रांज़िशन लगता है।',
+        ],
+        tips: [
+          'ये ग्राफ़िक्स चिप पर चलते हैं, प्रीव्यू और एक्सपोर्ट में एक जैसे, फ़ोन और कंप्यूटर दोनों पर।',
+          'स्याही की बूँदें और धुआँ अँधेरे और उजले शॉट के बीच कमाल लगते हैं; पेंट स्प्लैश मज़ेदार, रंगीन वीडियो के लिए है।',
+        ],
+      },
+    },
   ],
 }
 

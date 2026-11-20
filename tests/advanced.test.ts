@@ -10,6 +10,7 @@ import { emojiFor, emojiForWord } from '../src/lib/emoji'
 import { CAPTION_LOOKS, withEmoji } from '../src/lib/captions'
 import { parseTrending } from '../src/lib/trending'
 import { CAMERA_PRESETS, cameraKeys } from '../src/model/camera'
+import { TRANSITIONS } from '../src/engine/transitions'
 import { posAt } from '../src/model/clipKeys'
 
 const clip = (p: Partial<Clip> = {}): Clip => ({
@@ -118,4 +119,12 @@ test('camera: every preset makes keyframes inside the clip, no edge shows on zoo
   const k = cameraKeys(fast, 'crash', 0.6)
   assert.ok(Math.abs(k[1].t - 0.44) < 1e-6, 'crash zoom lands 0.22 s of timeline in (0.44 s of a 2x clip)')
   assert.ok(cameraKeys(c, 'quake', 1).length > 50)
+})
+
+test('transitions: Liquid & ink group with unique ids', () => {
+  const liquid = TRANSITIONS.filter((x) => x.group === 'Liquid & ink')
+  assert.equal(liquid.length, 8)
+  assert.equal(new Set(TRANSITIONS.map((x) => x.id)).size, TRANSITIONS.length)
+  // a // comment in a one-line GLSL template swallows the code after it
+  for (const x of liquid) assert.ok(!x.glsl.includes('//'), x.id)
 })
