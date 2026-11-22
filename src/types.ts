@@ -402,6 +402,7 @@ export interface Bloom {
   petals: number // how many petals fall (0 = none)
   seconds: number // how long new petals keep coming
   wind: number // -1..1, petals drift left / right
+  garden?: boolean // true: a whole flower garden first, the camera pushes in to one bud that blooms (engine/garden.ts)
 }
 
 export interface BlurLayer extends LayerBase {

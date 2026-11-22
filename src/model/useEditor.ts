@@ -779,19 +779,32 @@ export function useEditor(initial: Project) {
 
   /** Flower bloom reveal: `src` covers the frame from the playhead and comes out of an opening flower. */
   const addBloom = useCallback((t: number, src: MediaSource, bloom: Bloom, dur: number) => {
-    const p = ref.current
+    let p = ref.current
+    // a photo on the main track under the bloom is made long enough for the whole bloom to play over it
+    // (it is usually the photo that comes out of the flower), later clips move along
+    const hit = layoutClips(p.clips).items.find((it) => t >= it.start - 1e-6 && t < it.start + it.dur)
+    if (hit && sourcesRef.current[hit.clip.sourceId]?.kind === 'image' && !hit.clip.ramp) {
+      const need = t + (src.kind === 'image' ? dur : Math.min(dur, src.duration)) - (hit.start + hit.dur)
+      if (need > 0.01) p = { ...p, clips: p.clips.map((c) => (c.id === hit.clip.id ? { ...c, out: c.out + need * c.speed } : c)) }
+    }
     const ar = src.width && src.height ? src.width / src.height : 16 / 9
     const { w: W, h: H } = outputSize(p, sourcesRef.current, 1000)
     const base = ar >= 1 ? Math.max(W / ar, H) : Math.max(W, H * ar) // covers the frame
     const scale = (base / (Math.min(W, H) * 0.5)) * 1.001
+    const tot = layoutClips(p.clips).total
+    const start = Math.max(0, Math.min(t, Math.max(0, tot - 0.5)))
+    const len = src.kind === 'image' ? dur : src.duration
     const l: MediaLayer = {
-      id: uid(), type: 'media', sourceId: src.id, in: 0, ...span(t, src.kind === 'image' ? dur : src.duration), box: { ...centerBox(), scale },
+      id: uid(), type: 'media', sourceId: src.id, in: 0, start, end: Math.max(start + 0.5, Math.min(tot || start + len, start + len)), box: { ...centerBox(), scale },
       volume: src.kind === 'video' ? 1 : 0, chroma: defaultChroma(), mask: 'none', border: 0,
       adjust: defaultAdjust(), filter: null, filterAmount: 1, bloom: { ...bloom },
     }
-    addLayer(l)
+    const tr = p.tracks?.find((x) => x.id === track)
+    const fits = tr && tr.kind === trackKind(l) && !tr.locked && !p.layers.some((x) => x.track === tr.id && overlaps(x, l))
+    h.set({ ...p, layers: [...p.layers, fits ? { ...l, track: tr.id } : l] })
+    setSel({ type: 'layer', id: l.id })
     return l
-  }, [addLayer]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [h, track]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addAudio = useCallback((t: number, src: MediaSource, kind: AudioLayer['kind'], label: string, extra?: Partial<AudioLayer>) => {
     const tot = total()

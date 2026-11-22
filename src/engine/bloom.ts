@@ -1,4 +1,6 @@
 import type { Bloom, ShapeMask } from '../types'
+import { drawPetalSprite, drawRendered, flowersGL, renderFlowers } from './flowergl'
+import { drawGardenBack, gardenHeart, gardenOn, gardenTimes } from './garden'
 
 /**
  * Flower bloom reveal: a bud grows, the flower opens petal by petal, the chosen photo / video comes out of its
@@ -19,7 +21,7 @@ export const FLOWERS: { value: FlowerKind; label: string; icon: string; color: s
 export const flowerInfo = (k: FlowerKind) => FLOWERS.find((f) => f.value === k) ?? FLOWERS[0]
 
 export const defaultBloom = (flower: FlowerKind = 'rose'): Bloom => ({
-  flower, color: null, open: 2, size: 0.62, fill: true, petals: 60, seconds: 4, wind: flower === 'sakura' ? 0.4 : 0,
+  flower, color: null, open: 2, size: 0.62, fill: true, petals: 60, seconds: 4, wind: flower === 'sakura' ? 0.4 : 0, garden: true,
 })
 
 // ---------- small helpers ----------
@@ -384,6 +386,16 @@ const DRAW: Record<FlowerKind, (c: Ctx, R: number, open: number, pal: Pal, time:
 
 /** Draws one flower centred at cx, cy, R pixels from centre to petal tip, `open` 0 (bud) .. 1 (fully open). */
 export function drawFlower(c: Ctx, kind: FlowerKind, color: string | null, open: number, cx: number, cy: number, R: number, time: number) {
+  if (flowersGL()) {
+    // the real 3D flower, drawn at the canvas's own pixel size so it stays sharp
+    const sc = Math.max(0.25, Math.abs(c.getTransform?.().a ?? 1))
+    const S = Math.max(8, Math.min(4096, Math.ceil(R * 2.9 * sc)))
+    const cv = renderFlowers([{
+      kind, color, open: clamp01(open), x: S / 2, y: S / 2, r: (R * sc * 1.2), pitch: 1.0 - 0.25 * (1 - clamp01(open)), yaw: 0.4 + time * 0.05,
+      roll: Math.sin(time * 1.3) * 0.03 * (1 - open * 0.6), seed: 3,
+    }], S, S)
+    if (cv) { drawRendered(c, cv, cx - S / (2 * sc), cy - S / (2 * sc), S / sc, S / sc); return }
+  }
   c.save()
   c.translate(cx, cy)
   c.rotate(Math.sin(time * 1.3) * 0.03 * (1 - open * 0.6))
@@ -431,7 +443,8 @@ function petalSprite(kind: FlowerKind, color: string | null, px: number, back: b
  * One loose petal centred at 0,0 of the current transform, `size` pixels long; `flip` (-1..1) is how much it
  * faces the camera as it tumbles (the back side shows darker).
  */
-export function drawLoosePetal(c: Ctx, kind: FlowerKind, color: string | null, size: number, flip: number, soft = false) {
+export function drawLoosePetal(c: Ctx, kind: FlowerKind, color: string | null, size: number, flip: number, soft = false, phase?: number) {
+  if (phase !== undefined && drawPetalSprite(c, kind, color, size * 1.25, phase, soft)) return
   const sp = petalSprite(kind, color, size, flip < 0, soft)
   c.save()
   c.scale(Math.max(0.12, Math.abs(flip)), 1)
@@ -443,6 +456,7 @@ export function drawLoosePetal(c: Ctx, kind: FlowerKind, color: string | null, s
 export interface BloomTimes { bud: number; emerge: number; grow: number; fall: number; full: number }
 /** When each part happens, in seconds from the start of the layer. */
 export function bloomTimes(b: Bloom): BloomTimes {
+  if (gardenOn(b)) { const g = gardenTimes(b); return { bud: g.bud, emerge: g.emerge, grow: g.grow, fall: g.fall, full: g.full } }
   const o = Math.max(0.6, Math.min(8, b.open))
   const emerge = 0.85 * o
   const grow = Math.max(0.35, 0.3 * o)
@@ -486,6 +500,7 @@ export function bloomMask(r: number, mw: number, mh: number): ShapeMask {
 /** The flower (and, when the photo stays inside it, the far petals behind the photo). */
 export function drawBloomBack(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy: number, W: number, H: number, alpha: number) {
   if (alpha <= 0.001 || local < 0) return
+  if (gardenOn(b)) { drawGardenBack(c, b, local, dur, W, H, alpha); if (!b.fill) drawPetals(c, b, local, dur, cx, cy, W, H, alpha, 0); return }
   const tm = bloomTimes(b)
   const R = flowerRadius(b, W, H)
   const fade = b.fill ? 1 - clamp01((local - tm.fall) / 0.3) : 1
@@ -508,6 +523,13 @@ export function drawBloomBack(c: Ctx, b: Bloom, local: number, dur: number, cx: 
 /** The light burst as the photo comes out, the flower's own petals flying off, and the petals falling in front. */
 export function drawBloomFront(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy: number, W: number, H: number, alpha: number) {
   if (alpha <= 0.001 || local < 0) return
+  if (gardenOn(b)) {
+    // the flower's own petals break away from where the flower is now, then the petals fall over the picture
+    const h = gardenHeart(b, Math.min(local, bloomTimes(b).fall), W, H)
+    if (b.fill) drawBurst(c, b, local, dur, h.x, h.y, h.r * 0.85, W, H, alpha)
+    drawPetals(c, b, local, dur, h.x, h.y, W, H, alpha, b.fill ? -1 : 1)
+    return
+  }
   const tm = bloomTimes(b)
   const R = flowerRadius(b, W, H)
   const bt = local - tm.emerge + 0.1
@@ -554,7 +576,7 @@ function drawBurst(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy:
     c.globalAlpha = a0 * clamp01(t * 6)
     c.translate(x, y)
     c.rotate(ang + Math.PI / 2 + t * f.spin * (rnd(i, 25) - 0.5) * 2)
-    drawLoosePetal(c, b.flower, b.color, size, Math.cos(t * f.flip + i))
+    drawLoosePetal(c, b.flower, b.color, size, Math.cos(t * f.flip + i), false, t * f.flip + i)
     c.restore()
   }
 }
@@ -599,7 +621,8 @@ function drawPetals(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy
     c.globalAlpha = a0 * (depth === 0 ? 0.75 : 1) * clamp01(t * (already ? 3 : 8))
     c.translate(x, y)
     c.rotate((r3 - 0.5) * 6.28 + t * f.spin * (r4 - 0.5) * 2 + Math.sin(t * f.freq + r2 * 6) * 0.5)
-    drawLoosePetal(c, b.flower, b.color, size, Math.cos(t * f.flip * (0.7 + 0.6 * r1) + r2 * 6.28), depth === 2)
+    const ph = t * f.flip * (0.7 + 0.6 * r1) + r2 * 6.28
+    drawLoosePetal(c, b.flower, b.color, size, Math.cos(ph), depth === 2, ph)
     c.restore()
   }
 }
