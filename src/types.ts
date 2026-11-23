@@ -403,7 +403,12 @@ export interface Bloom {
   seconds: number // how long new petals keep coming
   wind: number // -1..1, petals drift left / right
   garden?: boolean // true: a whole flower garden first, the camera pushes in to one bud that blooms (engine/garden.ts)
+  photo?: boolean // true: the garden and the bloom are made from the user's own flower photos (engine/photoBloom.ts)
+  photos?: BloomPhotos | null
 }
+
+/** Cut-out flower photos (media file ids) for a real-photo bloom, from closed bud to fully open. */
+export interface BloomPhotos { bud: string; half?: string | null; open?: string | null; full: string }
 
 export interface BlurLayer extends LayerBase {
   type: 'blur'

@@ -44,6 +44,8 @@ export function usedSources(p: Project): Map<string, Use> {
     if (l.type === 'media') {
       add(l.sourceId, l.in + (l.end - l.start) * layerSpeed(l), 'track')
       if (l.backdrop?.kind === 'media') add(l.backdrop.sourceId, l.backdrop.in ?? 0, 'background')
+      const ph = l.bloom?.photos
+      if (ph) for (const id of [ph.bud, ph.half, ph.open, ph.full]) add(id, 0, 'track')
     } else if (l.type === 'audio') add(l.sourceId, l.in + (l.end - l.start) * layerSpeed(l), 'track', true)
     else if (l.type === 'wave') add(l.sourceId, l.in + (l.end - l.start), 'track', true)
   }

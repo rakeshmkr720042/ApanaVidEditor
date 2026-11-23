@@ -35,6 +35,7 @@ function sourceIds(x: unknown, out = new Set<string>()) {
   else if (x && typeof x === 'object') {
     for (const [k, v] of Object.entries(x)) {
       if (k === 'sourceId' && typeof v === 'string') out.add(v)
+      else if (k === 'photos' && v && typeof v === 'object') Object.values(v).forEach((id) => { if (typeof id === 'string' && id) out.add(id) }) // flower bloom photos
       else if (v && typeof v === 'object') sourceIds(v, out)
     }
   }

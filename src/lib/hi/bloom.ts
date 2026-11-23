@@ -16,4 +16,12 @@ export default {
   'Only the flower, over my video': 'सिर्फ़ फूल, मेरी वीडियो के ऊपर',
   'Main track': 'मेन ट्रैक',
   'A flower garden fills the screen, the camera goes to one bud, it blooms, your photo comes out of its heart and fills the screen, and the petals fall on it.': 'पूरी स्क्रीन पर फूलों का बगीचा दिखता है, कैमरा एक कली पर जाता है, कली खिलकर पूरा फूल बनती है, उसके बीच से आपकी फ़ोटो निकलकर पूरी स्क्रीन भर देती है, और पंखुड़ियां उस पर गिरती हैं।',
+  '📷 Real flower, from my photos': '📷 असली फूल, मेरी फ़ोटो से',
+  'Bud (closed)': 'कली (बंद)', 'Half open': 'आधा खिला', 'Open': 'खिला', 'Fully open': 'पूरा खिला',
+  'Cutting out…': 'काट रहे हैं…', 'Remove': 'हटाएँ', 'Could not cut out this photo': 'यह फ़ोटो काटी नहीं जा सकी',
+  'Needed: the bud and the fully open flower.': 'ज़रूरी: कली और पूरा खिला फूल।',
+  'Add the bud and fully open photos first': 'पहले कली और पूरे खिले फूल की फ़ोटो डालें',
+  'No flower found in this photo. Try a photo with a plain background.': 'इस फ़ोटो में फूल नहीं मिला। सादे बैकग्राउंड वाली फ़ोटो आज़माएँ।',
+  'Could not save the cut-out': 'कटी हुई फ़ोटो सेव नहीं हो सकी',
+  'Add photos of one real flower (your own photos): a closed bud, and the same kind fully open. Half open and open make the bloom smoother. A plain or blurred background works best; it is cut away on your device.': 'एक असली फूल की फ़ोटो डालें (अपनी फ़ोटो): एक बंद कली, और उसी तरह का पूरा खिला फूल। आधा खिला और खिला डालने से खिलना और स्मूथ लगता है। सादा या धुंधला बैकग्राउंड सबसे अच्छा है; बैकग्राउंड आपके फ़ोन/कंप्यूटर पर ही हटाया जाता है।',
 } as Record<string, string>

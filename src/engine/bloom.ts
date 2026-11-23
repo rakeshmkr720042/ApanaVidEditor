@@ -1,6 +1,7 @@
 import type { Bloom, ShapeMask } from '../types'
 import { drawPetalSprite, drawRendered, flowersGL, renderFlowers } from './flowergl'
 import { drawGardenBack, gardenHeart, gardenOn, gardenTimes } from './garden'
+import { drawPhotoBack, drawPhotoPetal, photoHeart, photoOn, photoTimes, picsOf, type Pics } from './photoBloom'
 
 /**
  * Flower bloom reveal: a bud grows, the flower opens petal by petal, the chosen photo / video comes out of its
@@ -456,6 +457,7 @@ export function drawLoosePetal(c: Ctx, kind: FlowerKind, color: string | null, s
 export interface BloomTimes { bud: number; emerge: number; grow: number; fall: number; full: number }
 /** When each part happens, in seconds from the start of the layer. */
 export function bloomTimes(b: Bloom): BloomTimes {
+  if (photoOn(b)) { const g = photoTimes(b, picsOf(b)); return { bud: g.bud, emerge: g.emerge, grow: g.grow, fall: g.fall, full: g.full } }
   if (gardenOn(b)) { const g = gardenTimes(b); return { bud: g.bud, emerge: g.emerge, grow: g.grow, fall: g.fall, full: g.full } }
   const o = Math.max(0.6, Math.min(8, b.open))
   const emerge = 0.85 * o
@@ -500,6 +502,11 @@ export function bloomMask(r: number, mw: number, mh: number): ShapeMask {
 /** The flower (and, when the photo stays inside it, the far petals behind the photo). */
 export function drawBloomBack(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy: number, W: number, H: number, alpha: number) {
   if (alpha <= 0.001 || local < 0) return
+  if (photoOn(b)) {
+    const pics = picsOf(b)
+    if (pics) { drawPhotoBack(c, b, pics, local, W, H, alpha); if (!b.fill) drawPetals(c, b, local, dur, cx, cy, W, H, alpha, 0) }
+    return
+  }
   if (gardenOn(b)) { drawGardenBack(c, b, local, dur, W, H, alpha); if (!b.fill) drawPetals(c, b, local, dur, cx, cy, W, H, alpha, 0); return }
   const tm = bloomTimes(b)
   const R = flowerRadius(b, W, H)
@@ -523,6 +530,14 @@ export function drawBloomBack(c: Ctx, b: Bloom, local: number, dur: number, cx: 
 /** The light burst as the photo comes out, the flower's own petals flying off, and the petals falling in front. */
 export function drawBloomFront(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy: number, W: number, H: number, alpha: number) {
   if (alpha <= 0.001 || local < 0) return
+  if (photoOn(b)) {
+    const pics = picsOf(b)
+    if (!pics) return
+    const h = photoHeart(b, pics, Math.min(local, bloomTimes(b).fall), W, H)
+    if (b.fill) drawBurst(c, b, local, dur, h.x, h.y, h.r * 0.85, W, H, alpha)
+    drawPetals(c, b, local, dur, h.x, h.y, W, H, alpha, b.fill ? -1 : 1)
+    return
+  }
   if (gardenOn(b)) {
     // the flower's own petals break away from where the flower is now, then the petals fall over the picture
     const h = gardenHeart(b, Math.min(local, bloomTimes(b).fall), W, H)
@@ -551,6 +566,12 @@ export function drawBloomFront(c: Ctx, b: Bloom, local: number, dur: number, cx:
   drawPetals(c, b, local, dur, cx, cy, W, H, alpha, b.fill ? -1 : 1)
 }
 
+/** A loose petal: a real one cut from the user's photo when the bloom has photos, else a drawn one. */
+function looseOrPhoto(c: Ctx, b: Bloom, pics: Pics | null, i: number, size: number, phase: number, soft: boolean) {
+  if (pics) drawPhotoPetal(c, pics, i, size, phase, soft)
+  else drawLoosePetal(c, b.flower, b.color, size, Math.cos(phase), soft, phase)
+}
+
 /** Fades the petals out over the last moment of the layer. */
 const endFade = (local: number, dur: number) => (Number.isFinite(dur) ? clamp01((dur - local) / 0.6) : 1)
 
@@ -563,6 +584,7 @@ function drawBurst(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy:
   const n = b.flower === 'sakura' ? 16 : b.flower === 'marigold' ? 22 : 14
   const k = 1.6 // air drag
   const a0 = alpha * endFade(local, dur)
+  const pics = picsOf(b)
   for (let i = 0; i < n; i++) {
     const ang = (i / n) * Math.PI * 2 + rnd(i, 21) * 0.4
     const sp = H * (0.45 + 0.6 * rnd(i, 22))
@@ -576,7 +598,7 @@ function drawBurst(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy:
     c.globalAlpha = a0 * clamp01(t * 6)
     c.translate(x, y)
     c.rotate(ang + Math.PI / 2 + t * f.spin * (rnd(i, 25) - 0.5) * 2)
-    drawLoosePetal(c, b.flower, b.color, size, Math.cos(t * f.flip + i), false, t * f.flip + i)
+    looseOrPhoto(c, b, pics, i, size, t * f.flip + i, false)
     c.restore()
   }
 }
@@ -595,6 +617,7 @@ function drawPetals(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy
   const secs = Math.max(0.5, b.seconds)
   const a0 = alpha * endFade(local, dur)
   if (a0 <= 0.001) return
+  const pics = picsOf(b)
   for (let i = 0; i < n; i++) {
     const depth = i % 3 // 0 far, 1 mid, 2 near
     if (which === 0 && depth !== 0) continue
@@ -622,7 +645,7 @@ function drawPetals(c: Ctx, b: Bloom, local: number, dur: number, cx: number, cy
     c.translate(x, y)
     c.rotate((r3 - 0.5) * 6.28 + t * f.spin * (r4 - 0.5) * 2 + Math.sin(t * f.freq + r2 * 6) * 0.5)
     const ph = t * f.flip * (0.7 + 0.6 * r1) + r2 * 6.28
-    drawLoosePetal(c, b.flower, b.color, size, Math.cos(ph), depth === 2, ph)
+    looseOrPhoto(c, b, pics, i, size, ph, depth === 2)
     c.restore()
   }
 }
