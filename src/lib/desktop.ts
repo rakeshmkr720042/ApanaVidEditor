@@ -30,6 +30,10 @@ interface DesktopBridge {
   keepAwake?(on: boolean): void
   /** Help → User guide / Keyboard shortcuts in the menu bar (topic id, or null for the contents). */
   onHelp?(cb: (topic: string | null) => void): () => void
+  /** AI chat with the user's own key: locks the key with Windows encryption; only `origin` may receive it. */
+  aiSeal?(key: string, origin: string): Promise<string>
+  /** AI chat request from the main process (no CORS); the main process unlocks `sealed` and adds it as the `auth` header. */
+  aiFetch?(r: { url: string; method: string; headers: Record<string, string>; body?: string; sealed: string | null; auth: { header: string; prefix: string } | null; timeout: number }): Promise<{ status: number; text: string }>
   googleFetch?(r: { url: string; method: string; headers: Record<string, string>; body?: Uint8Array | string }): Promise<{ status: number; location: string | null; range: string | null; text: string }>
 }
 

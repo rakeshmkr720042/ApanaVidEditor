@@ -4,7 +4,8 @@ import { readdirSync, mkdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 
-const files = readdirSync('tests').filter((f) => f.endsWith('.test.ts'))
+const only = process.env.ONLY
+const files = readdirSync('tests').filter((f) => f.endsWith('.test.ts') && (!only || f.includes(only)))
 const out = resolve('node_modules', '.cache', 'unit-tests')
 mkdirSync(out, { recursive: true })
 const built = []

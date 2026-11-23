@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('desktop', {
   googleLogin: () => ipcRenderer.invoke('desktop:google-login'),
   googleRefresh: (opts) => ipcRenderer.invoke('desktop:google-refresh', opts),
   googleFetch: (req) => ipcRenderer.invoke('desktop:google-fetch', req),
+  aiSeal: (key, origin) => ipcRenderer.invoke('desktop:ai-seal', { key, origin }),
+  aiFetch: (req) => ipcRenderer.invoke('desktop:ai-fetch', req),
   aiCheck: () => ipcRenderer.invoke('desktop:ai-check'),
   aiSetup: (model) => ipcRenderer.invoke('desktop:ai-setup', model),
   aiCancel: () => ipcRenderer.send('desktop:ai-cancel'),

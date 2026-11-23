@@ -352,6 +352,29 @@ ipcMain.handle('desktop:google-fetch', async (e, { url, method, headers, body })
   return { status: res.status, location: res.headers.get('location'), range: res.headers.get('range'), text: await res.text() }
 })
 
+// AI chat with the user's own API key. The key is locked with Windows' data protection and handed to the page
+// only in that locked form, tied to the one site it was saved for; it is unlocked here, just for the request.
+ipcMain.handle('desktop:ai-seal', async (e, { key, origin }) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  if (typeof key !== 'string' || !key || key.length > 500 || typeof origin !== 'string' || !/^https?:\/\/[^/]+$/.test(origin)) throw new Error('Not a valid key')
+  return seal(JSON.stringify({ k: key, o: origin }))
+})
+const HEADER_OK = /^(authorization|x-api-key|x-goog-api-key)$/i
+ipcMain.handle('desktop:ai-fetch', async (e, { url, method, headers, body, sealed, auth, timeout }) => {
+  if (e.sender !== win?.webContents) throw new Error('Not allowed')
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) throw new Error('Not allowed')
+  const h = { ...(headers && typeof headers === 'object' ? headers : {}) }
+  if (sealed) {
+    let k, o
+    try { ({ k, o } = JSON.parse(unseal(sealed))) } catch { throw new Error('Save the API key again') }
+    if (new URL(url).origin !== o) throw new Error('This key belongs to another address')
+    if (!auth || !HEADER_OK.test(auth.header)) throw new Error('Not allowed')
+    h[auth.header] = `${auth.prefix || ''}${k}`
+  }
+  const res = await net.fetch(url, { method: method === 'GET' ? 'GET' : 'POST', headers: h, body: method === 'GET' ? undefined : body, signal: AbortSignal.timeout(Math.min(Number(timeout) || 90000, 10 * 60000)) })
+  return { status: res.status, text: (await res.text()).slice(0, 2_000_000) }
+})
+
 // Local AI setup: checks this computer and, after the user agrees in the app, installs Ollama
 // and a Gemma 4 model that fits (see aisetup.js)
 ipcMain.handle('desktop:ai-check', async (e) => {

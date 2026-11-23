@@ -91,6 +91,7 @@ import { acceptHabits, describe as describeHabit, nextStep, noteShown, observe, 
 import { HabitBar, HabitsSheet } from './HabitsSheet'
 import { ToolBar, useDock, type Tool } from './ToolBar'
 import { PremiumSheet } from './PremiumSheet'
+import { AgentChat } from './AgentChat'
 import { isAllowed, usePremium, type Feature } from '../lib/premium'
 import { openHelp } from '../help/open'
 
@@ -159,6 +160,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const tester = useTesterUnlocked()
   const [habitsSheet, setHabitsSheet] = useState(false)
   const [paywall, setPaywall] = useState<Feature | null>(null)
+  const [chat, setChat] = useState(false)
   usePremium()
   const habitsVersion = useHabitsVersion()
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -1162,6 +1164,9 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
     ]
   }
 
+  // AI chat is there whatever is selected ("is clip ko black and white karo" works on the selection)
+  tools = [{ icon: 'ai', label: 'AI chat', on: () => { player?.pause(); setChat(true) }, disabled: empty } as Tool, ...tools]
+
   // ---- Smart shortcuts: "Your usual" for what is selected (or the project), and the usual next tool
   const usual = useMemo((): { hs: Habit[]; key: string; patches: Record<string, object>; project: boolean } | null => {
     void habitsVersion
@@ -1525,6 +1530,17 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       {pending && <PlaceSheet what={pending.what} time={time} onPick={placePending} onClose={() => setPending(null)} />}
       {screenRec && <ScreenRecorder mode={screenRec} onClose={() => setScreenRec(null)} onDone={addRecording} />}
       {habitsSheet && <HabitsSheet onClose={() => setHabitsSheet(false)} />}
+      {chat && (
+        <AgentChat ed={ed} projectId={initial.id} time={time} onClose={() => setChat(false)} onPaywall={() => setPaywall('aionline')}
+          onAfter={(open, select) => {
+            if (select !== undefined) ed.setSel(select)
+            if (!open) return
+            setChat(false)
+            if (open === 'text-titles') ed.addText(time)
+            if (open === 'audio') setAudioTab('mine')
+            setPanel(open as PanelName)
+          }} />
+      )}
       {paywall && <PremiumSheet feature={paywall} onClose={() => setPaywall(null)} />}
       {notesSheet && <FeedbackSheet where={`Editor: ${name}${panel ? ` › ${panel}` : ''}`} onClose={() => setNotesSheet(false)} />}
       {exporting && <ExportSheet project={output} sources={ed.sources} name={name} snapshot={snapshot} onClose={() => setExporting(false)} />}

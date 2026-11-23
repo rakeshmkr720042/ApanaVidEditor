@@ -1360,3 +1360,32 @@ body.has-ad-banner .home-main { padding-bottom: calc(72px + env(safe-area-inset-
 .tester-panel .tester-lock { border-top: 1px solid #ffffff1a; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .tester-panel .tester-lock .row { display: flex; gap: 8px; width: 100%; }
 .tester-panel .tester-lock input { flex: 1; min-width: 0; }
+
+/* ---------- AI chat (src/components/AgentChat.tsx) */
+.agent-chat { max-width: 620px; min-height: min(70dvh, 640px); grid-template-rows: auto auto 1fr auto auto; }
+.agent-chat h2 .link { margin-left: auto; }
+.agent-list { overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 120px; max-height: 58dvh; padding: 2px; }
+.agent-msg { padding: 8px 12px; border-radius: 14px; max-width: 92%; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.agent-msg p { margin: 0 0 4px; }
+.agent-msg.me { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.agent-msg.bot { align-self: flex-start; background: var(--panel-2); border-bottom-left-radius: 4px; display: grid; gap: 6px; }
+.agent-msg.bot.busy { display: flex; align-items: center; gap: 8px; }
+.agent-msg.plan.done { outline: 1px solid #34c75966; }
+.agent-msg.plan.failed { outline: 1px solid #ff6b6b66; }
+.agent-msg.plan.cancelled { opacity: 0.65; }
+.agent-msg .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.agent-msg .ok-text, .agent-msg .error-text { margin: 0; }
+.agent-steps { margin: 0; padding-left: 20px; display: grid; gap: 2px; }
+.agent-missing { border-left: 3px solid #ff9500; padding-left: 8px; }
+.agent-missing ul { margin: 2px 0 6px; padding-left: 18px; }
+.agent-chips, .agent-providers { display: flex; flex-wrap: wrap; gap: 6px; }
+.agent-chips .chip, .agent-providers .chip { border: 1px solid var(--line); background: var(--panel-2); color: inherit; border-radius: 16px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.agent-providers .chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.agent-input { display: flex; gap: 6px; align-items: flex-end; }
+.agent-input textarea { flex: 1; resize: none; min-height: 44px; max-height: 120px; font: inherit; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: inherit; }
+.agent-hint { margin: 0; }
+.agent-privacy { border: 1px solid #ff950088; border-radius: 12px; padding: 8px 12px; }
+.agent-privacy ul { margin: 4px 0 8px; padding-left: 18px; }
+.agent-form { display: grid; gap: 8px; }
+.agent-form .field { display: grid; gap: 4px; font-size: 13px; }
+.agent-form input, .agent-form select, .agent-msg input { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: inherit; min-width: 0; }
