@@ -54,6 +54,10 @@ const STYLES: { value: Style; label: string }[] = [
   { value: 'fill', label: 'Opens, then fills the screen' }, { value: 'stay', label: 'Stays inside the flower' },
 ]
 
+const SCENES: { value: 'garden' | 'video'; label: string }[] = [
+  { value: 'garden', label: '🌷 Flower garden, camera goes to one bud' }, { value: 'video', label: 'Only the flower, over my video' },
+]
+
 /** Colour, opening, petals and wind of a bloom (used when adding one and for a selected one). */
 export function BloomControls({ value, onChange, begin, end }: { value: Bloom; onChange: (b: Bloom) => void; begin?: () => void; end?: () => void }) {
   const b = value
@@ -70,6 +74,8 @@ export function BloomControls({ value, onChange, begin, end }: { value: Bloom; o
           <input type="color" value={(b.color ?? info.color).slice(0, 7)} onChange={(e) => onChange({ ...b, color: e.target.value })} />
         </label>
       </div>
+      <p className="muted small">{t('Background')}</p>
+      <Chips options={SCENES} value={b.garden ? 'garden' : 'video'} onChange={(s) => onChange({ ...b, garden: s === 'garden' })} wrap />
       <Chips options={STYLES} value={b.fill ? 'fill' : 'stay'} onChange={(s) => onChange({ ...b, fill: s === 'fill' })} wrap />
       <Slider label="Blooming time" min={0.8} max={5} step={0.1} value={b.open} format={(v) => `${v.toFixed(1)} s`} onStart={begin} onEnd={end} onChange={(v) => onChange({ ...b, open: v })} />
       <Slider label="Flower size" min={0.3} max={1} step={0.01} value={b.size} format={(v) => `${Math.round(v * 100)}%`} onStart={begin} onEnd={end} onChange={(v) => onChange({ ...b, size: v })} />

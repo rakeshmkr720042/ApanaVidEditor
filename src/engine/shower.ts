@@ -87,7 +87,7 @@ export function drawShower(ctx: Ctx, l: StickerLayer, t: number, W: number, H: n
   for (let i = 0; i < n; i++) {
     const r0 = rnd(i, 1), r1 = rnd(i, 2), r2 = rnd(i, 3), r3 = rnd(i, 4)
     const size = base * (0.6 + 0.8 * r2)
-    let x = 0, y = 0, rot = 0, a = 1, flip = 1
+    let x = 0, y = 0, rot = 0, a = 1, flip = 1, phase = 0
     const v = 0.12 + 0.12 * r3 // screen heights per second
     if (sh.motion === 'fall' || sh.motion === 'rise') {
       const span = 1 + (2 * size) / H
@@ -96,7 +96,8 @@ export function drawShower(ctx: Ctx, l: StickerLayer, t: number, W: number, H: n
       y = p * H - size
       x = r0 * W + Math.sin(tau * (1 + r2) + r1 * 6.28) * 0.04 * W
       rot = (r3 - 0.5) * 1.2 + Math.sin(tau * (1.5 + r0) + r2 * 6) * 0.8
-      flip = Math.cos(tau * (2 + r1 * 3) + r0 * 6)
+      phase = tau * (2 + r1 * 3) + r0 * 6
+      flip = Math.cos(phase)
     } else if (sh.motion === 'float') {
       x = (r0 + Math.sin(tau * 0.4 + r1 * 6.28) * 0.05) * W
       y = (r1 + Math.cos(tau * 0.35 + r0 * 6.28) * 0.05) * H
@@ -121,7 +122,8 @@ export function drawShower(ctx: Ctx, l: StickerLayer, t: number, W: number, H: n
       y = cy + Math.sin(ang) * sp * age * 0.9 + 0.5 * 0.35 * H * age * age
       a = Math.max(0, 1 - age / BURST) * Math.min(1, age * 8)
       rot = ang + age * 3
-      flip = Math.cos(age * 6 + r0 * 6)
+      phase = age * 6 + r0 * 6
+      flip = Math.cos(phase)
     }
     if (a <= 0.01) continue
     ctx.save()
@@ -133,7 +135,7 @@ export function drawShower(ctx: Ctx, l: StickerLayer, t: number, W: number, H: n
       ctx.fillStyle = PAPER[Math.floor(rnd(i, 8) * PAPER.length)]
       ctx.fillRect(-size * 0.22, -size * 0.12, size * 0.44, size * 0.24)
     } else if (l.emoji.startsWith('petal:')) {
-      drawLoosePetal(ctx, l.emoji.slice(6) as FlowerKind, null, size * 0.75, flip, rnd(i, 10) > 0.8)
+      drawLoosePetal(ctx, l.emoji.slice(6) as FlowerKind, null, size * 0.75, flip, rnd(i, 10) > 0.8, phase)
     } else if (l.emoji === 'petal') {
       ctx.scale(Math.max(0.3, Math.abs(flip)), 1)
       petal(ctx, size * 0.32, i)

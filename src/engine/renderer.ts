@@ -9,6 +9,7 @@ import { posAt } from '../model/clipKeys'
 import { contentRect, mainFrameOn } from '../model/mainFrame'
 import { applyMask, drawEdge, revealAt } from './shapeMask'
 import { bloomMask, bloomOpening, drawBloomBack, drawBloomFront } from './bloom'
+import { gardenOn, gardenPhoto } from './garden'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
@@ -784,7 +785,9 @@ export class Renderer {
     const bl = l.bloom
     const bLocal = inp.t - l.start, bDur = l.end - l.start
     const bx = l.box.x * W, by = l.box.y * H
-    const open = bl ? bloomOpening(bl, bLocal, bx, by, W, H) : null
+    // garden bloom: the picture comes out of the hero flower's heart and grows (its own place and size)
+    const gp = bl && gardenOn(bl) ? gardenPhoto(bl, bLocal, bDur, W, H, fw, fh) : null
+    const open = gp ? { r: gp.s > 0 ? gp.r / gp.s : 0, edge: gp.edge } : bl ? bloomOpening(bl, bLocal, bx, by, W, H) : null
     if (bl && open && open.r > 0 && Number.isFinite(open.r)) {
       const mw = Math.max(2, Math.round(fw)), mh = Math.max(2, Math.round(fh))
       const ms = (this.maskScratch ??= makeCanvas(mw, mh))
@@ -813,10 +816,15 @@ export class Renderer {
       ctx.restore()
     }
     ctx.save()
-    ctx.globalAlpha = l.box.opacity * a.alpha
+    ctx.globalAlpha = l.box.opacity * a.alpha * (gp ? gp.alpha : 1)
     ctx.globalCompositeOperation = BLEND_OPS[l.blend ?? 'normal']
-    ctx.translate(l.box.x * W + a.dx * H, l.box.y * H + a.dy * H)
-    ctx.rotate(((l.box.rotation + a.rot) * Math.PI) / 180)
+    if (gp) {
+      ctx.translate(gp.x, gp.y)
+      ctx.scale(gp.s, gp.s)
+    } else {
+      ctx.translate(l.box.x * W + a.dx * H, l.box.y * H + a.dy * H)
+      ctx.rotate(((l.box.rotation + a.rot) * Math.PI) / 180)
+    }
     if (a.scale !== 1) ctx.scale(a.scale, a.scale)
     if (a.blur > 0) ctx.filter = `blur(${(a.blur * H).toFixed(1)}px)`
     if (a.wipe < 1) { ctx.beginPath(); ctx.rect(-fw / 2, -fh / 2, fw * a.wipe, fh); ctx.clip() }
