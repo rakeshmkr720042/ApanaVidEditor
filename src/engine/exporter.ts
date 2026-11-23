@@ -266,6 +266,7 @@ export async function exportProject(
     renderer.resize(w, h)
     await renderer.prepareWatermark(project, sources)
     await renderer.prepareWaves(project, sources)
+    await renderer.prepareBlooms(project, sources)
     await renderer.preparePresenter(project)
     if (usesCutout(project)) await loadCutout()
     await prepare3d(project, sources)

@@ -10,6 +10,7 @@ import { contentRect, mainFrameOn } from '../model/mainFrame'
 import { applyMask, drawEdge, revealAt } from './shapeMask'
 import { bloomMask, bloomOpening, drawBloomBack, drawBloomFront } from './bloom'
 import { gardenOn, gardenPhoto } from './garden'
+import { photoKey, photoOn, photoPlace, setPics, type PicImage } from './photoBloom'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
@@ -101,6 +102,7 @@ export class Renderer {
   private adjBase = makeCanvas() // the picture under an adjustment layer
   private bgSmall = makeCanvas(48, 48)
   private wmImage: { id: string; img: CanvasImageSource | null; ready: Promise<void> } | null = null
+  private bloomPics = new Map<string, Promise<void>>()
   private prImage: { url: string; img: ImageBitmap | null; ready: Promise<void> } | null = null
   onNeedsRedraw: (() => void) | null = null
   W = 2
@@ -402,6 +404,26 @@ export class Renderer {
       this.wmImage = entry
     }
     return this.wmImage.img
+  }
+
+  /** Starts decoding a real-photo bloom's flower photos (once per set); a redraw is requested when they are ready. */
+  private bloomPhotos(bl: NonNullable<MediaLayer['bloom']>, sources: Record<string, MediaSource>): Promise<void> {
+    const key = photoKey(bl)
+    let p = this.bloomPics.get(key)
+    if (p) return p
+    const ph = bl.photos!
+    const one = async (id: string | null | undefined) => (id && sources[id] ? ((await decodeImage(sources[id])) as PicImage) : null)
+    p = Promise.all([one(ph.bud), one(ph.half), one(ph.open), one(ph.full)]).then(([bud, half, open, full]) => {
+      if (bud && full) { setPics({ key, bud, half, open, full }); this.onNeedsRedraw?.() }
+      else this.bloomPics.delete(key) // a file is not loaded yet: try again later
+    }).catch(() => { this.bloomPics.delete(key) })
+    this.bloomPics.set(key, p)
+    return p
+  }
+
+  /** Waits until the flower photos of every real-photo bloom are decoded, so exported frames have them. */
+  async prepareBlooms(project: Project, sources: Record<string, MediaSource>) {
+    await Promise.all(project.layers.flatMap((l) => (l.type === 'media' && l.bloom && photoOn(l.bloom) ? [this.bloomPhotos(l.bloom, sources)] : [])))
   }
 
   /** Waits until everything the watermark needs is loaded, so the first exported frames have it. */
@@ -786,7 +808,8 @@ export class Renderer {
     const bLocal = inp.t - l.start, bDur = l.end - l.start
     const bx = l.box.x * W, by = l.box.y * H
     // garden bloom: the picture comes out of the hero flower's heart and grows (its own place and size)
-    const gp = bl && gardenOn(bl) ? gardenPhoto(bl, bLocal, bDur, W, H, fw, fh) : null
+    if (bl && photoOn(bl)) void this.bloomPhotos(bl, inp.sources)
+    const gp = bl && photoOn(bl) ? photoPlace(bl, bLocal, bDur, W, H, fw, fh) : bl && gardenOn(bl) ? gardenPhoto(bl, bLocal, bDur, W, H, fw, fh) : null
     const open = gp ? { r: gp.s > 0 ? gp.r / gp.s : 0, edge: gp.edge } : bl ? bloomOpening(bl, bLocal, bx, by, W, H) : null
     if (bl && open && open.r > 0 && Number.isFinite(open.r)) {
       const mw = Math.max(2, Math.round(fw)), mh = Math.max(2, Math.round(fh))

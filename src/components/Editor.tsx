@@ -1256,7 +1256,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   else if (panel === 'volume' && selLayer?.type === 'audio') panelView = <VolumePanel ed={ed} target={{ kind: 'layer', id: selLayer.id, volume: selLayer.volume, fadeIn: selLayer.fadeIn, fadeOut: selLayer.fadeOut, volKeys: selLayer.volKeys }} onClose={closePanel}
     src={group ? undefined : time >= selLayer.start && time < selLayer.end ? layerSrcAt(selLayer, time - selLayer.start) : null} />
   else if (panel === 'volume' && tclip) panelView = <VolumePanel ed={ed} target={{ kind: 'clip', clip: tclip }} onClose={closePanel} src={group ? undefined : srcOfClip(tclip)} />
-  else if (panel === 'bloom' && selLayer?.type === 'media' && selLayer.bloom) panelView = <BloomEditPanel ed={ed} layer={selLayer} onClose={closePanel} onLocked={() => setPaywall('nature')} />
+  else if (panel === 'bloom' && selLayer?.type === 'media' && selLayer.bloom) panelView = <BloomEditPanel ed={ed} layer={selLayer} onClose={closePanel} onLocked={() => setPaywall('nature')} importSource={async (f) => { const s = await loadSource(f, f.name); ed.addSource(s); await saveMedia(s); return s }} />
   else if (panel === 'reveal' || panel === 'bloomadd') panelView = (
     <RevealPanel key={panel} ed={ed} time={time} onClose={closePanel} initialTab={panel === 'bloomadd' ? 'bloom' : 'shapes'} onLocked={() => setPaywall('nature')}
       importSource={async (f) => {

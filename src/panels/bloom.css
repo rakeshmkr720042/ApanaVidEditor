@@ -7,3 +7,14 @@
 .bloom-pro { position: absolute; top: 3px; right: 3px; font-style: normal; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 6px; background: linear-gradient(90deg, #ffb300, #ff6d00); color: #1a1000; }
 .bloom-colors { display: flex; gap: 8px; flex-wrap: wrap; padding: 2px; }
 @media (max-width: 380px) { .bloom-flowers { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.bloom-photos { display: grid; gap: 6px; }
+.bloom-slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.bloom-slot { position: relative; display: grid; justify-items: center; gap: 3px; text-align: center; min-width: 0; }
+.bloom-slot > span { font-size: 11px; line-height: 1.2; }
+.bloom-slot-pic { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px dashed var(--line); background: repeating-conic-gradient(#20242f 0 25%, #171a22 0 50%) 0 0 / 12px 12px; color: inherit; display: grid; place-items: center; overflow: hidden; padding: 2px; }
+.bloom-slot.has .bloom-slot-pic { border-style: solid; border-color: var(--accent); }
+.bloom-slot-pic { position: relative; }
+.bloom-slot-pic img { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); object-fit: contain; }
+.bloom-plus { font-size: 24px; opacity: 0.7; }
+.bloom-slot-x { position: absolute; top: -4px; right: -4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: #000c; color: #fff; font-size: 11px; line-height: 22px; padding: 0; }
+.bloom-error { color: #ff8a80; }

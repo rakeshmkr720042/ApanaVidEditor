@@ -6,7 +6,7 @@ import { t } from '../lib/i18n'
 import { REVEAL_SHAPE_OPTIONS, defaultReveal } from '../model/reveal'
 import { bloomLength, defaultBloom } from '../engine/bloom'
 import { BloomControls, FlowerPicker } from './BloomPanel'
-import { bloomLocked } from '../model/bloom'
+import { bloomLocked, photosMissing } from '../model/bloom'
 import { activeAt, layoutClips } from '../model/timeline'
 
 type Style = 'fill' | 'stay' | 'close'
@@ -86,7 +86,7 @@ export function RevealPanel({ ed, time, onAdded, onClose, importSource, initialT
         <>
           <p className="muted small">{t('A flower garden fills the screen, the camera goes to one bud, it blooms, your photo comes out of its heart and fills the screen, and the petals fall on it.')}</p>
           <b className="small">{t('1. Flower')}</b>
-          <FlowerPicker value={bloom.flower} color={bloom.color} onChange={(flower) => setBloom((b) => ({ ...defaultBloom(flower), fill: b.fill, open: b.open, size: b.size, petals: b.petals, seconds: b.seconds }))} />
+          <FlowerPicker value={bloom.flower} color={bloom.color} onChange={(flower) => setBloom((b) => ({ ...defaultBloom(flower), fill: b.fill, open: b.open, size: b.size, petals: b.petals, seconds: b.seconds, garden: b.garden, photo: b.photo, photos: b.photos }))} />
           <b className="small">{t('2. Photo or video that comes out')}</b>
         </>
       )}
@@ -105,8 +105,8 @@ export function RevealPanel({ ed, time, onAdded, onClose, importSource, initialT
           <Slider label="Shape size" min={0.2} max={1} step={0.01} value={size} format={(v) => `${Math.round(v * 100)}%`} onChange={setSize} />
           <RevealControls value={reveal} onChange={setReveal} />
         </>
-      ) : <BloomControls value={bloom} onChange={setBloom} />}
-      <button className="btn primary" disabled={!src} onClick={add}>{src ? (tab === 'bloom' && bloomLocked(bloom.flower) ? `🔒 ${t('Unlock with Pro')}` : t('Add at playhead')) : t('Pick the scene first')}</button>
+      ) : <BloomControls value={bloom} onChange={setBloom} photos={{ sources: ed.sources, importSource }} />}
+      <button className="btn primary" disabled={!src || (tab === 'bloom' && photosMissing(bloom))} onClick={add}>{tab === 'bloom' && photosMissing(bloom) ? t('Add the bud and fully open photos first') : src ? (tab === 'bloom' && bloomLocked(bloom.flower) ? `🔒 ${t('Unlock with Pro')}` : t('Add at playhead')) : t('Pick the scene first')}</button>
     </Panel>
   )
 }
