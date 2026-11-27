@@ -649,7 +649,7 @@ TOOLS.push({
 export const NOT_FOR_CHAT = new Set([
   'Add', 'Overlay', 'Paste track', 'Annotate', 'Select all', 'Add marker', 'Record voice', 'Scopes', 'Preview copies', 'Blur', 'Adjustment layer',
   'Freeze frame', 'Record screen', 'Record camera', 'Slides to video', 'Script to video', 'Mind map to video', 'Audio to video', 'Quiz to video',
-  'Data to video', 'Article to video',
+  'Data to video', 'Article to video', 'Deep Dive conversation to video',
 ])
 
 export const toolByName = (name: string) => TOOLS.find((t) => t.name === name) ?? null
