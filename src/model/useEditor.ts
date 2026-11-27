@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AdjustmentLayer, AudioLayer, BeatFx, Bloom, BlurLayer, Marker, Box, Clip, Layer, Lut, MainTrack, MediaLayer, MediaSource, Presenter, Project, ProjectSettings, ShapeMask, ShapeReveal, StickerLayer, TextLayer, Track, Watermark, WaveLayer } from '../types'
 import { MIN_CLIP } from '../types'
 import { useHistory } from '../lib/history'
+import { usedSources } from '../lib/relink'
 import { uid } from '../lib/format'
 import { clipSegments, defaultAdjust, gapAt, insertClipsAt, layerSpeed, layoutClips, moveClipTo, newClip, removeClipKeepGap, sourceAt } from './timeline'
 import { applySlideshow, type SlideshowOptions } from './slideshow'
@@ -129,6 +130,26 @@ export function useEditor(initial: Project) {
     sourcesRef.current = { ...sourcesRef.current, [s.id]: s }
     setSources(sourcesRef.current)
   }, [])
+
+  /** Files taken out of the project's media list; kept here so Undo can bring back an item that used one. */
+  const removed = useRef<Record<string, MediaSource>>({})
+  /** Takes a file out of the project's media list (pickers no longer show it; a saved project no longer keeps it). */
+  const removeSource = useCallback((id: string) => {
+    const s = sourcesRef.current[id]
+    if (!s) return
+    removed.current[id] = s
+    const rest = { ...sourcesRef.current }
+    delete rest[id]
+    sourcesRef.current = rest
+    setSources(rest)
+  }, [])
+  // an undo that brings back an item using a removed file brings the file back too
+  useEffect(() => {
+    const back = [...usedSources(project).keys()].filter((id) => !sourcesRef.current[id] && removed.current[id])
+    if (!back.length) return
+    sourcesRef.current = { ...sourcesRef.current, ...Object.fromEntries(back.map((id) => [id, removed.current[id]])) }
+    setSources(sourcesRef.current)
+  }, [project])
 
   /** Changes a clip; with all clips selected the look and sound part of the change goes to every clip. */
   const updateClip = useCallback((id: string, patch: Partial<Clip> | ((c: Clip) => Partial<Clip>)) => {
@@ -1045,10 +1066,10 @@ export function useEditor(initial: Project) {
   const replaceProject = useCallback((p: Project) => h.set(p), [h])
 
   return {
-    project, sources, layout, sel, setSel,
+    project, projectRef: ref, sources, layout, sel, setSel,
     canUndo: h.canUndo, canRedo: h.canRedo, undo: h.undo, redo: h.redo,
     begin, end, live: h.live,
-    addSource, splitClipAt, joinClips, breakApart, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter, addMarker, updateMarker, removeMarker,
+    addSource, removeSource, splitClipAt, joinClips, breakApart, place, addSplit, replaceMedia, freezeFrame, reverseClip, addSlides, setSlideshow, updateClip, updateAllClips, updateLayer, updateLayers, patchItems, setSettings, addLut, setWatermark, setPresenter, addMarker, updateMarker, removeMarker,
     addText, addSticker, addBlur, addAdjustment, addOverlay, addReveal, addBloom, addAudio, addWave, addLayer, detachAudio, addClone, setBeatFx,
     track, setTrack, addTrack, pasteTrack, updateTrack, moveTrack, reorderTrack, removeTrack, setMain, settleLayer, arrange,
     setNow, addKey, removeKey,

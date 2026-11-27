@@ -11,6 +11,7 @@ import { applyMask, drawEdge, revealAt } from './shapeMask'
 import { bloomMask, bloomOpening, drawBloomBack, drawBloomFront } from './bloom'
 import { gardenOn, gardenPhoto } from './garden'
 import { photoKey, photoOn, photoPlace, setPics, type PicImage } from './photoBloom'
+import { isReadyPhoto, loadReadyPhoto } from './readyFlowers'
 import { colorParams, type ColorParams } from './filters'
 import { Grader } from './gl'
 import { effectFrame } from './effects'
@@ -412,9 +413,9 @@ export class Renderer {
     let p = this.bloomPics.get(key)
     if (p) return p
     const ph = bl.photos!
-    const one = async (id: string | null | undefined) => (id && sources[id] ? ((await decodeImage(sources[id])) as PicImage) : null)
-    p = Promise.all([one(ph.bud), one(ph.half), one(ph.open), one(ph.full)]).then(([bud, half, open, full]) => {
-      if (bud && full) { setPics({ key, bud, half, open, full }); this.onNeedsRedraw?.() }
+    const one = async (id: string | null | undefined) => (isReadyPhoto(id) ? ((await loadReadyPhoto(id!)) as PicImage) : id && sources[id] ? ((await decodeImage(sources[id])) as PicImage) : null)
+    p = Promise.all([one(ph.bud), one(ph.half), one(ph.open), one(ph.full), one(ph.garden).catch(() => null)]).then(([bud, half, open, full, garden]) => {
+      if (bud && full) { setPics({ key, bud, half, open, full, garden }); this.onNeedsRedraw?.() }
       else this.bloomPics.delete(key) // a file is not loaded yet: try again later
     }).catch(() => { this.bloomPics.delete(key) })
     this.bloomPics.set(key, p)

@@ -408,7 +408,7 @@ export interface Bloom {
 }
 
 /** Cut-out flower photos (media file ids) for a real-photo bloom, from closed bud to fully open. */
-export interface BloomPhotos { bud: string; half?: string | null; open?: string | null; full: string }
+export interface BloomPhotos { bud: string; half?: string | null; open?: string | null; full: string; garden?: string | null }
 
 export interface BlurLayer extends LayerBase {
   type: 'blur'

@@ -1,5 +1,6 @@
 import type { MediaKind, MediaSource, Project } from '../types'
 import { layerSpeed } from '../model/timeline'
+import { isReadyPhoto } from '../engine/readyFlowers'
 
 /**
  * Missing media and relinking (Premiere's "Link media"). A project keeps its files in the app's storage; when the
@@ -28,7 +29,7 @@ type Use = { uses: number; need: number; where: Set<Missing['where'][number]>; a
 export function usedSources(p: Project): Map<string, Use> {
   const out = new Map<string, Use>()
   const add = (id: string | null | undefined, need: number, where: Missing['where'][number], audioOnly = false) => {
-    if (!id) return
+    if (!id || isReadyPhoto(id)) return // ready flower photos ship with the app
     const u = out.get(id) ?? { uses: 0, need: 0, where: new Set(), audioOnly: true }
     u.uses++
     u.need = Math.max(u.need, need)

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Bloom, BloomPhotos, MediaLayer, MediaSource } from '../types'
 import type { Editor } from '../model/useEditor'
+import { usedSources } from '../lib/relink'
 import { Chips, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { FLOWERS, bloomTimes, drawFlower, flowerInfo, type FlowerKind } from '../engine/bloom'
-import { bloomLocked, photosMissing } from '../model/bloom'
+import { bloomLocked, photosMissing, withFlower } from '../model/bloom'
+import { isReadyPhoto, readyPhotosOf, readyUrl, usesReadyPhotos } from '../engine/readyFlowers'
 import { cutFlower } from '../lib/flowerCut'
 import './bloom.css'
 
@@ -61,27 +63,42 @@ const SCENES: { value: Scene; label: string }[] = [
   { value: 'garden', label: '🌷 Flower garden, camera goes to one bud' }, { value: 'video', label: 'Only the flower, over my video' },
 ]
 
-/** What the real-photo bloom needs to add a photo: the loaded files and a way to add one to the project. */
-export interface PhotoTools { sources: Record<string, MediaSource>; importSource: (f: File) => Promise<MediaSource | null> }
+/** What the real-photo bloom needs to add a photo: the loaded files, a way to add one to the project and to take one out. */
+export interface PhotoTools {
+  sources: Record<string, MediaSource>
+  importSource: (f: File) => Promise<MediaSource | null>
+  /** Takes a cut-out the user removed out of the project, when nothing else uses it. */
+  forget?: (id: string) => void
+}
 
-const SLOTS: { key: keyof BloomPhotos; label: string; need?: boolean }[] = [
+const SLOTS: { key: 'bud' | 'half' | 'open' | 'full'; label: string; need?: boolean }[] = [
   { key: 'bud', label: 'Bud (closed)', need: true }, { key: 'half', label: 'Half open' },
   { key: 'open', label: 'Open' }, { key: 'full', label: 'Fully open', need: true },
 ]
+type SlotKey = (typeof SLOTS)[number]['key']
 
 /**
  * Four photo slots for a real-photo bloom, from the closed bud to the fully open flower. Each picked photo is cut
- * out on the device (the background goes, see lib/flowerCut.ts) and added to the project as a PNG.
+ * out on the device (the background goes, see lib/flowerCut.ts) and added to the project as a PNG. A flower with
+ * ready photos (the rose) starts with those; the user's own photo in any slot replaces them.
  */
 export function FlowerPhotos({ value, onChange, tools }: { value: Bloom; onChange: (b: Bloom) => void; tools: PhotoTools }) {
-  const [busy, setBusy] = useState<keyof BloomPhotos | null>(null)
+  const [busy, setBusy] = useState<SlotKey | null>(null)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
-  const slot = useRef<keyof BloomPhotos>('bud')
+  const slot = useRef<SlotKey>('bud')
   const ph = value.photos ?? null
-  const put = (k: keyof BloomPhotos, id: string | null) => {
-    const next = { bud: '', full: '', ...ph, [k]: id ?? (k === 'bud' || k === 'full' ? '' : null) } as BloomPhotos
-    onChange({ ...value, photo: true, garden: true, photos: next })
+  const ready = readyPhotosOf(value.flower)
+  const onReady = usesReadyPhotos(ph) && !!ph
+  const set = (next: BloomPhotos | null) => onChange({ ...value, photo: true, garden: true, photos: next })
+  const drop = (id: string | null | undefined) => { if (id && !isReadyPhoto(id)) tools.forget?.(id) }
+  const put = (k: SlotKey, id: string | null) => {
+    // the user's own photo replaces the ready ones (a set is one flower); the ready garden stays behind it
+    const base: Partial<BloomPhotos> = onReady && id ? { garden: ph?.garden ?? null } : { ...ph }
+    const old = ph?.[k]
+    const next = { bud: '', full: '', ...base, [k]: id ?? (k === 'bud' || k === 'full' ? '' : null) } as BloomPhotos
+    set(next)
+    if (old && old !== id) drop(old)
   }
   const pick = async (f: File) => {
     const k = slot.current
@@ -94,24 +111,38 @@ export function FlowerPhotos({ value, onChange, tools }: { value: Bloom; onChang
       setError(e instanceof Error ? t(e.message) : t('Could not cut out this photo'))
     } finally { setBusy(null) }
   }
+  const urlOf = (id: string | null | undefined) => (!id ? null : isReadyPhoto(id) ? readyUrl(id) : tools.sources[id]?.url ?? null)
+  const own = !!ph && !onReady && SLOTS.some((sl) => ph[sl.key])
   return (
     <div className="bloom-photos">
-      <p className="muted small">{t('Add photos of one real flower (your own photos): a closed bud, and the same kind fully open. Half open and open make the bloom smoother. A plain or blurred background works best; it is cut away on your device.')}</p>
+      {onReady
+        ? <p className="muted small">{t('Ready real flower photos are in. To use your own flower instead, tap a photo and pick yours.')}</p>
+        : <p className="muted small">{t('Add photos of one real flower (your own photos): a closed bud, and the same kind fully open. Half open and open make the bloom smoother. A plain or blurred background works best; it is cut away on your device.')}</p>}
       <div className="bloom-slots">
         {SLOTS.map((sl) => {
           const id = ph?.[sl.key]
-          const src = id ? tools.sources[id] : undefined
+          const url = urlOf(id)
           return (
-            <div key={sl.key} className={`bloom-slot${src ? ' has' : ''}`} data-slot={sl.key}>
+            <div key={sl.key} className={`bloom-slot${url ? ' has' : ''}`} data-slot={sl.key}>
               <button className="bloom-slot-pic" disabled={busy !== null} onClick={() => { slot.current = sl.key; input.current?.click() }} aria-label={t(sl.label)}>
-                {busy === sl.key ? <span className="small">{t('Cutting out…')}</span> : src ? <img src={src.url} alt="" /> : <span className="bloom-plus">+</span>}
+                {busy === sl.key ? <span className="small">{t('Cutting out…')}</span> : url ? <img src={url} alt="" /> : <span className="bloom-plus">+</span>}
               </button>
               <span className="small">{t(sl.label)}{sl.need ? ' *' : ''}</span>
-              {src && <button className="bloom-slot-x" onClick={() => put(sl.key, null)} aria-label={t('Remove')}>✕</button>}
+              {url && !onReady && <button className="bloom-slot-x" onClick={() => put(sl.key, null)} aria-label={t('Remove')} title={t('Remove')}>✕</button>}
             </div>
           )
         })}
       </div>
+      {own && (
+        <div className="bloom-photo-actions">
+          <button className="btn small" onClick={() => { SLOTS.forEach((sl) => drop(ph?.[sl.key])); set(ready ? { ...ready } : null) }}>
+            {ready ? `🌸 ${t('Back to the ready photos')}` : `🗑 ${t('Remove all my flower photos')}`}
+          </button>
+        </div>
+      )}
+      {!ph?.bud && !ph?.full && ready && !onReady && (
+        <button className="btn small" onClick={() => set({ ...ready })}>🌸 {t('Use the ready photos')}</button>
+      )}
       {error && <p className="small bloom-error">{error}</p>}
       {photosMissing(value) && <p className="muted small">* {t('Needed: the bud and the fully open flower.')}</p>}
       <input ref={input} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void pick(f) }} />
@@ -128,7 +159,7 @@ export function BloomControls({ value, onChange, begin, end, photos }: { value: 
   return (
     <>
       <p className="muted small">{t('Background')}</p>
-      <Chips options={scenes} value={scene} onChange={(s) => onChange({ ...b, garden: s !== 'video', photo: s === 'photo' })} wrap />
+      <Chips options={scenes} value={scene} onChange={(s) => onChange({ ...b, garden: s !== 'video', photo: s === 'photo', photos: s === 'photo' && !b.photos?.bud && !b.photos?.full ? (readyPhotosOf(b.flower) ?? b.photos) : b.photos })} wrap />
       {scene === 'photo' && photos && <FlowerPhotos value={b} onChange={onChange} tools={photos} />}
       {scene !== 'photo' && <p className="muted small">{t('Petal colour')}</p>}
       {scene !== 'photo' && <>
@@ -162,9 +193,15 @@ export function BloomEditPanel({ ed, layer, onClose, onLocked, importSource }: {
   }
   return (
     <Panel title="Flower bloom" onClose={onClose} tall>
-      <FlowerPicker value={b.flower} color={b.color} onChange={(flower) => set({ ...b, flower, color: null, wind: flower === 'sakura' && b.wind === 0 ? 0.4 : b.wind })} />
-      <BloomControls value={b} onChange={set} begin={ed.begin} end={ed.end} photos={importSource ? { sources: ed.sources, importSource } : undefined} />
+      <FlowerPicker value={b.flower} color={b.color} onChange={(flower) => set({ ...withFlower(b, flower), color: null, wind: flower === 'sakura' && b.wind === 0 ? 0.4 : b.wind })} />
+      <BloomControls value={b} onChange={set} begin={ed.begin} end={ed.end} photos={importSource ? { sources: ed.sources, importSource, forget: (id) => forgetUnused(ed, id) } : undefined} />
       <Toggle label="Flower bloom on" value onChange={() => ed.updateLayer<MediaLayer>(layer.id, { bloom: null })} />
     </Panel>
   )
+}
+
+/** Takes a removed flower cut-out out of the project's media, unless something in the project still uses it. */
+export function forgetUnused(ed: Editor, id: string) {
+  // the edit is committed first; check on the next tick against the project as it is then
+  setTimeout(() => { if (!usedSources(ed.projectRef.current).has(id)) ed.removeSource(id) }, 0)
 }

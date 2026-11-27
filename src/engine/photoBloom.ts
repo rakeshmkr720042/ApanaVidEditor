@@ -11,12 +11,12 @@ type Canvas = HTMLCanvasElement | OffscreenCanvas
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 export type PicImage = CanvasImageSource & { width: number; height: number }
 /** The decoded flower photos of a bloom (bud and full are needed, half and open are optional). */
-export interface Pics { key: string; bud: PicImage; half?: PicImage | null; open?: PicImage | null; full: PicImage }
+export interface Pics { key: string; bud: PicImage; half?: PicImage | null; open?: PicImage | null; full: PicImage; garden?: PicImage | null }
 
 // ---------- the user's photos, decoded by the renderer ----------
 /** True when this bloom is made from the user's own flower photos (bud and fully open are needed). */
 export const photoOn = (b: Bloom) => !!(b.photo && b.photos?.bud && b.photos.full)
-export const photoKey = (b: Bloom) => (b.photos ? [b.photos.bud, b.photos.half ?? '', b.photos.open ?? '', b.photos.full].join('|') : '')
+export const photoKey = (b: Bloom) => (b.photos ? [b.photos.bud, b.photos.half ?? '', b.photos.open ?? '', b.photos.full, b.photos.garden ?? ''].join('|') : '')
 let loaded: Pics[] = []
 /** The decoded photos of this bloom, or null while they are still loading. */
 export function picsOf(b: Bloom): Pics | null {
@@ -76,10 +76,12 @@ function headOf(img: PicImage): Head {
   // the head is the block of wide rows from the top; a stem or narrow leaves below it are not the head
   let top = rows.findIndex((r) => r.n > 0)
   if (top < 0) top = 0
+  // (a bud's pointed tip is narrow too: the head starts at the first wide row, it does not end at the tip;
+  // measuring only the tip made the bud's width tiny and the bud was drawn hugely, covering the screen)
   let base = top, best = 0, sumX = 0, cnt = 0
   for (let y = top; y < h; y++) {
     const r = rows[y]
-    if (r.n >= maxN * 0.35) { base = y; if (r.r - r.l > best) best = r.r - r.l; sumX += (r.l + r.r) / 2; cnt++ } else if (y > base + h * 0.06) break
+    if (r.n >= maxN * 0.35) { base = y; if (r.r - r.l > best) best = r.r - r.l; sumX += (r.l + r.r) / 2; cnt++ } else if (cnt > 0 && y > base + h * 0.06) break
   }
   const k = img.width / w
   const hd: Head = { cx: (cnt ? sumX / cnt : w / 2) * k, base: (base + 1) * k, width: Math.max(4, best * k), top: top * k }
@@ -151,10 +153,17 @@ function buildGarden(pics: Pics, W: number, H: number): Garden {
     bc.beginPath(); bc.ellipse(x, y, r, r * 0.8, 0, 0, Math.PI * 2); bc.fill()
   }
   bc.globalAlpha = 1
-  const back = blurred(bk, s * res * 0.5 * 0.035)
+  if (pics.garden) {
+    // a real garden photo behind everything (cover-fit), soft like a camera focused on the bud
+    const gw = pics.garden.width, gh = pics.garden.height
+    const k = Math.max(bk.width / gw, bk.height / gh)
+    bc.setTransform(1, 0, 0, 1, 0, 0)
+    bc.drawImage(pics.garden, (bk.width - gw * k) / 2, (bk.height - gh * k) / 2, gw * k, gh * k)
+  }
+  const back = blurred(bk, s * res * 0.5 * (pics.garden ? 0.022 : 0.035))
   const bkc = ctxOf(back)
   bkc.scale(res / 2, res / 2)
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < (pics.garden ? 0 : 22); i++) {
     const x = rnd(i, 5) * (W + 2 * m), y = (H + 2 * m) * 0.6 * rnd(i, 6), r = s * (0.02 + 0.04 * rnd(i, 7))
     const g = bkc.createRadialGradient(x, y, 0, x, y, r)
     const a = 0.08 + 0.16 * rnd(i, 8)
@@ -310,7 +319,8 @@ export function drawPhotoBack(c: Ctx, b: Bloom, pics: Pics, local: number, W: nu
   drawLight(c, W, H)
   drawHero(c, b, pics, local, cam, g, H)
   c.globalAlpha = alpha
-  drawLayer(c, g.fg, g, cam, 1.5, 1 - 0.7 * cam.p)
+  // the near soft flowers leave early, so they never cover the bud while the camera moves in
+  drawLayer(c, g.fg, g, cam, 1.5, 1 - sm(cam.p / 0.3))
   const gl = clamp01(1 - Math.abs(local - tm.emerge) / 0.6)
   if (gl > 0) {
     const h = photoHeart(b, pics, local, W, H)
