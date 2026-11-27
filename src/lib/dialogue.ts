@@ -14,20 +14,50 @@ export type SpeakerId = 'thomas' | 'maria' | 'daniel' | 'nancy'
 
 export interface Character {
   id: SpeakerId
-  name: string // as shown on the badge
+  name: string // as shown on the badge (Hindi lessons)
   role: string
+  nameEn: string // the same for English lessons
+  roleEn: string
   color: string
-  /** voice shaping on top of the one AI voice: playback-rate factor (<1 deeper, >1 higher) and a pause after each line */
+  /**
+   * voice shaping on top of the one AI voice: pitch factor (<1 deeper, >1 higher, the pace stays), pace factor
+   * (>1 faster) and the shortest pause after each line (longer lines and questions get more, see pauseAfter)
+   */
   pitch: number
+  tempo: number
   pause: number
 }
 
 export const CHARACTERS: Record<SpeakerId, Character> = {
-  thomas: { id: 'thomas', name: 'प्रो. थॉमस', role: 'वरिष्ठ प्रोफ़ेसर', color: '#2563eb', pitch: 0.9, pause: 0.35 },
-  maria: { id: 'maria', name: 'डॉ. मारिया', role: 'सहायक प्रोफ़ेसर', color: '#db2777', pitch: 1.06, pause: 0.3 },
-  daniel: { id: 'daniel', name: 'डैनियल', role: 'छात्र', color: '#16a34a', pitch: 0.98, pause: 0.25 },
-  nancy: { id: 'nancy', name: 'नैन्सी', role: 'छात्रा', color: '#ea580c', pitch: 1.14, pause: 0.25 },
+  thomas: { id: 'thomas', name: 'प्रो. थॉमस', role: 'वरिष्ठ प्रोफ़ेसर', nameEn: 'Prof. Thomas', roleEn: 'Senior professor', color: '#2563eb', pitch: 0.86, tempo: 0.94, pause: 0.35 },
+  maria: { id: 'maria', name: 'डॉ. मारिया', role: 'सहायक प्रोफ़ेसर', nameEn: 'Dr. Maria', roleEn: 'Assistant professor', color: '#db2777', pitch: 1.1, tempo: 1, pause: 0.3 },
+  daniel: { id: 'daniel', name: 'डैनियल', role: 'छात्र', nameEn: 'Daniel', roleEn: 'Student', color: '#16a34a', pitch: 0.97, tempo: 1.06, pause: 0.25 },
+  nancy: { id: 'nancy', name: 'नैन्सी', role: 'छात्रा', nameEn: 'Nancy', roleEn: 'Student', color: '#ea580c', pitch: 1.2, tempo: 1.04, pause: 0.25 },
 }
+
+export type LessonLang = 'hi' | 'en'
+export const nameOf = (c: Character, lang: LessonLang = 'hi') => (lang === 'en' ? c.nameEn : c.name)
+export const roleOf = (c: Character, lang: LessonLang = 'hi') => (lang === 'en' ? c.roleEn : c.role)
+
+/**
+ * Seconds of quiet after a line: a little more for long lines, more after a question (the listener thinks, the other
+ * person "hears" it) or an exclamation, less after a comma-like ending. Never more than 1.6 s.
+ */
+export function pauseAfter(line: string, base: number): number {
+  const s = line.trim()
+  const words = s.split(/\s+/).filter(Boolean).length
+  let p = base + Math.min(0.45, words * 0.012)
+  const end = s.replace(/["'”’)\]]+$/, '').slice(-1)
+  if (end === '?') p += 0.35
+  else if (end === '!') p += 0.2
+  else if (end === '…') p += 0.3
+  else if (end === ':') p += 0.2
+  else if (end === '।' || end === '.') p += 0.1
+  else if (end === ',' || end === ';') p -= 0.05
+  return Math.round(Math.min(1.6, Math.max(0.15, p)) * 100) / 100
+}
+/** Quiet after a Pause & Predict question is read: time to think before the answer card. */
+export const THINK_PAUSE = 2.5
 
 export interface Turn {
   id: number | string
@@ -37,12 +67,14 @@ export interface Turn {
   emotion?: string
   formula?: string | null
   branch?: string // the doubt question this turn belongs to
+  readFormula?: boolean // the voice also reads the board (lessons made from notes, where the line only points to it)
 }
 
 export interface Predict { after: number | string; q: string; options: string[]; answer: number; why: string[] }
 
 export interface Lesson {
   topic: string
+  lang?: LessonLang // 'hi' when left out
   turns: Turn[]
   predicts: Predict[]
   /** where each doubt branch goes in the main talk: id of the turn it follows */
@@ -100,6 +132,8 @@ const LET: Record<string, string> = {
 }
 const DIG = ['शून्य', 'एक', 'दो', 'तीन', 'चार', 'पाँच', 'छह', 'सात', 'आठ', 'नौ']
 const SUP: Record<string, string> = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' }
+const SUB: Record<string, string> = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' }
+const subscripts = (s: string) => s.replace(/[₀-₉]+/g, (m) => ` ${[...m].map((c) => SUB[c]).join('')} `)
 const SYMS: Record<string, string> = {
   Irms: 'आई आर एम एस', Iavg: 'आई एवरेज', Rsh: 'आर शंट', Pcu: 'पी सी यू', Ist: 'आई स्टार्ट', Eb: 'ई बी', Ia: 'आई ए', Ra: 'आर ए',
   Pm: 'पी एम', Td: 'टी डी', Tc: 'टी सी', Im: 'आई एम', Rm: 'आर एम', Rs: 'आर एस', NBAI: 'एन बी ए आई', PMMC: 'पी एम एम सी',
@@ -118,7 +152,11 @@ const sym = (tok: string) => SYMS[tok] ?? spell(tok)
 
 /** Turns formulas, symbols and units into words, so the voice does not skip or spell them wrongly. Hindi text stays as it is. */
 export function verbalize(text: string): string {
-  let s = text
+  // chemical formulas (CO₂, C₆H₁₂O₆): each element spelled, each count said
+  let s = text.replace(/(?<![A-Za-z])((?:[A-Z][a-z]?[₀-₉]*){1,8})(?![A-Za-z])/g, (m: string) =>
+    /[₀-₉]/.test(m) ? ` ${m.replace(/([A-Z][a-z]?)([₀-₉]*)/g, (_x, el: string, n: string) => ` ${spell(el)} ${[...n].map((c) => SUB[c]).join('')} `)} ` : m)
+  s = subscripts(s)
+  s = s.replace(/√\s*\(?([^\s)]+)\)?/g, ' $1 का वर्गमूल ').replace(/(?<=\d)³/g, ' का घन').replace(/\b([A-Za-z]{1,4})³/g, '$1 का घन')
   s = s.replace(/10([⁻⁺]?)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, (_m, sign: string, e: string) => {
     const n = [...e].map((c) => SUP[c]).join('')
     return `दस की घात ${sign === '⁻' ? 'ऋण ' : ''}${n.length === 1 ? DIG[+n] : n}`
@@ -134,7 +172,7 @@ export function verbalize(text: string): string {
     const [a, b] = m.split('.')
     return `${a === '0' ? 'शून्य' : a} दशमलव ${[...b].map((c) => DIG[+c]).join(' ')}`
   })
-  s = s.replace(/×/g, ' गुणा ').replace(/−/g, ' घटा ').replace(/≈/g, ' लगभग बराबर ').replace(/∝/g, ' समानुपाती ').replace(/=/g, ' बराबर ').replace(/·/g, ' ')
+  s = s.replace(/→|⟶|=>/g, ' से बनता है ').replace(/\+/g, ' धन ').replace(/×/g, ' गुणा ').replace(/−/g, ' घटा ').replace(/≈/g, ' लगभग बराबर ').replace(/∝/g, ' समानुपाती ').replace(/=/g, ' बराबर ').replace(/·/g, ' ')
   s = s.replace(/\s*\/\s*/g, ' भाग ')
   for (const [g, r] of Object.entries(GREEK)) s = s.split(g).join(` ${r} `)
   for (const k of Object.keys(SYMS).sort((a, b) => b.length - a.length)) {
@@ -166,13 +204,30 @@ function latinToHindi(s: string): string {
 }
 
 /** True when the line is already in spoken form (the "tts" copy of the file): nothing to convert. */
-export const isSpoken = (s: string) => !/[A-Za-z=×−≈∝°%⁰¹²³⁴⁵⁶⁷⁸⁹φθωπΔλ·]/.test(s)
+export const isSpoken = (s: string) => !/[A-Za-z=×−≈∝°%⁰¹²³⁴⁵⁶⁷⁸⁹₀-₉φθωπΔλ·+→√]/.test(s)
+
+/** The English voice's version of verbalize: symbols and powers in words, the rest left as written. */
+export function verbalizeEn(text: string): string {
+  let s = subscripts(text)
+  s = s.replace(/√\s*\(?([^\s)]+)\)?/g, ' the square root of $1 ')
+  s = s.replace(/10([⁻⁺]?)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, (_m, sign: string, e: string) => ` ten to the power ${sign === '⁻' ? 'minus ' : ''}${[...e].map((c) => SUP[c]).join('')} `)
+  s = s.replace(/²/g, ' squared ').replace(/³/g, ' cubed ')
+  s = s.replace(/[⁰¹⁴⁵⁶⁷⁸⁹]+/g, (m) => ` to the power ${[...m].map((c) => SUP[c]).join('')} `)
+  s = s.replace(/→|⟶|=>/g, ' gives ').replace(/≈/g, ' is about ').replace(/∝/g, ' is proportional to ').replace(/=/g, ' equals ')
+    .replace(/\+/g, ' plus ').replace(/×/g, ' times ').replace(/−/g, ' minus ').replace(/(?<=\s)-(?=\s)/g, ' minus ').replace(/·/g, ' ')
+    .replace(/(?<=\d)\s*\/\s*(?=\d)/g, ' over ').replace(/%/g, ' percent').replace(/°/g, ' degrees')
+  for (const [g, r] of Object.entries({ φ: 'phi', θ: 'theta', ω: 'omega', π: 'pi', Δ: 'delta', λ: 'lambda' })) s = s.split(g).join(` ${r} `)
+  return s.replace(/\s+/g, ' ').replace(/ ([,.?!])/g, '$1').trim()
+}
 
 // ------------------------------------------------------------ cards
 
 export interface DialogueCard {
   kind: 'say' | 'ask' | 'reveal' | 'title'
+  lang?: LessonLang
   speaker?: SpeakerId
+  /** with a step-by-step formula (lines split by a new line): how many of its lines are on the board so far */
+  step?: number
   title?: string // the topic, or the question
   text: string
   formula?: string | null
@@ -185,7 +240,15 @@ const SECTION: Record<string, string> = {
   hook: 'शुरुआत', prior: 'पहले से क्या जानें', concept: 'मूल बात', math: 'गणित', misconception: 'आम ग़लतफ़हमी',
   realworld: 'असली दुनिया', mistakes: 'ग़लतियाँ', exam: 'परीक्षा', recap: 'सार',
 }
-export const sectionLabel = (s?: string) => (s ? SECTION[s] ?? '' : '')
+const SECTION_EN: Record<string, string> = {
+  hook: 'Opening', prior: 'What to know first', concept: 'Key idea', math: 'Maths', misconception: 'Common mistake',
+  realworld: 'Real world', mistakes: 'Mistakes', exam: 'Exam', recap: 'Recap',
+}
+export const sectionLabel = (s?: string, lang: LessonLang = 'hi') => (s ? (lang === 'en' ? SECTION_EN : SECTION)[s] ?? '' : '')
+/** The lines of a formula board, top to bottom. */
+export const formulaSteps = (f?: string | null) => (f ?? '').split(/\n+/).map((x) => x.trim()).filter(Boolean)
+const WORDS_EN = { title: 'Deep Dive conversation', branch: 'Doubt', ask: 'Think first', answer: 'Answer', then: 'Then' }
+const WORDS_HI = { title: 'Deep Dive बातचीत', branch: 'सवाल पर बात', ask: 'पहले सोचो', answer: 'उत्तर', then: 'फिर' }
 
 const shorten = (s: string, n: number) => (s.length > n ? s.slice(0, n).replace(/\s+\S*$/, '') + '…' : s)
 
@@ -196,39 +259,64 @@ export interface Plan {
   text: string // what the captions show (as written)
   name: string
   speaker?: SpeakerId
+  pause: number // seconds of quiet after the voice
 }
 
 export interface PlanOptions { doubts: boolean; predicts: boolean }
 
 export function planLesson(l: Lesson, o: PlanOptions): Plan[] {
   const out: Plan[] = []
-  const spoken = (s: string) => (isSpoken(s) ? s : latinToHindi(verbalize(s)))
-  if (l.topic) out.push({ card: { kind: 'title', title: l.topic, text: 'Deep Dive बातचीत' }, say: spoken(l.topic), text: l.topic, name: shorten(l.topic, 40) })
+  const lang: LessonLang = l.lang ?? 'hi'
+  const W = lang === 'en' ? WORDS_EN : WORDS_HI
+  const spoken = (s: string) => (lang === 'en' ? verbalizeEn(s) : isSpoken(s) ? s : latinToHindi(verbalize(s)))
+  if (l.topic) out.push({ card: { kind: 'title', lang, title: l.topic, text: W.title }, say: spoken(l.topic), text: l.topic, name: shorten(l.topic, 40), pause: 0.6 })
   const add = (t: Turn) => {
     const c = CHARACTERS[t.speaker]
-    out.push({
-      card: { kind: 'say', speaker: t.speaker, text: t.line, formula: t.formula, tag: t.branch ? 'सवाल पर बात' : sectionLabel(t.section) },
-      say: spoken(t.line), text: t.line, name: `${t.id}. ${c.name}`, speaker: t.speaker,
+    const tag = t.branch ? W.branch : sectionLabel(t.section, lang)
+    const steps = formulaSteps(t.formula)
+    const name = `${t.id}. ${nameOf(c, lang)}`
+    if (steps.length < 2) {
+      const words = t.readFormula && steps.length ? `${t.line} ${steps[0]}` : t.line
+      out.push({ card: { kind: 'say', lang, speaker: t.speaker, text: t.line, formula: t.formula, tag }, say: spoken(words), text: words, name, speaker: t.speaker, pause: pauseAfter(t.line, c.pause) })
+      return
+    }
+    // a worked formula: the board fills one line at a time, each read out as it appears
+    steps.forEach((st, k) => {
+      const words = k === 0 ? `${t.line} ${st}` : `${W.then}, ${st}`
+      out.push({
+        card: { kind: 'say', lang, speaker: t.speaker, text: t.line, formula: t.formula, step: k + 1, tag },
+        say: spoken(words), text: k === 0 ? `${t.line} ${st}` : st, name: k === 0 ? name : `${name} (${k + 1})`, speaker: t.speaker,
+        pause: k === steps.length - 1 ? pauseAfter(t.line, c.pause) : 0.45,
+      })
     })
   }
   const same = (a: number | string, b: number | string) => String(a) === String(b)
   for (const t of l.turns) {
     add(t)
-    if (o.predicts) for (const p of l.predicts.filter((p) => same(p.after, t.id))) out.push(...predictPlans(p, spoken))
+    if (o.predicts) for (const p of l.predicts.filter((p) => same(p.after, t.id))) out.push(...predictPlans(p, spoken, lang))
     if (o.doubts) for (const b of l.branches.filter((b) => same(b.after, t.id))) b.turns.forEach(add)
   }
   return out
 }
 
-function predictPlans(p: Predict, spoken: (s: string) => string): Plan[] {
-  const letters = ['अ', 'ब', 'स', 'द']
-  const ask = `अब रुककर सोचिए। ${p.q} ${p.options.map((o, i) => `विकल्प ${letters[i] ?? i + 1}: ${o}`).join('। ')}।`
-  const right = p.options[p.answer]
+export const optionLetters = (lang: LessonLang = 'hi') => (lang === 'en' ? ['A', 'B', 'C', 'D'] : ['अ', 'ब', 'स', 'द'])
+
+const bare = (s: string) => s.replace(/[\s.।!]+$/, '')
+
+function predictPlans(p: Predict, spoken: (s: string) => string, lang: LessonLang): Plan[] {
+  const letters = optionLetters(lang)
+  const en = lang === 'en'
+  const opt = (i: number) => `${en ? 'option' : 'विकल्प'} ${letters[i] ?? i + 1}`
+  const ask = en
+    ? `Pause and think. ${p.q} ${p.options.map((o, i) => `${opt(i)}: ${bare(o)}`).join('. ')}.`
+    : `अब रुककर सोचिए। ${p.q} ${p.options.map((o, i) => `${opt(i)}: ${bare(o)}`).join('। ')}।`
+  const right = bare(p.options[p.answer])
   const why = p.why[p.answer] ?? ''
-  const reveal = `सही उत्तर है विकल्प ${letters[p.answer] ?? p.answer + 1}: ${right}। ${why}`
+  const reveal = en ? `The right answer is ${opt(p.answer)}: ${right}. ${why}` : `सही उत्तर है ${opt(p.answer)}: ${right}। ${why}`
+  const W = en ? WORDS_EN : WORDS_HI
   return [
-    { card: { kind: 'ask', title: p.q, text: p.q, options: p.options, tag: 'पहले सोचो' }, say: spoken(ask), text: p.q, name: `सोचो: ${shorten(p.q, 30)}` },
-    { card: { kind: 'reveal', title: p.q, text: why, options: p.options, answer: p.answer, tag: 'उत्तर' }, say: spoken(reveal), text: `${right}. ${why}`, name: `उत्तर: ${shorten(p.q, 30)}` },
+    { card: { kind: 'ask', lang, title: p.q, text: p.q, options: p.options, tag: W.ask }, say: spoken(ask), text: p.q, name: `${en ? 'Think' : 'सोचो'}: ${shorten(p.q, 30)}`, pause: THINK_PAUSE },
+    { card: { kind: 'reveal', lang, title: p.q, text: why, options: p.options, answer: p.answer, tag: W.answer }, say: spoken(reveal).trim(), text: why ? `${right}. ${why}` : right, name: `${W.answer}: ${shorten(p.q, 30)}`, pause: 0.6 },
   ]
 }
 
@@ -245,15 +333,47 @@ function wrapText(g: CanvasRenderingContext2D, text: string, width: number): str
   return lines
 }
 
-/** Draws one conversation card at W×H and returns it as a PNG. */
-export async function drawDialogueCard(card: DialogueCard, theme: CardTheme, W: number, H: number): Promise<Blob> {
-  const font = 'Noto Sans Devanagari'
-  await ensureFont(font)
-  const c = document.createElement('canvas')
-  c.width = W; c.height = H
-  const g = c.getContext('2d')!
+const FONT = 'Noto Sans Devanagari'
+
+/** Where the speaker's round badge sits on a W×H card (the same on every card, so a speaking avatar can be drawn over it). */
+export function avatarSpot(W: number, H: number) {
+  const u = Math.min(W, H)
+  const padX = W * (W > H ? 0.07 : 0.08)
+  const base = u * 0.05
+  const r = base * 0.85
+  return { x: padX + r, y: H * 0.07 + r, r, base }
+}
+
+/**
+ * The speaker's badge: a round initial. While they speak (`level` 0..1 from the voice), soft rings pulse round it
+ * with the sound, kept clear of the name and the words.
+ */
+export function paintAvatar(g: CanvasRenderingContext2D, card: DialogueCard, W: number, H: number, level: number | null) {
+  const sp = card.speaker ? CHARACTERS[card.speaker] : null
+  if (!sp) return
+  const { x, y, r } = avatarSpot(W, H)
+  if (level != null) {
+    for (let k = 2; k >= 1; k--) {
+      g.globalAlpha = (0.14 + level * 0.2) / k
+      g.fillStyle = sp.color
+      g.beginPath(); g.arc(x, y, r * (1 + k * (0.06 + level * 0.12)), 0, Math.PI * 2); g.fill()
+    }
+    g.globalAlpha = 1
+  }
+  g.fillStyle = sp.color
+  g.beginPath(); g.arc(x, y, r * (1 + (level ?? 0) * 0.05), 0, Math.PI * 2); g.fill()
+  g.fillStyle = '#ffffff'; g.font = `700 ${Math.round(r * 1.1)}px "${FONT}"`; g.textAlign = 'center'; g.textBaseline = 'top'
+  const name = nameOf(sp, card.lang).replace(/^(प्रो|डॉ|Prof|Dr)\.\s*/, '')
+  g.fillText([...name][0] ?? '', x, y - r * 0.58)
+  g.textAlign = 'left'
+}
+
+/** Draws one conversation card on `g` (W×H). The font must be ready (see drawDialogueCard). */
+export function paintDialogueCard(g: CanvasRenderingContext2D, card: DialogueCard, theme: CardTheme, W: number, H: number) {
+  const font = FONT
   const u = Math.min(W, H)
   const sp = card.speaker ? CHARACTERS[card.speaker] : null
+  const lang = card.lang ?? 'hi'
   const accent = sp?.color ?? theme.accent
 
   const grad = g.createLinearGradient(0, 0, W, H)
@@ -272,15 +392,12 @@ export async function drawDialogueCard(card: DialogueCard, theme: CardTheme, W: 
   // name badge: a round initial and the name
   if (sp) {
     const r = base * 0.85
-    g.fillStyle = sp.color
-    g.beginPath(); g.arc(padX + r, y + r, r, 0, Math.PI * 2); g.fill()
-    g.fillStyle = '#ffffff'; g.font = `700 ${Math.round(r * 1.1)}px "${font}"`; g.textAlign = 'center'
-    g.fillText([...sp.name.replace(/^(प्रो|डॉ)\.\s*/, '')][0] ?? '', padX + r, y + r * 0.42)
-    g.textAlign = 'left'
+    paintAvatar(g, card, W, H, null)
+    g.textBaseline = 'top'
     g.fillStyle = theme.title; g.font = `700 ${Math.round(base * 1.05)}px "${font}"`
-    g.fillText(sp.name, padX + r * 2.4, y + r * 0.05)
+    g.fillText(nameOf(sp, lang), padX + r * 2.4, y + r * 0.05)
     g.fillStyle = theme.text; g.font = `400 ${Math.round(base * 0.62)}px "${font}"`
-    g.fillText(sp.role, padX + r * 2.4, y + r * 1.15)
+    g.fillText(roleOf(sp, lang), padX + r * 2.4, y + r * 1.15)
     y += r * 2.6
   }
   if (card.tag) {
@@ -323,31 +440,37 @@ export async function drawDialogueCard(card: DialogueCard, theme: CardTheme, W: 
     g.font = `400 ${Math.round(k * 0.8)}px "${font}"`; g.fillStyle = theme.text
     g.fillText(card.text, W / 2, ty + k * 0.9)
   } else if (card.kind === 'say') {
-    // the formula, when there is one, sits on a board under the words
-    const formula = card.formula?.trim()
-    const k = fit([{ text: card.text, size: 1, weight: 500, color: theme.title }, ...(formula ? [{ text: formula, size: 1.1, weight: 700, color: accent }] : [])], formula ? 1.2 : 0.3, base * 1.15)
+    // the formula, when there is one, sits on a board under the words; a worked one fills in line by line
+    const steps = formulaSteps(card.formula)
+    const shown = card.step ? Math.min(steps.length, Math.max(1, card.step)) : steps.length
+    // sized for the full board, so the words do not jump while the lines come in
+    const k = fit([{ text: card.text, size: 1, weight: 500, color: theme.title }, ...steps.map((st) => ({ text: st, size: 1.1, weight: 700, color: accent }))], steps.length ? 1.2 : 0.3, base * 1.15)
     g.font = `500 ${Math.round(k)}px "${font}"`; g.fillStyle = theme.title
     for (const l of wrapText(g, card.text, boxW)) { g.fillText(l, padX, y); y += k * lh }
-    if (formula) {
+    if (steps.length) {
       y += k * 0.5
       g.font = `700 ${Math.round(k * 1.1)}px "${font}"`
-      const fl = wrapText(g, formula, boxW - k * 2)
-      const bh = fl.length * k * 1.1 * lh + k * 0.9
+      const wrapped = steps.map((st) => wrapText(g, st, boxW - k * 2))
+      const bh = wrapped.reduce((n, w) => n + w.length, 0) * k * 1.1 * lh + k * 0.9
       g.fillStyle = accent; g.globalAlpha = 0.12
       g.fillRect(padX, y, boxW, bh); g.globalAlpha = 1
       g.fillStyle = accent; g.fillRect(padX, y, Math.max(6, u * 0.008), bh)
-      g.fillStyle = theme.title
       let fy = y + k * 0.45
-      for (const l of fl) { g.fillText(l, padX + k, fy); fy += k * 1.1 * lh }
+      wrapped.forEach((lines, i) => {
+        if (i >= shown) return
+        // the newest line of a worked formula stands out
+        g.fillStyle = card.step && steps.length > 1 && i === shown - 1 ? accent : theme.title
+        for (const l of lines) { g.fillText(l, padX + k, fy); fy += k * 1.1 * lh }
+      })
     }
   } else {
     // a question with its four options; on the answer card the right one is lit
     const opts = card.options ?? []
-    const k = fit([{ text: card.title ?? '', size: 1, weight: 700, color: theme.title }, ...opts.map((o) => ({ text: `अ. ${o}`, size: 0.85, weight: 400, color: theme.text }))], 0.5, base * 1.05)
+    const labels = optionLetters(lang)
+    const k = fit([{ text: card.title ?? '', size: 1, weight: 700, color: theme.title }, ...opts.map((o) => ({ text: `${labels[0]}. ${o}`, size: 0.85, weight: 400, color: theme.text }))], 0.5, base * 1.05)
     g.font = `700 ${Math.round(k)}px "${font}"`; g.fillStyle = theme.title
     for (const l of wrapText(g, card.title ?? '', boxW)) { g.fillText(l, padX, y); y += k * lh }
     y += k * 0.4
-    const labels = ['अ', 'ब', 'स', 'द']
     opts.forEach((o, i) => {
       const right = card.kind === 'reveal' && i === card.answer
       const dim = card.kind === 'reveal' && !right
@@ -370,17 +493,46 @@ export async function drawDialogueCard(card: DialogueCard, theme: CardTheme, W: 
     }
   }
   g.textAlign = 'left'
+}
+
+/** Draws one conversation card at W×H and returns it as a PNG. */
+export async function drawDialogueCard(card: DialogueCard, theme: CardTheme, W: number, H: number): Promise<Blob> {
+  await ensureFont(FONT)
+  const c = document.createElement('canvas')
+  c.width = W; c.height = H
+  paintDialogueCard(c.getContext('2d')!, card, theme, W, H)
   return new Promise<Blob>((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not draw the card'))), 'image/png'))
 }
 
+/**
+ * A card whose speaker's badge moves with their voice: `level` holds the loudness `fps` times a second, starting
+ * `speechAt` seconds into the clip. Returns null where the device can't make video (the still card is used then).
+ */
+export async function renderTalkingCard(card: DialogueCard, theme: CardTheme, W: number, H: number, seconds: number, speechAt: number, level: Float32Array, fps = 15): Promise<{ blob: Blob; ext: string } | null> {
+  await ensureFont(FONT)
+  const still = document.createElement('canvas')
+  still.width = W; still.height = H
+  paintDialogueCard(still.getContext('2d')!, card, theme, W, H)
+  const { renderCanvasVideo } = await import('./canvasVideo')
+  const speechEnd = speechAt + level.length / fps
+  return renderCanvasVideo(W, H, seconds, [[speechAt, Math.min(seconds, speechEnd)]], (g, t) => {
+    g.drawImage(still, 0, 0)
+    const f = Math.floor((t - speechAt) * fps)
+    paintAvatar(g, card, W, H, f >= 0 && f < level.length ? level[f] : 0)
+  }, fps)
+}
+
 /** The whole lesson as scenes: a card each, with the spoken form kept apart from the caption text. */
-export async function lessonToScenes(l: Lesson, o: PlanOptions, theme: CardTheme, W: number, H: number, progress: (p: number) => void): Promise<Scene[]> {
+export async function lessonToScenes(l: Lesson, o: PlanOptions, theme: CardTheme, W: number, H: number, progress: (p: number) => void, talking = false): Promise<Scene[]> {
   const plans = planLesson(l, o)
   const scenes: Scene[] = []
   for (let i = 0; i < plans.length; i++) {
     progress(i / plans.length)
     const p = plans[i]
-    scenes.push({ id: uid(), image: await drawDialogueCard(p.card, theme, W, H), name: p.name, text: p.text, say: p.say, speaker: p.speaker, duration: null })
+    scenes.push({
+      id: uid(), image: await drawDialogueCard(p.card, theme, W, H), name: p.name, text: p.text, say: p.say, speaker: p.speaker, pause: p.pause, duration: null,
+      ...(talking && p.speaker ? { talk: { card: p.card, theme: theme.id } } : {}),
+    })
   }
   return scenes
 }

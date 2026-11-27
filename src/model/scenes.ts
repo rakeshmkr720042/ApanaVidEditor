@@ -22,6 +22,8 @@ export interface Scene {
   text: string // spoken by the AI voice and/or shown as captions
   say?: string // what the voice reads when it differs from `text` (formulas written out in words)
   speaker?: string // a conversation character (see lib/dialogue): the voice is shaped for them
+  pause?: number // seconds of quiet added after the voice (conversation lines: longer after questions and long lines)
+  talk?: { card: import('../lib/dialogue').DialogueCard; theme: string } // a conversation card whose speaker's badge moves with the voice
   duration: number | null // seconds on screen; null = automatic (voice length, or the default)
   card?: TextCard // when the image is a drawn text card: what is on it, so it can be redrawn
   mind?: MindScene // one step of a mind map: becomes an animated clip when the scenes are placed
@@ -71,7 +73,7 @@ export const defaultSceneOptions = (): SceneOptions => ({
 })
 
 const KB_SOFT = ['zoom-in', 'zoom-out'] as const
-const VOICE_LEAD = 0.3 // pause before a scene's voice starts
+export const VOICE_LEAD = 0.3 // pause before a scene's voice starts
 const VOICE_TAIL = 0.6 // pause after it ends
 
 /** Tidies extracted text into something a voice can read: no hyphen breaks, single spaces. */
