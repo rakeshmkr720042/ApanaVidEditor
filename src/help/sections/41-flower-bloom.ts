@@ -78,7 +78,7 @@ const section: HelpSection = {
         where: 'Flower bloom → Background → 📷 Real flower, from my photos',
         steps: [
           'Tap Flower bloom (with nothing selected), pick the photo that comes out (the Main track photo is already picked).',
-          'Rose, Lotus, Sakura and Marigold are ready to use: pick one and Background is already 📷 Real flower, with ready real photos of that flower in the boxes (Rose: bud, opening bud, half open, fully open, with a real rose garden behind; Lotus: bud, half open, fully open; Sakura: bud, half open, open, fully open; Marigold: bud, open, fully open). Just tap Add at playhead. Want your own flower? Read on.',
+          'All five flowers (Rose, Lotus, Sunflower, Sakura, Marigold) are ready to use: pick one and Background is already 📷 Real flower, with ready real photos of that flower in the boxes (Rose: bud, opening bud, half open, fully open, with a real rose garden behind; Lotus: bud, half open, fully open; Sunflower: bud, half open, fully open; Sakura: bud, half open, open, fully open; Marigold: bud, open, fully open). Just tap Add at playhead. Want your own flower? Read on.',
           'Under Background tap 📷 Real flower, from my photos. Four boxes show: Bud (closed) *, Half open, Open, Fully open *.',
           'Tap Bud (closed) and pick your photo of a closed bud. Wait a moment while "Cutting out…" shows: the background is taken away and the cut-out flower shows in the box.',
           'Tap Fully open and pick a photo of the same kind of flower fully open. Half open and Open are optional, but they make the opening smoother.',
@@ -103,7 +103,7 @@ const section: HelpSection = {
         where: 'फूल खिलना → पीछे क्या दिखे → 📷 असली फूल, मेरी फ़ोटो से',
         steps: [
           'कुछ न चुनकर "फूल खिलना" दबाएँ, जो फ़ोटो निकलनी है वो चुनें (मेन ट्रैक वाली पहले से चुनी होती है)।',
-          'गुलाब, कमल, साकुरा और गेंदा तैयार हैं: इनमें से कोई चुनते ही "पीछे क्या दिखे" में "📷 असली फूल" पहले से लगा होता है, और डिब्बों में उस फूल की असली तैयार फ़ोटो होती हैं (गुलाब: कली, खुलती कली, आधा खिला, पूरा खिला, पीछे असली गुलाब का बगीचा; कमल: कली, आधा खिला, पूरा खिला; साकुरा: कली, आधा खिला, खिला, पूरा खिला; गेंदा: कली, खिला, पूरा खिला)। बस "प्लेहेड पर जोड़ें" दबाएँ। अपना फूल लगाना है? आगे पढ़ें।',
+          'पाँचों फूल (गुलाब, कमल, सूरजमुखी, साकुरा, गेंदा) तैयार हैं: इनमें से कोई चुनते ही "पीछे क्या दिखे" में "📷 असली फूल" पहले से लगा होता है, और डिब्बों में उस फूल की असली तैयार फ़ोटो होती हैं (गुलाब: कली, खुलती कली, आधा खिला, पूरा खिला, पीछे असली गुलाब का बगीचा; कमल: कली, आधा खिला, पूरा खिला; सूरजमुखी: कली, आधा खिला, पूरा खिला; साकुरा: कली, आधा खिला, खिला, पूरा खिला; गेंदा: कली, खिला, पूरा खिला)। बस "प्लेहेड पर जोड़ें" दबाएँ। अपना फूल लगाना है? आगे पढ़ें।',
           '"पीछे क्या दिखे" में "📷 असली फूल, मेरी फ़ोटो से" दबाएँ। चार डिब्बे दिखेंगे: कली (बंद) *, आधा खिला, खिला, पूरा खिला *।',
           '"कली (बंद)" दबाएँ और बंद कली की फ़ोटो चुनें। "काट रहे हैं…" दिखे तब तक थोड़ा रुकें: बैकग्राउंड हट जाता है और कटा हुआ फूल डिब्बे में दिखता है।',
           '"पूरा खिला" दबाएँ और उसी तरह के पूरे खिले फूल की फ़ोटो चुनें। आधा खिला और खिला ज़रूरी नहीं, पर इनसे खिलना और स्मूथ लगता है।',

@@ -4,7 +4,7 @@ import type { BloomPhotos } from '../types'
  * Ready-made real flower photos that ship with the app (public/flowers/<flower>/), so a real-photo bloom works
  * without the user's own photos. A bloom points at them with ids like 'ready:rose:bud' instead of media file ids;
  * they are not project media (never missing, never copied into a project file).
- * The rose, lotus, sakura and marigold photos were made by the app's owner for the app.
+ * The photos of all five flowers were made by the app's owner for the app.
  */
 const PREFIX = 'ready:'
 export const isReadyPhoto = (id: string | null | undefined): boolean => !!id && id.startsWith(PREFIX)
@@ -20,6 +20,7 @@ export function readyUrl(id: string): string {
 export const READY_PHOTOS: Partial<Record<string, BloomPhotos>> = {
   rose: { bud: 'ready:rose:bud', half: 'ready:rose:half', open: 'ready:rose:open', full: 'ready:rose:full', garden: 'ready:rose:garden' },
   lotus: { bud: 'ready:lotus:bud', half: 'ready:lotus:half', open: null, full: 'ready:lotus:full' },
+  sunflower: { bud: 'ready:sunflower:bud', half: 'ready:sunflower:half', open: null, full: 'ready:sunflower:full' },
   sakura: { bud: 'ready:sakura:bud', half: 'ready:sakura:half', open: 'ready:sakura:open', full: 'ready:sakura:full' },
   marigold: { bud: 'ready:marigold:bud', half: null, open: 'ready:marigold:open', full: 'ready:marigold:full' },
 }
