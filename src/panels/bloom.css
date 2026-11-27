@@ -16,5 +16,12 @@
 .bloom-slot-pic { position: relative; }
 .bloom-slot-pic img { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); object-fit: contain; }
 .bloom-plus { font-size: 24px; opacity: 0.7; }
-.bloom-slot-x { position: absolute; top: -4px; right: -4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: #000c; color: #fff; font-size: 11px; line-height: 22px; padding: 0; }
+.bloom-slot-x { position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; background: #d33; color: #fff; font-size: 13px; line-height: 24px; padding: 0; box-shadow: 0 1px 4px #0008; }
 .bloom-error { color: #ff8a80; }
+
+.bloom-photo-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+/* scene picker chips with a remove button */
+.reveal-srcs .reveal-src { display: inline-flex; align-items: center; gap: 2px; }
+.reveal-srcs .reveal-src-x { padding: 0; width: 26px; height: 26px; border-radius: 50%; font-size: 12px; line-height: 24px; color: #ff8a8a; }
+.reveal-srcs .reveal-src-ask { display: inline-flex; gap: 4px; }
+.reveal-srcs .reveal-src-ask .danger { background: #d33; border-color: #d33; color: #fff; }

@@ -5,8 +5,9 @@ import { Chips, ColorRow, Panel, Slider, Toggle } from '../ui/kit'
 import { t } from '../lib/i18n'
 import { REVEAL_SHAPE_OPTIONS, defaultReveal } from '../model/reveal'
 import { bloomLength, defaultBloom } from '../engine/bloom'
-import { BloomControls, FlowerPicker } from './BloomPanel'
-import { bloomLocked, photosMissing } from '../model/bloom'
+import { BloomControls, FlowerPicker, forgetUnused } from './BloomPanel'
+import { bloomLocked, isFlowerCutout, photosMissing, withFlower } from '../model/bloom'
+import { usedSources } from '../lib/relink'
 import { activeAt, layoutClips } from '../model/timeline'
 
 type Style = 'fill' | 'stay' | 'close'
@@ -48,7 +49,11 @@ export function RevealPanel({ ed, time, onAdded, onClose, importSource, initialT
   const [shape, setShape] = useState<ShapeMask['shape']>('heart')
   const [reveal, setReveal] = useState<ShapeReveal>(() => defaultReveal('heart'))
   const [size, setSize] = useState(0.6)
-  const visual = Object.values(ed.sources).filter((s) => s.kind !== 'audio')
+  // flower cut-outs (and anything a bloom uses as a flower photo) are parts of a bloom, not a scene to show
+  const flowerIds = new Set(ed.project.layers.flatMap((l) => (l.type === 'media' && l.bloom?.photos ? Object.values(l.bloom.photos) : [])))
+  const visual = Object.values(ed.sources).filter((s) => s.kind !== 'audio' && !isFlowerCutout(s) && !flowerIds.has(s.id) && !Object.values(bloom.photos ?? {}).includes(s.id))
+  const used = usedSources(ed.project)
+  const [ask, setAsk] = useState<string | null>(null)
   // the photo / video on the main track at the playhead is the natural one to come out of the flower
   const setTab = (v: 'shapes' | 'bloom') => { setTab0(v); if (v === 'bloom' && !srcId && mainId) setSrcId(mainId) }
   const [mainId] = useState<string | null>(() => {
@@ -86,11 +91,26 @@ export function RevealPanel({ ed, time, onAdded, onClose, importSource, initialT
         <>
           <p className="muted small">{t('A flower garden fills the screen, the camera goes to one bud, it blooms, your photo comes out of its heart and fills the screen, and the petals fall on it.')}</p>
           <b className="small">{t('1. Flower')}</b>
-          <FlowerPicker value={bloom.flower} color={bloom.color} onChange={(flower) => setBloom((b) => ({ ...defaultBloom(flower), fill: b.fill, open: b.open, size: b.size, petals: b.petals, seconds: b.seconds, garden: b.garden, photo: b.photo, photos: b.photos }))} />
+          <FlowerPicker value={bloom.flower} color={bloom.color} onChange={(flower) => setBloom((b) => withFlower({ ...defaultBloom(flower), fill: b.fill, open: b.open, size: b.size, petals: b.petals, seconds: b.seconds, garden: b.garden, photo: b.photo, photos: b.photos }, flower))} />
           <b className="small">{t('2. Photo or video that comes out')}</b>
         </>
       )}
-      {visual.length > 0 && <Chips options={visual.map((s) => ({ value: s.id, label: s.id === mainId && tab === 'bloom' ? `⭐ ${t('Main track')}: ${name(s)}` : name(s) }))} value={srcId} onChange={setSrcId} wrap />}
+      {visual.length > 0 && (
+        <div className="chips wrap reveal-srcs">
+          {visual.map((s) => {
+            // a photo nothing in the project uses yet can be taken out of this list (and the project)
+            const free = !used.has(s.id) && s.id !== mainId
+            return (
+              <span key={s.id} className="reveal-src">
+                <button className={s.id === srcId ? 'on' : ''} onClick={() => setSrcId(s.id)}>{s.id === mainId && tab === 'bloom' ? `⭐ ${t('Main track')}: ${name(s)}` : name(s)}</button>
+                {free && (ask === s.id
+                  ? <span className="reveal-src-ask"><button className="danger" onClick={() => { setAsk(null); if (srcId === s.id) setSrcId(null); ed.removeSource(s.id) }}>{t('Remove')}</button><button onClick={() => setAsk(null)}>{t('Keep')}</button></span>
+                  : <button className="reveal-src-x" aria-label={`${t('Remove')} ${s.name}`} title={t('Remove')} onClick={() => setAsk(s.id)}>✕</button>)}
+              </span>
+            )
+          })}
+        </div>
+      )}
       <button className="btn small" disabled={busy} onClick={() => file.current?.click()}>{busy ? t('Adding…') : t('Pick a photo or video…')}</button>
       <input ref={file} type="file" accept="video/*,image/*" hidden onChange={async (e) => {
         const f = e.target.files?.[0]
@@ -105,7 +125,7 @@ export function RevealPanel({ ed, time, onAdded, onClose, importSource, initialT
           <Slider label="Shape size" min={0.2} max={1} step={0.01} value={size} format={(v) => `${Math.round(v * 100)}%`} onChange={setSize} />
           <RevealControls value={reveal} onChange={setReveal} />
         </>
-      ) : <BloomControls value={bloom} onChange={setBloom} photos={{ sources: ed.sources, importSource }} />}
+      ) : <BloomControls value={bloom} onChange={setBloom} photos={{ sources: ed.sources, importSource, forget: (id) => forgetUnused(ed, id) }} />}
       <button className="btn primary" disabled={!src || (tab === 'bloom' && photosMissing(bloom))} onClick={add}>{tab === 'bloom' && photosMissing(bloom) ? t('Add the bud and fully open photos first') : src ? (tab === 'bloom' && bloomLocked(bloom.flower) ? `🔒 ${t('Unlock with Pro')}` : t('Add at playhead')) : t('Pick the scene first')}</button>
     </Panel>
   )

@@ -142,6 +142,97 @@ function tint(r: number, g: number, b: number): [number, number, number] {
   return [r * k * 0.8 + l * 0.35, g * k * 0.8 + l * 0.35, b * k * 0.8 + l * 0.35]
 }
 
+/** Hue (0..360), saturation and value (0..1) of a colour. */
+function hsv(r: number, g: number, b: number): [number, number, number] {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn
+  let hh = 0
+  if (d > 0) hh = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return [hh * 60, mx ? d / mx : 0, mx / 255]
+}
+/** Leaves, stems and grass: greens and yellow-greens (never a petal of the flowers this works for). */
+const leafy = (r: number, g: number, b: number) => {
+  const [hh, sa, v] = hsv(r, g, b)
+  return (hh >= 62 && hh <= 175 && sa > 0.12) || (v < 0.1)
+}
+
+/**
+ * The flower by its own colour, for a real photo with a busy background (leaves, more flowers, the flower
+ * touching the edge): the petal colours are learned from the middle of the photo (leaves left out), the
+ * background colours from the edge (minus any that are the flower's own, when the flower fills the photo),
+ * and each pixel goes to the closer side; leaves and stems always count as background. Fills `m`, false when
+ * the middle of the photo holds too little flower colour to learn from (then the older edge-based cut is used).
+ */
+function petalMask(px: Uint8ClampedArray, w: number, h: number, m: Uint8Array): boolean {
+  const N = w * h
+  const step = Math.max(1, Math.round(Math.sqrt(N / 60000)))
+  const mid: number[] = []
+  const R2 = (Math.min(w, h) * 0.32) ** 2
+  let seen = 0
+  for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+    if ((x - w / 2) ** 2 + (y - h / 2) ** 2 > R2) continue
+    seen++
+    const i = (y * w + x) * 4
+    if (!leafy(px[i], px[i + 1], px[i + 2])) mid.push(...tint(px[i], px[i + 1], px[i + 2]))
+  }
+  if (mid.length / 3 < Math.max(80, seen * 0.15)) return false
+  const fg0 = groups(mid, 4)
+  const fg = bigGroups(fg0, 0.08)
+  const band = Math.max(2, Math.round(Math.min(w, h) * 0.04))
+  const edge: number[] = []
+  for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+    if (x >= band && x < w - band && y >= band && y < h - band) continue
+    const i = (y * w + x) * 4
+    edge.push(...tint(px[i], px[i + 1], px[i + 2]))
+  }
+  const bg0 = groups(edge, 6)
+  const bgL: number[] = []
+  for (let j = 0; j < bg0.c.length; j += 3) {
+    if (bg0.share[j / 3] < 0.02) continue
+    if (nearest(fg, bg0.c[j], bg0.c[j + 1], bg0.c[j + 2]).d < 22) continue // the flower itself reaching the edge
+    bgL.push(bg0.c[j], bg0.c[j + 1], bg0.c[j + 2])
+  }
+  const bg = bgL.length ? new Float32Array(bgL) : null
+  // how far a petal colour may be from the learned petal colours
+  const lim = 26 + fg0.spread * 1.4
+  for (let i = 0; i < N; i++) {
+    const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2]
+    if (leafy(r, g, b)) { m[i] = 0; continue }
+    const [tr, tg, tb] = tint(r, g, b)
+    const df = nearest(fg, tr, tg, tb).d
+    m[i] = df < lim && (!bg || df < nearest(bg, tr, tg, tb).d * 0.9) ? 1 : 0
+  }
+  return true
+}
+
+/** Keeps the biggest piece of the mask, counting pieces near the middle of the photo more (blurred far flowers go). */
+function biggestNearMiddle(m: Uint8Array, w: number, h: number): Uint8Array {
+  const lab = new Int32Array(m.length)
+  const stack = new Int32Array(m.length)
+  const diag = Math.hypot(w, h) / 2
+  let best = -1, bestScore = 0, next = 0
+  for (let s = 0; s < m.length; s++) {
+    if (!m[s] || lab[s]) continue
+    const id = ++next
+    let n = 0, area = 0, sx = 0, sy = 0
+    stack[n++] = s; lab[s] = id
+    while (n) {
+      const p = stack[--n]
+      const x = p % w, y = (p - x) / w
+      area++; sx += x; sy += y
+      if (x > 0 && m[p - 1] && !lab[p - 1]) { lab[p - 1] = id; stack[n++] = p - 1 }
+      if (x < w - 1 && m[p + 1] && !lab[p + 1]) { lab[p + 1] = id; stack[n++] = p + 1 }
+      if (y > 0 && m[p - w] && !lab[p - w]) { lab[p - w] = id; stack[n++] = p - w }
+      if (y < h - 1 && m[p + w] && !lab[p + w]) { lab[p + w] = id; stack[n++] = p + w }
+    }
+    const d = Math.hypot(sx / area - w / 2, sy / area - h / 2) / diag
+    const score = area * Math.pow(Math.max(0.05, 1 - d), 2)
+    if (score > bestScore) { bestScore = score; best = id }
+  }
+  const out = new Uint8Array(m.length)
+  if (best > 0) for (let i = 0; i < m.length; i++) out[i] = lab[i] === best ? 1 : 0
+  return out
+}
+
 /**
  * `strength` 0..1: how different from the background a colour must be to count as flower (0.5 is a good start;
  * lower keeps more, higher cuts more).
@@ -160,8 +251,11 @@ export async function cutFlower(file: Blob, strength = 0.5): Promise<FlowerCut> 
   let clear = 0, border = 0
   for (let x = 0; x < w; x += 4) { border += 2; if (px[x * 4 + 3] < 200) clear++; if (px[((h - 1) * w + x) * 4 + 3] < 200) clear++ }
   const m = new Uint8Array(N)
+  let byColour = false
   if (clear > border * 0.5) {
     for (let i = 0; i < N; i++) m[i] = px[i * 4 + 3] > 40 ? 1 : 0
+  } else if (petalMask(px, w, h, m)) {
+    byColour = true
   } else {
     // learn the background from a band round the edge: a few colour groups (a busy background has several)
     const band = Math.max(2, Math.round(Math.min(w, h) * 0.04))
@@ -217,7 +311,7 @@ export async function cutFlower(file: Blob, strength = 0.5): Promise<FlowerCut> 
   const r = Math.max(1, Math.round(Math.min(w, h) / 400))
   morph(m, w, h, r); morph(m, w, h, -r)
   morph(m, w, h, -r); morph(m, w, h, r)
-  const keep = keepJoined(m, w, h, ...middle(m, w, h))
+  const keep = byColour ? biggestNearMiddle(m, w, h) : keepJoined(m, w, h, ...middle(m, w, h))
   fillHoles(keep, w, h)
   // soft edge
   const a = canvas(w, h)

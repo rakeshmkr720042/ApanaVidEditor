@@ -24,4 +24,7 @@ export default {
   'No flower found in this photo. Try a photo with a plain background.': 'इस फ़ोटो में फूल नहीं मिला। सादे बैकग्राउंड वाली फ़ोटो आज़माएँ।',
   'Could not save the cut-out': 'कटी हुई फ़ोटो सेव नहीं हो सकी',
   'Add photos of one real flower (your own photos): a closed bud, and the same kind fully open. Half open and open make the bloom smoother. A plain or blurred background works best; it is cut away on your device.': 'एक असली फूल की फ़ोटो डालें (अपनी फ़ोटो): एक बंद कली, और उसी तरह का पूरा खिला फूल। आधा खिला और खिला डालने से खिलना और स्मूथ लगता है। सादा या धुंधला बैकग्राउंड सबसे अच्छा है; बैकग्राउंड आपके फ़ोन/कंप्यूटर पर ही हटाया जाता है।',
+  'Ready real flower photos are in. To use your own flower instead, tap a photo and pick yours.': 'असली फूल की तैयार फ़ोटो लगी हैं। अपना फूल लगाना हो तो किसी फ़ोटो पर टैप करके अपनी फ़ोटो चुनें।',
+  'Back to the ready photos': 'वापस तैयार फ़ोटो', 'Remove all my flower photos': 'मेरी सारी फूल फ़ोटो हटाएँ',
+  'Use the ready photos': 'तैयार फ़ोटो लगाएँ', 'Keep': 'रहने दें',
 } as Record<string, string>

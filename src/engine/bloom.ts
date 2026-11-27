@@ -1,6 +1,7 @@
 import type { Bloom, ShapeMask } from '../types'
 import { drawPetalSprite, drawRendered, flowersGL, renderFlowers } from './flowergl'
 import { drawGardenBack, gardenHeart, gardenOn, gardenTimes } from './garden'
+import { readyPhotosOf } from './readyFlowers'
 import { drawPhotoBack, drawPhotoPetal, photoHeart, photoOn, photoTimes, picsOf, type Pics } from './photoBloom'
 
 /**
@@ -21,9 +22,14 @@ export const FLOWERS: { value: FlowerKind; label: string; icon: string; color: s
 ]
 export const flowerInfo = (k: FlowerKind) => FLOWERS.find((f) => f.value === k) ?? FLOWERS[0]
 
-export const defaultBloom = (flower: FlowerKind = 'rose'): Bloom => ({
-  flower, color: null, open: 2, size: 0.62, fill: true, petals: 60, seconds: 4, wind: flower === 'sakura' ? 0.4 : 0, garden: true,
-})
+/** A new bloom; a flower with ready real photos (the rose) starts as a real-photo bloom with them. */
+export const defaultBloom = (flower: FlowerKind = 'rose'): Bloom => {
+  const ready = readyPhotosOf(flower)
+  return {
+    flower, color: null, open: 2, size: 0.62, fill: true, petals: 60, seconds: 4, wind: flower === 'sakura' ? 0.4 : 0, garden: true,
+    ...(ready ? { photo: true, photos: { ...ready } } : {}),
+  }
+}
 
 // ---------- small helpers ----------
 const clamp01 = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x)
