@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MediaSource } from '../types'
 import type { Editor } from '../model/useEditor'
-import { defaultSceneOptions, placeScenes, planOf, readingTime, sceneLengths, transitionLengths, type BuiltScene, type Scene, type SceneOptions } from '../model/scenes'
+import { VOICE_LEAD, defaultSceneOptions, placeScenes, planOf, readingTime, sceneLengths, transitionLengths, type BuiltScene, type Scene, type SceneOptions } from '../model/scenes'
 import { filesToScenes } from '../lib/sceneImport'
 import { CARD_THEMES, drawTextCard, parseScript, scriptToScenes, themeOf } from '../lib/scriptScenes'
 import { MAP_THEMES, drawMapPreview, drawMindStill, mindToScenes, node, parseOutline, renderMindVideo, tidy, toOutline, type MapSettings, type MindNode } from '../lib/mindmap'
+import { CHARACTERS, lessonToScenes, parseLesson, renderTalkingCard, type Lesson, type SpeakerId } from '../lib/dialogue'
+import { NOTE_TEMPLATES, notesLang, notesToLesson } from '../lib/notesDialogue'
+import { loudness, shapeBuffer } from '../engine/voiceshape'
 import { MindTree } from './MindTree'
 import { QuizEditor } from './QuizEditor'
 import {
@@ -39,6 +42,8 @@ import { articleKeyPoints, chapterPoints, findLocalAI, keyPoints, localAI, makeQ
 
 // remembered while the app is open, so the next deck starts with the same choices
 let memo: SceneOptions = defaultSceneOptions()
+let dialogueDraft = { tab: 'notes' as 'notes' | 'file', notes: '', text: '', lang: 'auto' as 'auto' | 'hi' | 'en', doubts: true, predicts: true, talk: false }
+const TALK_FPS = 15 // a speaking badge moves smoothly enough at this rate, and keeps phones quick
 let draft = '' // pasted script, kept if the sheet is closed before making scenes
 // the mind map being written, kept the same way
 let mapDraft = { tab: 'outline' as 'outline' | 'tree', outline: '', tree: node('', [node('')]), overview: true }
@@ -168,7 +173,7 @@ const waveColors = (look: AudioLook, theme: string): [string, string] => {
 const extOf = (b: Blob) => (b.type === 'image/png' ? 'png' : b.type === 'image/webp' ? 'webp' : b.type === 'image/gif' ? 'gif' : 'jpg')
 
 /** Slides, PDF pages, photos or a pasted script → scenes you can script and time → clips on the timeline. */
-export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article'; onClose: () => void; onDone: (msg: string) => void }) {
+export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start: 'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | 'dialogue'; onClose: () => void; onDone: (msg: string) => void }) {
   const [scenes, setScenes] = useState<Scene[]>([])
   // a new audio → video run starts with the waveform and captions on
   const [o, setO] = useState(() => (start === 'audio' && !memo.wave ? (memo = { ...memo, wave: 'bars', captions: true, theme: memo.theme === 'clean' ? 'dark' : memo.theme }) : memo))
@@ -203,6 +208,9 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const setDataDraft = (patch: Partial<typeof dataDraft>) => setDd((v) => (dataDraft = { ...v, ...patch }))
   const [ds, setDs] = useState(dataMemo)
   const dataPreview = useRef<HTMLCanvasElement>(null)
+  const [talking, setTalking] = useState(start === 'dialogue')
+  const [dg, setDg] = useState(dialogueDraft)
+  const setDialogue = (patch: Partial<typeof dialogueDraft>) => setDg((v) => (dialogueDraft = { ...v, ...patch }))
   const [reading, setReading] = useState(start === 'article')
   const [art, setArt] = useState(articleDraft)
   const setArticle = (patch: Partial<typeof articleDraft>) => setArt((v) => (articleDraft = { ...v, ...patch }))
@@ -293,6 +301,21 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const textScenes = (raw: string) => {
     const { w, h } = frame()
     return scriptToScenes(raw, themeOf(o.theme), w, h, (p) => setBusy({ label: t('Making scenes…'), p }))
+  }
+
+  const addDialogue = async () => {
+    setError(null)
+    try {
+      const lesson: Lesson = dg.tab === 'notes' ? notesToLesson(dg.notes, dg.lang === 'auto' ? notesLang(dg.notes) : dg.lang) : parseLesson(dg.text)
+      const { w, h } = frame()
+      const got = await lessonToScenes(lesson, { doubts: dg.doubts, predicts: dg.predicts }, themeOf(o.theme), w, h, (p) => setBusy({ label: t('Making scenes…'), p }), dg.talk)
+      setScenes((v) => [...v, ...got])
+      setTalking(false)
+      if (dg.tab === 'file') setDialogue({ text: '' })
+      // the card already shows the words: voice on, no captions on top of them
+      const lang = lesson.lang ?? 'hi'
+      if (!scenes.length) set({ voice: VOICES[lang] ? 'ai' : o.voice, lang: VOICES[lang] ? lang : o.lang, captions: false })
+    } catch (e) { setError(t((e as Error).message)) } finally { setBusy(null) }
   }
 
   const addScript = async () => {
@@ -820,7 +843,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
   const estimate = useMemo(() => {
     const fake = scenes.map((scene) => ({
       scene, source: null as unknown as MediaSource,
-      voice: speaking && scene.text.trim() ? ({ duration: scene.text.length / 14 } as MediaSource) : null,
+      voice: speaking && (scene.say ?? scene.text).trim() ? ({ duration: (scene.say ?? scene.text).length / 14 } as MediaSource) : null,
       voice2: speaking && scene.quiz?.say2.trim() ? ({ duration: scene.quiz.say2.length / 14 } as MediaSource) : null,
     }))
     return sceneLengths(fake, o, o.voice === 'track' ? track : null).reduce((a, b) => a + b, 0)
@@ -907,7 +930,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       for (let i = 0; i < scenes.length; i++) {
         setBusy({ label: t('Adding scenes…'), p: i / scenes.length })
         const s = scenes[i]
-        if (s.mind || s.quiz || s.data || s.media) { built.push({ scene: s, source: null as unknown as MediaSource, voice: null }); continue } // made below, once its length is known
+        if (s.mind || s.quiz || s.data || s.media || (s.talk && speaking)) { built.push({ scene: s, source: null as unknown as MediaSource, voice: null }); continue } // made below, once its length is known
         // a photo shown on several chapters is stored once
         let src = loaded.get(s.image)
         if (!src) {
@@ -918,21 +941,55 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
         }
         built.push({ scene: s, source: src, voice: null })
       }
+      const voiced = new Map<number, AudioBuffer>() // the shaped voice of each conversation line, for its speaking badge
       if (speaking) {
         setBusy({ label: t('Recording voice-over…'), p: 0 })
         // quiz answers are read in the same go, after the questions
-        const bufs = await speakLines([...scenes.map((s) => s.text), ...scenes.map((s) => s.quiz?.say2 ?? '')], o.lang, (stage, p) =>
+        const bufs = await speakLines([...scenes.map((s) => s.say ?? s.text), ...scenes.map((s) => s.quiz?.say2 ?? '')], o.lang, (stage, p) =>
           setBusy({ label: stage === 'download' ? t('Downloading AI model (first time only)') : t('Recording voice-over…'), p }))
         for (let k = 0; k < bufs.length; k++) {
-          const b = bufs[k]
-          if (!b) continue
           const i = k % scenes.length
           const second = k >= scenes.length
+          const who = scenes[i].speaker as SpeakerId | undefined
+          const ch = who ? CHARACTERS[who] : undefined
+          const raw = bufs[k]
+          // each conversation character gets a voice of their own (pitch and pace), then a pause that fits the line
+          const b = raw && !second && (ch || scenes[i].pause)
+            ? shapeBuffer(raw, ch?.pitch ?? 1, scenes[i].pause ?? ch?.pause ?? 0, ch?.tempo ?? 1)
+            : raw
+          if (!b) continue
+          if (!second && scenes[i].talk) voiced.set(i, b)
           const src = await loadSource(encodeWav(b), `${scenes[i].name} ${t(second ? 'Answer' : 'Voice-over')}.wav`)
           ed.addSource(src)
           await saveMedia(src)
           if (second) built[i].voice2 = src
           else built[i].voice = src
+        }
+      }
+      const talks = built.filter((b) => b.scene.talk && !b.source)
+      if (talks.length) {
+        // conversation lines with a speaking badge: the still card, with the badge moving while the voice plays
+        const lens = sceneLengths(built, o, o.voice === 'track' ? track : null)
+        const trs = transitionLengths(lens, o)
+        const last = ed.project.clips[ed.project.clips.length - 1]
+        const firstIn = last?.transition ? Math.max(0, Math.min(last.transition.duration, clipDuration(last) / 2, (lens[0] + trs[0]) / 2)) : 0
+        const { w, h } = frame()
+        for (let k = 0; k < talks.length; k++) {
+          setBusy({ label: t('Animating the speakers…'), p: k / talks.length })
+          const b = talks[k]
+          const i = built.indexOf(b)
+          const buf = voiced.get(i)
+          const offset = i === 0 ? firstIn : trs[i - 1]
+          const video = buf
+            ? await renderTalkingCard(b.scene.talk!.card, themeOf(b.scene.talk!.theme), w, h, offset + lens[i] + trs[i] + QUIZ_SLACK, offset + VOICE_LEAD,
+              loudness(buf.getChannelData(0), buf.sampleRate, TALK_FPS), TALK_FPS).catch(() => null)
+            : null
+          const src = video
+            ? await loadSource(video.blob, `${b.scene.name}.${video.ext}`)
+            : await loadSource(b.scene.image, `${b.scene.name}.png`)
+          ed.addSource(src)
+          await saveMedia(src)
+          b.source = src
         }
       }
       const maps = built.filter((b) => b.scene.mind)
@@ -1047,8 +1104,10 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
       <div className="sheet scene-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grab" />
         <SheetClose onClose={onClose} disabled={!!busy} />
-        <h2>{t(start === 'article' ? 'Article to video' : start === 'data' ? 'Data to video' : start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
-        <p className="muted small">{t(start === 'article'
+        <h2>{t(start === 'dialogue' ? 'Deep Dive conversation to video' : start === 'article' ? 'Article to video' : start === 'data' ? 'Data to video' : start === 'quiz' ? 'Quiz to video' : start === 'audio' ? 'Audio to video' : start === 'mindmap' ? 'Mind map to video' : start === 'text' ? 'Script to video' : 'Slides to video')} {scenes.length > 0 && <span className="muted small">{scenes.length} {t('scenes')} · ~{fmtTime(estimate)}</span>}</h2>
+        <p className="muted small">{t(start === 'dialogue'
+          ? 'Paste your notes (or pick a ready lesson, or open a Deep Dive .json): they become a talk between a professor, an assistant professor and two students. Every line becomes a scene with the speaker\'s name, in their own voice.'
+          : start === 'article'
           ? 'Paste the link of a blog post or news article. Its headline, sections and pictures become scenes, read by the voice.'
           : start === 'data'
           ? 'Paste a table from a spreadsheet, CSV, or lines like "Delhi: 42". It becomes a chart whose bars, points or rows come in one by one with the voice.'
@@ -1068,6 +1127,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           <button className={`btn${listening ? ' on' : ''}`} disabled={!!busy} onClick={() => setListening((v) => !v)}>{t('Audio')}</button>
           <button className={`btn${quizzing ? ' on' : ''}`} disabled={!!busy} onClick={() => setQuizzing((v) => !v)}>{t('Quiz')}</button>
           <button className={`btn${charting ? ' on' : ''}`} disabled={!!busy} onClick={() => setCharting((v) => !v)}>{t('Data')}</button>
+          <button className={`btn${talking ? ' on' : ''}`} disabled={!!busy} onClick={() => setTalking((v) => !v)}>{t('Conversation')}</button>
           <button className={`btn${reading ? ' on' : ''}`} disabled={!!busy} onClick={() => setReading((v) => !v)}>{t('Article')}</button>
           {scenes.length > 0 && <button className="btn" disabled={!!busy} onClick={() => setScenes([])}>{t('Clear')}</button>}
         </div>
@@ -1082,6 +1142,38 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
             {aiTools('script', script)}
             {material('script', 'text')}
             <button className="btn primary" disabled={!!busy || !script.trim()} onClick={addScript}>{t('Make scenes')}</button>
+          </div>
+        )}
+
+        {talking && (
+          <div className="script-box">
+            <Step n={1} title="Conversation" hint={dg.tab === 'notes' ? 'paste notes or an article, or start from a ready lesson' : 'open the lesson .json file, or paste it'} />
+            <Chips options={[{ value: 'notes', label: 'From notes' }, { value: 'file', label: 'Lesson file (.json)' }]} value={dg.tab} onChange={(tab) => setDialogue({ tab })} />
+            {dg.tab === 'notes' ? (
+              <>
+                <span className="field-label">{t('Ready lessons')}</span>
+                <div className="row wrap dd-templates">
+                  {NOTE_TEMPLATES.map((x) => (
+                    <button key={x.id} className="btn small" disabled={!!busy} onClick={() => setDialogue({ notes: x.text })}>{t(x.label)}</button>
+                  ))}
+                  <button className="btn small" disabled={!!busy} onClick={() => openText((notes) => setDialogue({ notes }))}>{t('Open file')} (.txt, .md)</button>
+                </div>
+                <textarea className="text-input" rows={9} value={dg.notes} placeholder={t('# Topic\n## Heading\nTerm: what it means\n- a point\n- another point\na² + b² = c²')} onChange={(e) => setDialogue({ notes: e.target.value })} />
+                <p className="muted small">{t('Headings become questions from the students, "Term: meaning" lines are asked and answered, lists give Pause & Predict questions, and lines with = go on the formula board one step at a time.')}</p>
+                <span className="field-label">{t('Language')}</span>
+                <Chips options={[{ value: 'auto', label: 'Auto' }, { value: 'hi', label: 'हिंदी' }, { value: 'en', label: 'English' }]} value={dg.lang} onChange={(lang) => setDialogue({ lang })} />
+              </>
+            ) : (
+              <>
+                <div className="row"><button className="btn small" disabled={!!busy} onClick={() => openText((text) => setDialogue({ text }))}>{t('Open file')} (.json)</button></div>
+                <textarea className="text-input" rows={7} value={dg.text} placeholder='{ "meta": {...}, "dialogue": [ { "id": 1, "speaker": "thomas", "line": "..." } ], "pause_and_predict": [...] }' onChange={(e) => setDialogue({ text: e.target.value })} />
+                <Toggle label="Include doubt branches (extra questions from the students)" value={dg.doubts} onChange={(doubts) => setDialogue({ doubts })} />
+              </>
+            )}
+            <Toggle label="Pause & Predict questions (question card, then the answer)" value={dg.predicts} onChange={(predicts) => setDialogue({ predicts })} />
+            <Toggle label="Speaking badge moves with the voice (takes longer to make)" value={dg.talk} onChange={(talk) => setDialogue({ talk })} />
+            <p className="muted small">{t('Each person gets a voice of their own from the one AI voice: higher or deeper, faster or slower. Pauses follow the line: longer after questions. Formulas are read out in words.')}</p>
+            <button className="btn primary" disabled={!!busy || !(dg.tab === 'notes' ? dg.notes : dg.text).trim()} onClick={addDialogue}>{t('Make scenes')}</button>
           </div>
         )}
 
@@ -1380,7 +1472,7 @@ export function SceneBuilder({ ed, start, onClose, onDone }: { ed: Editor; start
           onChange={(e) => { const f = e.target.files?.[0]; if (f) setAudio({ cover: f, look: 'cover' }); e.target.value = '' }} />
         <input ref={csvInput} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((text) => setDataDraft({ tab: 'text', text })); e.target.value = '' }} />
-        <input ref={textInput} type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" hidden
+        <input ref={textInput} type="file" accept=".txt,.md,.markdown,.json,text/plain,text/markdown,application/json" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((text) => textFor.current(text)); e.target.value = '' }} />
         <input ref={swapInput} type="file" accept={RAW_ACCEPT} hidden onChange={(e) => { if (e.target.files) void swapPicture([...e.target.files]); e.target.value = '' }} />
       </div>
