@@ -186,7 +186,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
   const [importing, setImporting] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [scenes, showScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | null>(null)
+  const [scenes, showScenes] = useState<'files' | 'text' | 'mindmap' | 'audio' | 'quiz' | 'data' | 'article' | 'dialogue' | null>(null)
   const setScenes = (v: typeof scenes) => { if (v && !isAllowed('scenes')) setPaywall('scenes'); else showScenes(v) }
   const [audioTab, setAudioTab] = useState<'mine' | 'voice'>('mine')
   const [screenRec, setScreenRec] = useState<'screen' | 'camera' | null>(null)
@@ -1160,6 +1160,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
       { icon: 'podcast', label: 'Audio to video', on: () => { player?.pause(); setScenes('audio') } },
       { icon: 'quiz', label: 'Quiz to video', on: () => { player?.pause(); setScenes('quiz') } },
       { icon: 'chart', label: 'Data to video', on: () => { player?.pause(); setScenes('data') } },
+      { icon: 'podcast', label: 'Deep Dive conversation to video', on: () => { player?.pause(); setScenes('dialogue') } },
       { icon: 'article', label: 'Article to video', on: () => { player?.pause(); setScenes('article') } },
     ]
   }
@@ -1410,6 +1411,7 @@ function EditorView({ initial, onBack }: { initial: Loaded; onBack: () => void }
               <button className="btn" onClick={() => setScenes('audio')}><Icon name="podcast" size={18} /> {t('Audio to video')}</button>
               <button className="btn" onClick={() => setScenes('quiz')}><Icon name="quiz" size={18} /> {t('Quiz to video')}</button>
               <button className="btn" onClick={() => setScenes('data')}><Icon name="chart" size={18} /> {t('Data to video')}</button>
+              <button className="btn" onClick={() => setScenes('dialogue')}><Icon name="podcast" size={18} /> {t('Deep Dive conversation to video')}</button>
               <button className="btn" onClick={() => setScenes('article')}><Icon name="article" size={18} /> {t('Article to video')}</button>
               <button className="btn" onClick={() => setScreenRec('screen')}><Icon name="screen" size={18} /> {t('Record screen')}</button>
               <button className="btn" onClick={() => setScreenRec('camera')}><Icon name="camera" size={18} /> {t('Record camera')}</button>

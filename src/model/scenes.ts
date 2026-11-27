@@ -20,6 +20,8 @@ export interface Scene {
   image: Blob // what is shown (a photo, a rendered PDF page or slide, a text card)
   name: string
   text: string // spoken by the AI voice and/or shown as captions
+  say?: string // what the voice reads when it differs from `text` (formulas written out in words)
+  speaker?: string // a conversation character (see lib/dialogue): the voice is shaped for them
   duration: number | null // seconds on screen; null = automatic (voice length, or the default)
   card?: TextCard // when the image is a drawn text card: what is on it, so it can be redrawn
   mind?: MindScene // one step of a mind map: becomes an animated clip when the scenes are placed
