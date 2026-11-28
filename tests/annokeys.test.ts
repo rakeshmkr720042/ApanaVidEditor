@@ -3,8 +3,8 @@ import './_env'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 // @ts-expect-error plain JS module of the Windows app
-import { hotkeyList, hotkeyTexts, registerHotkeys } from '../electron/annokeys.js'
-import { keysFor, modeForKey } from '../src/lib/annokeys'
+import { hotkeyList, hotkeyTexts, minimizeList, registerHotkeys, registerMinimize } from '../electron/annokeys.js'
+import { isMinimizeKey, keysFor, minimizeKeysFor, modeForKey } from '../src/lib/annokeys'
 
 const key = (k: string, o: { ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean } = {}) => ({
   key: k, code: /^[a-z]$/i.test(k) ? `Key${k.toUpperCase()}` : k, ctrlKey: !!o.ctrl, altKey: !!o.alt, shiftKey: !!o.shift, metaKey: !!o.meta,
@@ -64,4 +64,43 @@ test('annokeys: the recording window shows the chosen keys', () => {
   assert.equal(keysFor('both').hide, 'Alt+Shift+H / Ctrl+Shift+H')
   assert.equal(keysFor('alt').zoom, 'Alt+Shift+Z')
   assert.equal(keysFor('ctrl').draw, 'Ctrl+Shift+D')
+})
+
+test('annokeys: Alt+Shift+M / Ctrl+Shift+M minimize the recording window, following the chosen style', () => {
+  assert.deepEqual(minimizeList('both'), ['Alt+Shift+M', 'Ctrl+Shift+M'])
+  assert.deepEqual(minimizeList(undefined), ['Alt+Shift+M', 'Ctrl+Shift+M'])
+  assert.deepEqual(minimizeList('alt'), ['Alt+Shift+M'])
+  assert.deepEqual(minimizeList('ctrl'), ['Ctrl+Shift+M'])
+  // the minimize keys never clash with the annotate mode keys, and are not shown as pressed keys
+  const modes = hotkeyList('both').map(([, a]: [string, string]) => a)
+  for (const acc of minimizeList('both')) { assert.ok(!modes.includes(acc)); assert.ok(hotkeyTexts().has(acc)) }
+  assert.equal(minimizeKeysFor('both'), 'Alt+Shift+M / Ctrl+Shift+M')
+  assert.equal(minimizeKeysFor('ctrl'), 'Ctrl+Shift+M')
+})
+
+test('annokeys: a minimize key another app holds is reported, the other still works', () => {
+  let pressed = 0
+  const fns = new Map<string, () => void>()
+  const r = registerMinimize('both', (acc: string, fn: () => void) => { if (acc === 'Ctrl+Shift+M') return false; fns.set(acc, fn); return true }, () => pressed++)
+  assert.equal(r.keys, 'Alt+Shift+M')
+  assert.deepEqual(r.failed, ['Ctrl+Shift+M'])
+  fns.get('Alt+Shift+M')!()
+  assert.equal(pressed, 1)
+  const none = registerMinimize('alt', () => { throw new Error('x') }, () => {})
+  assert.equal(none.keys, '')
+  assert.deepEqual(none.failed, ['Alt+Shift+M'])
+})
+
+test('annokeys: minimize key pressed inside the app', () => {
+  assert.ok(isMinimizeKey(key('m', { ctrl: true, shift: true }), 'both'))
+  assert.ok(isMinimizeKey(key('M', { alt: true, shift: true }), 'both'))
+  assert.ok(!isMinimizeKey(key('m', { ctrl: true, shift: true }), 'alt'))
+  assert.ok(!isMinimizeKey(key('m', { alt: true, shift: true }), 'ctrl'))
+  assert.ok(!isMinimizeKey(key('m', { shift: true }), 'both')) // Shift+M stays "add marker"
+  assert.ok(!isMinimizeKey(key('m', { ctrl: true, alt: true, shift: true }), 'both'))
+  assert.ok(!isMinimizeKey(key('d', { ctrl: true, shift: true }), 'both'))
+  // Hindi keyboard: e.key is not the letter, the physical key is
+  assert.ok(isMinimizeKey({ key: 'म', code: 'KeyM', ctrlKey: true, altKey: false, shiftKey: true, metaKey: false }, 'both'))
+  // the annotate mode keys do not see M
+  assert.equal(modeForKey(key('m', { ctrl: true, shift: true }), 'both'), null)
 })

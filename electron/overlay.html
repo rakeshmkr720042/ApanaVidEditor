@@ -8,14 +8,24 @@
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; font: 13px "Segoe UI", system-ui, sans-serif; color: #fff; user-select: none; }
   canvas { position: fixed; inset: 0; }
   body.drawing { cursor: crosshair; background: rgba(0, 0, 0, 0.01); }
-  #bar { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); display: none; gap: 4px; align-items: center; padding: 6px 8px; border-radius: 12px; background: rgba(20, 20, 26, 0.92); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4); }
+  /* the draw bar: dragged by its grip anywhere on the screen (remembered), "–" folds it to a small pill */
+  #bar { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); display: none; gap: 4px; align-items: center; padding: 6px 8px; border-radius: 12px; background: rgba(20, 20, 26, 0.92); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4); }
+  #bar.placed { transform: none; bottom: auto; }
+  #bar .grip { cursor: grab; padding: 6px 4px; opacity: 0.7; letter-spacing: -2px; }
+  #bar.dragging .grip { cursor: grabbing; }
+  #bar.mini .tool, #bar.mini .sw, #bar.mini .sep, #bar.mini .hint { display: none; }
+  #bar .hint { opacity: 0.6; font-size: 11px; padding: 0 4px; }
   body.drawing #bar { display: flex; }
   #bar button { border: 0; border-radius: 8px; padding: 6px 9px; background: transparent; color: #fff; font: inherit; cursor: pointer; }
   #bar button.on { background: #ff3b30; }
   #bar .sw { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
   #bar .sw.on { border-color: #fff; background: inherit; }
   #bar .sep { width: 1px; height: 22px; background: rgba(255, 255, 255, 0.2); margin: 0 4px; }
-  #chip { position: fixed; top: 10px; right: 12px; padding: 5px 10px; border-radius: 999px; background: rgba(20, 20, 26, 0.85); transition: opacity 0.4s; }
+  /* the status chip: bottom of the screen (above the taskbar), never the top-right corner where – ▢ ✕ are */
+  #chip { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); padding: 4px 10px; font-size: 12px; border-radius: 999px; background: rgba(20, 20, 26, 0.85); transition: opacity 0.4s; white-space: nowrap; pointer-events: none; }
+  body.chip-bottom-left #chip { left: 12px; transform: none; }
+  body.chip-bottom-right #chip { left: auto; right: 12px; transform: none; }
+  body.chip-off #chip, body.drawing #chip { display: none; }
   #chip b { color: #ffd60a; }
 </style>
 </head>

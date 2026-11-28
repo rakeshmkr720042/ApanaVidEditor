@@ -57,7 +57,7 @@ const section: HelpSection = {
       isNew: true,
       platforms: ['windows'],
       keywords: ['laser', 'spotlight', 'zoom', 'hotkey', 'shortcut', 'alt shift', 'ctrl shift', 'hotkey not working', 'draw on screen', 'pen'],
-      related: ['annotate-record'],
+      related: ['annotate-record', 'annotate-out-of-way'],
       en: {
         title: 'Hotkeys while recording: draw, laser, spotlight, zoom',
         what: 'These keys work while a recording with Smart annotate is running, even when another app is in front. Both Alt+Shift and Ctrl+Shift work (for example Alt+Shift+H or Ctrl+Shift+H). The same buttons are in the recording window.',
@@ -81,6 +81,46 @@ const section: HelpSection = {
           'Alt+Shift+H या Ctrl+Shift+H: कुछ देर के लिए सारे इफ़ेक्ट छिपाएँ (किसी निजी हिस्से के लिए), फिर दबाएँ तो दिखेंगे।',
         ],
         tips: ['स्टेप नंबर खुद बढ़ते हैं: 1, 2, 3… स्टेप-बाय-स्टेप गाइड के लिए।', 'Start recording दबाने से पहले "हॉटकी" में सिर्फ़ Alt+Shift या सिर्फ़ Ctrl+Shift चुन सकते हैं, ताकि दूसरा सेट उस ऐप के लिए खाली रहे जिसे आप रिकॉर्ड कर रहे हैं (जैसे Ctrl+Shift+Z redo)।', 'अगर कोई दूसरा ऐप वही हॉटकी इस्तेमाल करता है, तो रिकॉर्डिंग विंडो बताती है कौन-सी; उसके बटन या दूसरी हॉटकी इस्तेमाल करें।', 'रिकॉर्डिंग के दौरान Ctrl+Shift+L लेज़र है (रिकॉर्डिंग के बाद यह फिर से ब्लैकबॉक्स खोलता है)।'],
+      },
+    },
+    {
+      id: 'annotate-out-of-way',
+      isNew: true,
+      platforms: ['windows'],
+      find: { tool: 'Record screen', needs: 'project' },
+      keywords: ['minimize', 'minimise', 'window button', 'close button', 'popup covering', 'chip', 'move toolbar', 'drag toolbar', 'alt shift m', 'ctrl shift m', 'chhota karna', 'window hatana', 'popup upar aa jata'],
+      related: ['annotate-hotkeys', 'annotate-record'],
+      en: {
+        title: 'Keep the annotate popups out of the way and minimize the recording window',
+        what: 'While recording, nothing from Smart annotate sits in the top-right corner of the screen, where windows keep their Minimize, Maximize and Close buttons. The small status popup shows at the bottom, the drawing toolbar can be moved and made small, and a hotkey hides the recording window and brings it back.',
+        where: 'Toolbar → Record screen → Smart annotate → Status on screen',
+        steps: [
+          'Before you press Start recording, pick "Status on screen": Bottom (the default), Bottom left, Bottom right, or Off. This is the small "✨ Laser · Spotlight" popup; it never sits over the window buttons.',
+          'While recording, press Alt+Shift+M or Ctrl+Shift+M to minimize the recording window. Press it again to bring the window back. The recording keeps going.',
+          'In draw mode (Alt+Shift+D), drag the drawing toolbar by its ⋮⋮ grip to any place. The app remembers the place for the next recording.',
+          'Tap "–" on the toolbar to make it small (only the grip, the current tool and Done stay). Tap the tool name to show all tools again.',
+          'While drawing, the whole screen is your page, so clicks do not reach other windows. Press Esc or ✓ Done to click windows again. Alt+Shift+M also stops drawing before it minimizes.',
+        ],
+        tips: [
+          'If another app already uses Ctrl+Shift+M (Microsoft Teams uses it to mute), choose "Alt+Shift" under Hotkeys before recording. The recording window tells you if a key could not be taken.',
+          'The status popup and the drawing toolbar are never part of the recorded video.',
+        ],
+      },
+      hi: {
+        title: 'एनोटेट पॉपअप को रास्ते से हटाएँ और रिकॉर्डिंग विंडो छोटी करें',
+        what: 'रिकॉर्डिंग के दौरान स्मार्ट एनोटेट का कुछ भी स्क्रीन के ऊपर दाएँ कोने में नहीं आता, जहाँ विंडो के मिनिमाइज़, मैक्सिमाइज़ और बंद (– ▢ ✕) बटन होते हैं। छोटा स्टेटस पॉपअप नीचे दिखता है, ड्रॉइंग टूलबार को खिसका और छोटा कर सकते हैं, और एक हॉटकी से रिकॉर्डिंग विंडो छिपती है और वापस आती है।',
+        where: 'टूलबार → स्क्रीन रिकॉर्ड → स्मार्ट एनोटेट → स्क्रीन पर स्टेटस',
+        steps: [
+          '"रिकॉर्डिंग शुरू करें" दबाने से पहले "स्क्रीन पर स्टेटस" चुनें: नीचे (पहले से), नीचे बाएँ, नीचे दाएँ, या बंद। यह छोटा "✨ लेज़र · स्पॉटलाइट" वाला पॉपअप है; यह कभी विंडो के बटनों के ऊपर नहीं आता।',
+          'रिकॉर्डिंग के दौरान Alt+Shift+M या Ctrl+Shift+M दबाएँ तो रिकॉर्डिंग विंडो मिनिमाइज़ हो जाती है। फिर से दबाएँ तो विंडो वापस आ जाती है। रिकॉर्डिंग चलती रहती है।',
+          'ड्रॉ मोड (Alt+Shift+D) में ड्रॉइंग टूलबार को उसके ⋮⋮ हैंडल से पकड़कर कहीं भी खिसकाएँ। ऐप अगली रिकॉर्डिंग के लिए वह जगह याद रखता है।',
+          'टूलबार पर "–" दबाएँ तो वह छोटा हो जाता है (सिर्फ़ हैंडल, चुना हुआ टूल और Done रहते हैं)। सारे टूल फिर से देखने के लिए टूल के नाम पर दबाएँ।',
+          'ड्रॉ करते समय पूरी स्क्रीन आपका पन्ना होती है, इसलिए क्लिक दूसरी विंडो तक नहीं पहुँचते। विंडो पर फिर से क्लिक करने के लिए Esc या ✓ Done दबाएँ। Alt+Shift+M मिनिमाइज़ करने से पहले ड्रॉइंग भी बंद कर देता है।',
+        ],
+        tips: [
+          'अगर कोई दूसरा ऐप पहले से Ctrl+Shift+M इस्तेमाल करता है (Microsoft Teams इससे म्यूट करता है), तो रिकॉर्डिंग से पहले "हॉटकी" में "Alt+Shift" चुनें। कोई कुंजी न मिले तो रिकॉर्डिंग विंडो बता देती है।',
+          'स्टेटस पॉपअप और ड्रॉइंग टूलबार कभी रिकॉर्ड हुई वीडियो में नहीं आते।',
+        ],
       },
     },
     {

@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('desktop', {
   annoStart: (opts) => ipcRenderer.invoke('desktop:anno-start', opts),
   annoStop: () => ipcRenderer.send('desktop:anno-stop'),
   annoMode: (mode, on) => ipcRenderer.send('desktop:anno-mode', mode, on),
+  // Alt+Shift+M / Ctrl+Shift+M minimize / bring back the window while screen recording (electron/reckeys.js)
+  recKeys: (on, style) => ipcRenderer.invoke('desktop:rec-keys', !!on, style),
+  recMinimize: () => ipcRenderer.send('desktop:rec-minimize'),
   onAnno(cb) {
     const listener = (_e, events) => cb(events)
     ipcRenderer.on('desktop:anno', listener)

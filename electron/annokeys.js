@@ -36,7 +36,25 @@ export function registerHotkeys(style, register, onMode) {
   return { hotkeys, taken, failed }
 }
 
+/** The keys that minimize / bring back the app window while screen recording (M, same Alt / Ctrl style). */
+export function minimizeList(style) {
+  const s = KEY_STYLES.includes(style) ? style : 'both'
+  return [...(s !== 'ctrl' ? ['Alt+Shift+M'] : []), ...(s !== 'alt' ? ['Ctrl+Shift+M'] : [])]
+}
+
+/** Registers the minimize keys; returns the text to show ('' when none could be taken) and what was refused. */
+export function registerMinimize(style, register, onPress) {
+  const taken = []
+  const failed = []
+  for (const acc of minimizeList(style)) {
+    let ok = false
+    try { ok = register(acc, onPress) !== false } catch { ok = false }
+    ;(ok ? taken : failed).push(acc)
+  }
+  return { keys: taken.join(' / '), taken, failed }
+}
+
 /** Every shortcut a style can use, so the helper does not show them as pressed keys. */
 export function hotkeyTexts() {
-  return new Set(hotkeyList('both').map(([, acc]) => acc))
+  return new Set([...hotkeyList('both').map(([, acc]) => acc), ...minimizeList('both')])
 }

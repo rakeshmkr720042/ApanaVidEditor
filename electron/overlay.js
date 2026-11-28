@@ -10,7 +10,16 @@ const canvas = document.getElementById('c')
 const ctx = canvas.getContext('2d')
 const bar = document.getElementById('bar')
 const chip = document.getElementById('chip')
-let state = { modes: {}, tool: 'auto', color: '#ff3b30', hotkeys: {} }
+let state = { modes: {}, tool: 'auto', color: '#ff3b30', hotkeys: {}, chip: 'bottom', inset: { top: 0, left: 0, bottom: 0, right: 0 } }
+// the draw bar's place (0..1 of the screen, null = bottom centre) and whether it is folded, kept between recordings
+const BAR_KEY = 'anno-bar'
+let barPlace = null
+let barMini = false
+try {
+  const v = JSON.parse(localStorage.getItem(BAR_KEY) || 'null')
+  if (v && typeof v === 'object') { barMini = !!v.mini; if (Number.isFinite(v.x) && Number.isFinite(v.y)) barPlace = { x: v.x, y: v.y } }
+} catch { /* nothing kept */ }
+const saveBar = () => { try { localStorage.setItem(BAR_KEY, JSON.stringify({ ...(barPlace ?? {}), mini: barMini })) } catch { /* private */ } }
 let strokes = [] // { pts: [[x, y]], tool, color, at }
 let live = null
 let chipTimer = 0
@@ -24,11 +33,14 @@ size()
 
 function buildBar() {
   bar.innerHTML = ''
+  const grip = Object.assign(document.createElement('span'), { className: 'grip', textContent: '⋮⋮', title: 'Drag to move' })
+  grip.addEventListener('pointerdown', startDrag)
+  bar.appendChild(grip)
   for (const [id, label, key] of TOOLS) {
     const b = document.createElement('button')
     b.textContent = label
     b.title = `${label} (${key})`
-    b.className = state.tool === id ? 'on' : ''
+    b.className = `tool${state.tool === id ? ' on' : ''}`
     b.onclick = () => window.overlay.tool(id, state.color)
     bar.appendChild(b)
   }
@@ -41,11 +53,64 @@ function buildBar() {
     bar.appendChild(b)
   }
   bar.appendChild(Object.assign(document.createElement('span'), { className: 'sep' }))
+  const fold = document.createElement('button')
+  fold.textContent = barMini ? `✎ ${TOOLS.find((x) => x[0] === state.tool)?.[1] ?? ''} ▸` : '–'
+  fold.title = barMini ? 'Show all tools' : 'Make this bar small'
+  fold.dataset.fold = '1'
+  fold.onclick = () => { barMini = !barMini; saveBar(); buildBar() }
+  bar.appendChild(fold)
   const done = document.createElement('button')
   done.textContent = '✓ Done (Esc)'
   done.onclick = () => window.overlay.done()
   bar.appendChild(done)
+  bar.classList.toggle('mini', barMini)
+  placeBar()
 }
+
+/** Puts the bar at its kept place, always fully on the screen and above the taskbar. */
+function placeBar() {
+  const ins = state.inset || {}
+  if (!barPlace) {
+    bar.classList.remove('placed')
+    bar.style.left = bar.style.top = ''
+    bar.style.bottom = `${(ins.bottom || 0) + 60}px`
+    return
+  }
+  bar.classList.add('placed')
+  bar.style.bottom = ''
+  const w = bar.offsetWidth || 300, h = bar.offsetHeight || 40
+  const minX = ins.left || 0, minY = ins.top || 0
+  const maxX = Math.max(minX, innerWidth - (ins.right || 0) - w), maxY = Math.max(minY, innerHeight - (ins.bottom || 0) - h)
+  bar.style.left = `${Math.min(maxX, Math.max(minX, barPlace.x * innerWidth))}px`
+  bar.style.top = `${Math.min(maxY, Math.max(minY, barPlace.y * innerHeight))}px`
+}
+addEventListener('resize', () => { if (state.modes.draw) placeBar() })
+
+let drag = null
+function startDrag(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  const r = bar.getBoundingClientRect()
+  drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId }
+  bar.setPointerCapture(e.pointerId)
+  bar.classList.add('dragging')
+}
+bar.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return
+  barPlace = { x: (e.clientX - drag.dx) / innerWidth, y: (e.clientY - drag.dy) / innerHeight }
+  placeBar()
+})
+const endDrag = (e) => {
+  if (!drag || e.pointerId !== drag.id) return
+  drag = null
+  bar.classList.remove('dragging')
+  // keep the clamped place, so a bar dropped half off the screen comes back whole next time
+  const r = bar.getBoundingClientRect()
+  barPlace = { x: r.left / innerWidth, y: r.top / innerHeight }
+  saveBar()
+}
+bar.addEventListener('pointerup', endDrag)
+bar.addEventListener('pointercancel', endDrag)
 
 function showChip() {
   const on = Object.entries(state.modes).filter(([k, v]) => v && k !== 'draw').map(([k]) => k)
@@ -53,14 +118,17 @@ function showChip() {
   chip.innerHTML = on.length
     ? `✨ ${on.map((k) => `<b>${names[k]}</b>`).join(' · ')}`
     : `✨ Smart annotate · <b>${state.hotkeys.draw || 'Alt+Shift+D'}</b> draw`
+  const ins = state.inset || {}
+  chip.style.bottom = `${(ins.bottom || 0) + 12}px`
   chip.style.opacity = '1'
   clearTimeout(chipTimer)
   if (!on.length) chipTimer = setTimeout(() => { chip.style.opacity = '0' }, 4000)
 }
 
 window.overlay.onState((s) => {
-  state = s
+  state = { ...state, ...s }
   document.body.classList.toggle('drawing', !!s.modes.draw)
+  for (const c of ['chip-bottom-left', 'chip-bottom-right', 'chip-off']) document.body.classList.toggle(c, `chip-${s.chip}` === c)
   buildBar()
   showChip()
 })

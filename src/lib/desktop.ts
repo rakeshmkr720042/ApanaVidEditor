@@ -21,7 +21,10 @@ interface DesktopBridge {
   aiCancel?(): void
   onAIProgress?(cb: (p: AISetupProgress) => void): () => void
   /** Smart annotate while screen recording: cursor, clicks, keys and drawing on the screen (electron/annotate.js). */
-  annoStart?(opts?: { overlay?: boolean; hotkeys?: boolean; keys?: 'both' | 'alt' | 'ctrl' }): Promise<AnnoAbility | null>
+  annoStart?(opts?: { overlay?: boolean; hotkeys?: boolean; keys?: 'both' | 'alt' | 'ctrl'; chip?: AnnoChipSpot }): Promise<AnnoAbility | null>
+  /** Alt+Shift+M / Ctrl+Shift+M minimize / bring back the window while screen recording (electron/reckeys.js). */
+  recKeys?(on: boolean, style?: 'both' | 'alt' | 'ctrl'): Promise<{ keys: string; failed: string[] } | null>
+  recMinimize?(): void
   annoStop?(): void
   annoMode?(mode: AnnoModeName, on?: boolean): void
   onAnno?(cb: (events: AnnoEvent[]) => void): () => void
@@ -45,6 +48,8 @@ export interface ComputerInfo {
 export interface AISetupProgress { step: string; text: string; status?: string; p?: number; done?: number; total?: number }
 
 export type AnnoModeName = 'draw' | 'laser' | 'spotlight' | 'zoom' | 'hide'
+/** Where the Smart annotate status chip shows on the screen while recording (never the top-right corner). */
+export type AnnoChipSpot = 'bottom' | 'bottom-left' | 'bottom-right' | 'off'
 export interface AnnoAbility { cursor: boolean; clicks: boolean; keys: boolean; window: boolean; hotkeys: Partial<Record<AnnoModeName, string>>; failed?: string[] }
 export interface AnnoState { modes: Record<AnnoModeName, boolean>; tool: string; color: string; hotkeys: Partial<Record<AnnoModeName, string>> }
 /** What happened, with the time (ms since 1970) it happened; x, y are 0..1 of the recorded picture. */
