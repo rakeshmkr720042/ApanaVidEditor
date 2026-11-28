@@ -1,4 +1,4 @@
-import type { AnnoModeName } from './desktop'
+import type { AnnoChipSpot, AnnoModeName } from './desktop'
 
 /** Which Smart annotate hotkeys to use while recording (the Windows app registers them, electron/annokeys.js). */
 export type AnnoKeyStyle = 'both' | 'alt' | 'ctrl'
@@ -36,4 +36,25 @@ export function modeForKey(e: KeyLike, style: AnnoKeyStyle): AnnoModeName | null
   // with Alt or a Hindi keyboard, e.key may not be the letter; e.code is the physical key
   const letter = /^Key[A-Z]$/.test(e.code) ? e.code.slice(3).toLowerCase() : e.key.length === 1 ? e.key.toLowerCase() : ''
   return BY_LETTER[letter] ?? null
+}
+
+/** The keys that minimize / bring back the app window while recording, for a style (electron/annokeys.js). */
+export function minimizeKeysFor(style: AnnoKeyStyle): string {
+  return style === 'alt' ? 'Alt+Shift+M' : style === 'ctrl' ? 'Ctrl+Shift+M' : 'Alt+Shift+M / Ctrl+Shift+M'
+}
+
+/** True when a key press in the app is the minimize key of a style (Alt+Shift+M / Ctrl+Shift+M). */
+export function isMinimizeKey(e: KeyLike, style: AnnoKeyStyle): boolean {
+  if (!e.shiftKey || e.metaKey) return false
+  const alt = e.altKey && !e.ctrlKey, ctrl = e.ctrlKey && !e.altKey
+  if (!(alt && style !== 'ctrl') && !(ctrl && style !== 'alt')) return false
+  return e.code === 'KeyM' || (!/^Key[A-Z]$/.test(e.code) && e.key.toLowerCase() === 'm')
+}
+
+export const ANNO_CHIP_SPOTS: AnnoChipSpot[] = ['bottom', 'bottom-left', 'bottom-right', 'off']
+export function loadChipSpot(): AnnoChipSpot {
+  try { const v = localStorage.getItem('anno-chip'); return ANNO_CHIP_SPOTS.includes(v as AnnoChipSpot) ? (v as AnnoChipSpot) : 'bottom' } catch { return 'bottom' }
+}
+export function saveChipSpot(s: AnnoChipSpot) {
+  try { localStorage.setItem('anno-chip', s) } catch { /* private mode */ }
 }

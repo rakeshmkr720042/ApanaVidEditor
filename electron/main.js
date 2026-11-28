@@ -9,6 +9,7 @@ import { basename, dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { cancelSetup, checkComputer, runSetup } from './aisetup.js'
 import { registerAnnotate, setPickedSource, stopAnnotate } from './annotate.js'
+import { registerRecKeys, releaseRecKeys } from './reckeys.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const distDir = join(here, '..', 'dist')
@@ -176,7 +177,7 @@ function createWindow() {
     },
   })
   win.once('ready-to-show', () => win?.show())
-  win.on('closed', () => { stopAnnotate(); win = null })
+  win.on('closed', () => { stopAnnotate(); releaseRecKeys(); win = null })
   win.webContents.on('did-start-loading', () => { rendererReady = false })
   // links that open a new window (help pages, model cards) go to the default browser
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -417,6 +418,7 @@ if (!app.requestSingleInstanceLock()) {
     serveDist()
     handleDisplayMedia()
     registerAnnotate((wc) => wc === win?.webContents)
+    registerRecKeys((wc) => wc === win?.webContents)
     buildMenu()
     createWindow()
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow() })

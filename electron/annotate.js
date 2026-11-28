@@ -24,6 +24,12 @@ export function setPickedSource(source) {
 
 let run = null // the running session
 
+const CHIP_SPOTS = ['bottom', 'bottom-left', 'bottom-right', 'off']
+const insetOf = (d) => {
+  const b = d.bounds, w = d.workArea ?? b
+  return { top: Math.max(0, w.y - b.y), left: Math.max(0, w.x - b.x), bottom: Math.max(0, b.y + b.height - (w.y + w.height)), right: Math.max(0, b.x + b.width - (w.x + w.width)) }
+}
+
 function displayOf(id) {
   const all = screen.getAllDisplays()
   return all.find((d) => String(d.id) === String(id)) ?? screen.getPrimaryDisplay()
@@ -57,6 +63,10 @@ function start(sender, opts) {
     keys: false,
     hotkeys: {},
     taken: [],
+    // where the small status chip sits: never the top-right corner, where windows keep – ▢ ✕
+    chip: CHIP_SPOTS.includes(opts?.chip) ? opts.chip : 'bottom',
+    // the taskbar's room, so the chip and the draw bar stay above it
+    inset: insetOf(display),
   }
   run = r
   const push = (e) => { e.at = Date.now(); r.queue.push(e) }
@@ -158,7 +168,7 @@ function openOverlay(r) {
 }
 
 function sendState(r) {
-  const state = { modes: r.modes, tool: r.tool, color: r.color, hotkeys: r.hotkeys }
+  const state = { modes: r.modes, tool: r.tool, color: r.color, hotkeys: r.hotkeys, chip: r.chip, inset: r.inset }
   if (r.overlay && !r.overlay.isDestroyed()) r.overlay.webContents.send('overlay:state', state)
   if (!r.sender.isDestroyed()) r.sender.send('desktop:anno-state', state)
 }
@@ -221,3 +231,5 @@ export function registerAnnotate(isMain) {
 }
 
 export const stopAnnotate = stop
+/** Ends draw mode if it is on (used before the app window is minimized). */
+export const endDraw = () => toggle('draw', false)

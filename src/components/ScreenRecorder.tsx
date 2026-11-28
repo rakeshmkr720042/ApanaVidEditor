@@ -5,9 +5,9 @@ import { Icon } from './Icon'
 import { t } from '../lib/i18n'
 import { useBack } from '../lib/back'
 import { fmtTime } from '../lib/format'
-import { desktop, type AnnoAbility, type AnnoModeName, type AnnoState, type ScreenSource } from '../lib/desktop'
+import { desktop, type AnnoAbility, type AnnoChipSpot, type AnnoModeName, type AnnoState, type ScreenSource } from '../lib/desktop'
 import { AnnoRecorder, type AnnoTake } from '../lib/annorec'
-import { keysFor, loadKeyStyle, modeForKey, saveKeyStyle, type AnnoKeyStyle } from '../lib/annokeys'
+import { isMinimizeKey, keysFor, loadChipSpot, loadKeyStyle, minimizeKeysFor, modeForKey, saveChipSpot, saveKeyStyle, type AnnoKeyStyle } from '../lib/annokeys'
 import { info as logInfo } from '../lib/blackbox'
 import {
   canRecordCamera, canRecordScreen, captureScreen, finishRecording, listCameras, micStream, mixStreams, openCamera, recorderMime, type Surface,
@@ -89,6 +89,12 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
   const annoRec = useRef<AnnoRecorder | null>(null)
   const [annoKeys, setAnnoKeys] = useState<AnnoKeyStyle>(loadKeyStyle)
   const pickAnnoKeys = (s: AnnoKeyStyle) => { setAnnoKeys(s); saveKeyStyle(s) }
+  // where the annotate status chip shows on the screen (bottom by default, never over the window's – ▢ ✕)
+  const [chipSpot, setChipSpot] = useState<AnnoChipSpot>(loadChipSpot)
+  const pickChipSpot = (s: AnnoChipSpot) => { setChipSpot(s); saveChipSpot(s) }
+  // Alt+Shift+M / Ctrl+Shift+M minimize / bring back this window while recording (Windows app)
+  const minAvailable = !cameraOnly && !!desktop?.recKeys
+  const [minKeys, setMinKeys] = useState<{ keys: string; failed: string[] } | null>(null)
 
   const video = useRef<HTMLVideoElement>(null)
   const camVideo = useRef<HTMLVideoElement>(null)
@@ -145,6 +151,22 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [annoAvailable, annoOn, phase, annoKeys])
+  // the minimize keys: held from the countdown until recording ends, then given back to other apps
+  const minPhase = phase === 'countdown' || phase === 'recording'
+  useEffect(() => {
+    if (!minAvailable || !minPhase) return
+    let live = true
+    desktop!.recKeys!(true, annoKeys).then((r) => { if (live) { setMinKeys(r); logInfo('Minimize hotkeys', r ?? {}) } }).catch(() => { if (live) setMinKeys(null) })
+    // the same keys pressed in this window (when another app holds them, or Windows did not pass them on)
+    const onKey = (e: KeyboardEvent) => {
+      if (!isMinimizeKey(e, annoKeys)) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (!e.repeat) desktop?.recMinimize?.()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => { live = false; window.removeEventListener('keydown', onKey, true); desktop?.recKeys?.(false).catch(() => {}) }
+  }, [minAvailable, minPhase, annoKeys])
   // which hotkeys Windows gave us, and which another app already holds
   useEffect(() => {
     if (annoAbility) logInfo('Annotate hotkeys', { ok: annoAbility.hotkeys, taken: annoAbility.failed ?? [] })
@@ -285,7 +307,7 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
     if (annoAvailable && annoOn) {
       annoRec.current = new AnnoRecorder()
       setAnnoCount(0)
-      desktop!.annoStart!({ keys: annoKeys }).then((a) => setAnnoAbility(a)).catch(() => setAnnoAbility(null))
+      desktop!.annoStart!({ keys: annoKeys, chip: chipSpot }).then((a) => setAnnoAbility(a)).catch(() => setAnnoAbility(null))
     }
     setPhase('countdown')
     for (let n = 3; n > 0; n--) {
@@ -520,13 +542,19 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
           </div>
         )}
         {(phase === 'ready' || phase === 'recording') && annoAvailable && annoOn && (
-          <AnnoBar state={annoState} ability={annoAbility} count={annoCount} recording={phase === 'recording'} keyStyle={annoKeys} onKeyStyle={pickAnnoKeys} />
+          <AnnoBar state={annoState} ability={annoAbility} count={annoCount} recording={phase === 'recording'} keyStyle={annoKeys} onKeyStyle={pickAnnoKeys} chipSpot={chipSpot} onChipSpot={pickChipSpot} />
         )}
         {phase === 'recording' && (
           <div className="row">
             <button className="btn" onClick={togglePause}>{paused ? `▶ ${t('Resume')}` : `❚❚ ${t('Pause')}`}</button>
             <button className="btn primary grow rec-stop" onClick={stop}>■ {t('Stop & add')}</button>
           </div>
+        )}
+        {(phase === 'ready' || phase === 'recording') && minAvailable && (
+          <p className="muted small rec-min" data-testid="rec-min-keys">
+            <kbd>{phase === 'recording' && minKeys?.keys ? minKeys.keys : minimizeKeysFor(annoKeys)}</kbd> {t('Minimize this window / bring it back (recording goes on)')}
+            {phase === 'recording' && !!minKeys?.failed.length && <> · <span className="warn">{t('Used by another app')}: {minKeys.failed.join(', ')}</span></>}
+          </p>
         )}
       </div>
     </div>
@@ -537,13 +565,17 @@ const MODE_BUTTONS: { mode: AnnoModeName; label: string }[] = [
   { mode: 'draw', label: '✎ Draw' }, { mode: 'laser', label: '🔴 Laser' }, { mode: 'spotlight', label: '🔦 Spotlight' },
   { mode: 'zoom', label: '🔍 Zoom' }, { mode: 'hide', label: '🙈 Hide effects' },
 ]
+const CHIP_CHOICES: { value: AnnoChipSpot; label: string }[] = [
+  { value: 'bottom', label: 'Bottom' }, { value: 'bottom-left', label: 'Bottom left' }, { value: 'bottom-right', label: 'Bottom right' }, { value: 'off', label: 'Off' },
+]
 const KEY_CHOICES: { value: AnnoKeyStyle; label: string }[] = [
   { value: 'both', label: 'Alt+Shift & Ctrl+Shift' }, { value: 'alt', label: 'Alt+Shift' }, { value: 'ctrl', label: 'Ctrl+Shift' },
 ]
 
 /** Smart annotate while recording: the hotkeys, buttons for the modes, and what is being caught. */
-function AnnoBar({ state, ability, count, recording, keyStyle, onKeyStyle }: {
+function AnnoBar({ state, ability, count, recording, keyStyle, onKeyStyle, chipSpot, onChipSpot }: {
   state: AnnoState | null; ability: AnnoAbility | null; count: number; recording: boolean; keyStyle: AnnoKeyStyle; onKeyStyle: (s: AnnoKeyStyle) => void
+  chipSpot: AnnoChipSpot; onChipSpot: (s: AnnoChipSpot) => void
 }) {
   const shown = keysFor(keyStyle)
   const got = recording ? (state?.hotkeys ?? ability?.hotkeys) : null
@@ -557,6 +589,12 @@ function AnnoBar({ state, ability, count, recording, keyStyle, onKeyStyle }: {
         <div className="row" data-testid="anno-keys">
           <span className="muted small">{t('Hotkeys')}:</span>
           <Chips options={KEY_CHOICES} value={keyStyle} onChange={onKeyStyle} />
+        </div>
+      )}
+      {!recording && (
+        <div className="row" data-testid="anno-chip">
+          <span className="muted small">{t('Status on screen')}:</span>
+          <Chips options={CHIP_CHOICES} value={chipSpot} onChange={onChipSpot} />
         </div>
       )}
       {recording && (
