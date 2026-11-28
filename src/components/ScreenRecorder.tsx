@@ -7,6 +7,8 @@ import { useBack } from '../lib/back'
 import { fmtTime } from '../lib/format'
 import { desktop, type AnnoAbility, type AnnoModeName, type AnnoState, type ScreenSource } from '../lib/desktop'
 import { AnnoRecorder, type AnnoTake } from '../lib/annorec'
+import { keysFor, loadKeyStyle, modeForKey, saveKeyStyle, type AnnoKeyStyle } from '../lib/annokeys'
+import { info as logInfo } from '../lib/blackbox'
 import {
   canRecordCamera, canRecordScreen, captureScreen, finishRecording, listCameras, micStream, mixStreams, openCamera, recorderMime, type Surface,
 } from '../lib/screenrec'
@@ -85,6 +87,8 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
   const [annoState, setAnnoState] = useState<AnnoState | null>(null)
   const [annoCount, setAnnoCount] = useState(0)
   const annoRec = useRef<AnnoRecorder | null>(null)
+  const [annoKeys, setAnnoKeys] = useState<AnnoKeyStyle>(loadKeyStyle)
+  const pickAnnoKeys = (s: AnnoKeyStyle) => { setAnnoKeys(s); saveKeyStyle(s) }
 
   const video = useRef<HTMLVideoElement>(null)
   const camVideo = useRef<HTMLVideoElement>(null)
@@ -127,6 +131,24 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
     const offS = desktop?.onAnnoState?.((s) => setAnnoState(s))
     return () => { offA?.(); offS?.() }
   }, [annoAvailable])
+  // the same hotkeys pressed while this app is in front: handled here first, so they never reach the
+  // editor's own Ctrl+Shift shortcuts (redo, blackbox…) and still work if Windows would not give them to us
+  useEffect(() => {
+    if (!annoAvailable || !annoOn || phase !== 'recording') return
+    const onKey = (e: KeyboardEvent) => {
+      const mode = modeForKey(e, annoKeys)
+      if (!mode) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (!e.repeat) { logInfo(`Annotate hotkey in app: ${mode}`); desktop?.annoMode?.(mode) }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [annoAvailable, annoOn, phase, annoKeys])
+  // which hotkeys Windows gave us, and which another app already holds
+  useEffect(() => {
+    if (annoAbility) logInfo('Annotate hotkeys', { ok: annoAbility.hotkeys, taken: annoAbility.failed ?? [] })
+  }, [annoAbility])
   const setAnno = (on: boolean) => {
     setAnnoOn(on)
     try { localStorage.setItem('anno-rec', on ? 'on' : 'off') } catch { /* private mode */ }
@@ -263,7 +285,7 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
     if (annoAvailable && annoOn) {
       annoRec.current = new AnnoRecorder()
       setAnnoCount(0)
-      desktop!.annoStart!().then((a) => setAnnoAbility(a)).catch(() => setAnnoAbility(null))
+      desktop!.annoStart!({ keys: annoKeys }).then((a) => setAnnoAbility(a)).catch(() => setAnnoAbility(null))
     }
     setPhase('countdown')
     for (let n = 3; n > 0; n--) {
@@ -498,7 +520,7 @@ export function ScreenRecorder({ mode, onClose, onDone }: Props) {
           </div>
         )}
         {(phase === 'ready' || phase === 'recording') && annoAvailable && annoOn && (
-          <AnnoBar state={annoState} ability={annoAbility} count={annoCount} recording={phase === 'recording'} />
+          <AnnoBar state={annoState} ability={annoAbility} count={annoCount} recording={phase === 'recording'} keyStyle={annoKeys} onKeyStyle={pickAnnoKeys} />
         )}
         {phase === 'recording' && (
           <div className="row">
@@ -515,14 +537,28 @@ const MODE_BUTTONS: { mode: AnnoModeName; label: string }[] = [
   { mode: 'draw', label: '✎ Draw' }, { mode: 'laser', label: '🔴 Laser' }, { mode: 'spotlight', label: '🔦 Spotlight' },
   { mode: 'zoom', label: '🔍 Zoom' }, { mode: 'hide', label: '🙈 Hide effects' },
 ]
-const DEFAULT_KEYS: Record<AnnoModeName, string> = { draw: 'Alt+Shift+D', laser: 'Alt+Shift+L', spotlight: 'Alt+Shift+S', zoom: 'Alt+Shift+Z', hide: 'Alt+Shift+H' }
+const KEY_CHOICES: { value: AnnoKeyStyle; label: string }[] = [
+  { value: 'both', label: 'Alt+Shift & Ctrl+Shift' }, { value: 'alt', label: 'Alt+Shift' }, { value: 'ctrl', label: 'Ctrl+Shift' },
+]
 
 /** Smart annotate while recording: the hotkeys, buttons for the modes, and what is being caught. */
-function AnnoBar({ state, ability, count, recording }: { state: AnnoState | null; ability: AnnoAbility | null; count: number; recording: boolean }) {
-  const keys = state?.hotkeys ?? ability?.hotkeys ?? DEFAULT_KEYS
+function AnnoBar({ state, ability, count, recording, keyStyle, onKeyStyle }: {
+  state: AnnoState | null; ability: AnnoAbility | null; count: number; recording: boolean; keyStyle: AnnoKeyStyle; onKeyStyle: (s: AnnoKeyStyle) => void
+}) {
+  const shown = keysFor(keyStyle)
+  const got = recording ? (state?.hotkeys ?? ability?.hotkeys) : null
+  // before recording: the chosen keys; while recording: the ones Windows really gave the app
+  const keys = (Object.keys(shown) as AnnoModeName[]).reduce((o, m) => ({ ...o, [m]: got ? (got[m] || '—') : shown[m] }), {} as Record<AnnoModeName, string>)
+  const failed = recording ? (ability?.failed ?? []) : []
   return (
     <div className="rec-anno" data-testid="rec-anno">
       <b>✨ {t('Smart annotate')}</b>
+      {!recording && (
+        <div className="row" data-testid="anno-keys">
+          <span className="muted small">{t('Hotkeys')}:</span>
+          <Chips options={KEY_CHOICES} value={keyStyle} onChange={onKeyStyle} />
+        </div>
+      )}
       {recording && (
         <div className="rec-modes">
           {MODE_BUTTONS.map((b) => (
@@ -537,6 +573,7 @@ function AnnoBar({ state, ability, count, recording }: { state: AnnoState | null
         <kbd>{keys.zoom}</kbd><span>{t('Zoom in on the cursor')}</span>
         <kbd>{keys.hide}</kbd><span>{t('Hide / show all effects')}</span>
       </div>
+      {failed.length > 0 && <p className="muted small warn" data-testid="anno-keys-failed">{t('These hotkeys are already used by another app, so they will not work now')}: {failed.join(', ')}. {t('Use the buttons above, or choose the other hotkeys before recording.')}</p>}
       {recording && ability && !ability.clicks && <p className="muted small">{t('Only the cursor is followed on this computer (clicks and keys could not be read).')}</p>}
       {recording && <p className="muted small">{t('Caught so far')}: {count}. {t('Everything stays editable in the editor (Annotate).')}</p>}
     </div>

@@ -7,19 +7,14 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { hotkeyTexts, registerHotkeys } from './annokeys.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 // the helper sits next to this file in development and in app.asar.unpacked once installed
 const helperPath = () => join(here, 'bin', 'inputhook.exe').replace(`app.asar${process.platform === 'win32' ? '\\' : '/'}`, `app.asar.unpacked${process.platform === 'win32' ? '\\' : '/'}`)
 
-export const HOTKEYS = {
-  draw: 'Alt+Shift+D',
-  laser: 'Alt+Shift+L',
-  spotlight: 'Alt+Shift+S',
-  zoom: 'Alt+Shift+Z',
-  hide: 'Alt+Shift+H',
-}
-const HOTKEY_TEXT = new Set(Object.values(HOTKEYS))
+// Alt+Shift+D/L/S/Z/H and Ctrl+Shift+D/L/S/Z/H (electron/annokeys.js); the recorder can pick just one set
+const HOTKEY_TEXT = hotkeyTexts()
 
 /** The screen or window chosen in the screen picker (set by main.js). */
 let picked = null
@@ -60,6 +55,8 @@ function start(sender, opts) {
     overlay: null,
     clicks: false,
     keys: false,
+    hotkeys: {},
+    taken: [],
   }
   run = r
   const push = (e) => { e.at = Date.now(); r.queue.push(e) }
@@ -99,12 +96,15 @@ function start(sender, opts) {
   if (!r.helper) startPolling(r, push)
 
   if (opts?.overlay !== false) openOverlay(r)
+  let failed = []
   if (opts?.hotkeys !== false) {
-    for (const [mode, acc] of Object.entries(HOTKEYS)) {
-      try { globalShortcut.register(acc, () => toggle(mode)) } catch { /* taken by another app */ }
-    }
+    // register() returns false (it does not throw) when another app already holds the key
+    const got = registerHotkeys(opts?.keys, (acc, fn) => globalShortcut.register(acc, fn), (mode) => toggle(mode))
+    r.hotkeys = got.hotkeys
+    r.taken = got.taken
+    failed = got.failed
   }
-  return { cursor: true, clicks: r.clicks, keys: r.keys, hotkeys: HOTKEYS, window: !!windowId }
+  return { cursor: true, clicks: r.clicks, keys: r.keys, hotkeys: r.hotkeys, failed, window: !!windowId }
 }
 
 function helperLine(r, line, norm, push) {
@@ -158,7 +158,7 @@ function openOverlay(r) {
 }
 
 function sendState(r) {
-  const state = { modes: r.modes, tool: r.tool, color: r.color, hotkeys: HOTKEYS }
+  const state = { modes: r.modes, tool: r.tool, color: r.color, hotkeys: r.hotkeys }
   if (r.overlay && !r.overlay.isDestroyed()) r.overlay.webContents.send('overlay:state', state)
   if (!r.sender.isDestroyed()) r.sender.send('desktop:anno-state', state)
 }
@@ -187,7 +187,7 @@ function stop() {
   clearInterval(r.poll)
   clearInterval(r.flush)
   if (r.queue.length && !r.sender.isDestroyed()) r.sender.send('desktop:anno', r.queue)
-  for (const acc of Object.values(HOTKEYS)) { try { globalShortcut.unregister(acc) } catch { /* not ours */ } }
+  for (const acc of r.taken) { try { globalShortcut.unregister(acc) } catch { /* not ours */ } }
   if (r.helper) { try { r.helper.stdin.write('q\n'); r.helper.stdin.end() } catch { /* gone */ } setTimeout(() => { try { r.helper?.kill() } catch { /* gone */ } }, 500) }
   if (r.overlay && !r.overlay.isDestroyed()) r.overlay.destroy()
 }
